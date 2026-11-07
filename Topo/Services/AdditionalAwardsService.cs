@@ -48,11 +48,13 @@ namespace Topo.Services
             var additionalAwardsList = new List<AdditionalAwardListModel>();
             var lastMemberProcessed = "";
             var memberName = "";
+            // the Reading line names each Scout the short way, as the reports do
+            var shortNames = SignInSheetLayout.GetDisplayNames(selectedMembers, false);
             foreach (var member in selectedMembers)
             {
                 var memberKVP = new KeyValuePair<string, string>(member.id, $"{member.first_name} {member.last_name}");
                 var firstEntry = additionalAwardsList.Count;
-                progress?.Invoke($"{memberKVP.Value} ({selectedMembers.IndexOf(member) + 1} of {selectedMembers.Count})");
+                progress?.Invoke($"{(shortNames.TryGetValue(member.id, out var shortName) ? shortName : memberKVP.Value)} ({selectedMembers.IndexOf(member) + 1} of {selectedMembers.Count})");
                 await _terrainAPIService.RevokeAssumedProfiles();
                 await _terrainAPIService.AssumeProfile(memberKVP.Key);
                 var getMemberLogbookMetrics = await _terrainAPIService.GetMemberLogbookMetrics(memberKVP.Key);
