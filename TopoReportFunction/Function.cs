@@ -263,7 +263,7 @@ public class Function
         if (reportData != null)
         {
             var workbook = reportService.GenerateSIAWorkbook(reportData, reportGenerationRequest.GroupName, reportGenerationRequest.Section
-                , reportGenerationRequest.UnitName, reportGenerationRequest.OutputType == OutputType.PDF);
+                , reportGenerationRequest.UnitName, reportGenerationRequest.OutputType == OutputType.PDF, reportGenerationRequest.BreakByPatrol);
             return workbook;
         }
         return reportService.CreateWorkbookWithSheets(1);

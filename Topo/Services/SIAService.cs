@@ -1,12 +1,13 @@
 ﻿using System.Globalization;
 using Topo.Model.Approvals;
+using Topo.Model.Members;
 using Topo.Model.SIA;
 
 namespace Topo.Services
 {
     public interface ISIAService
     {
-        public Task<List<SIAProjectListModel>> GenerateSIAReportData(List<KeyValuePair<string, string>> selectedMembers, string section, string selectedUnitId);
+        public Task<List<SIAProjectListModel>> GenerateSIAReportData(List<MemberListModel> selectedMembers, string section, string selectedUnitId, Action<string>? progress = null);
     }
 
     public class SIAService : ISIAService
@@ -18,20 +19,26 @@ namespace Topo.Services
             _terrainAPIService = terrainAPIService;
         }
 
-        public async Task<List<SIAProjectListModel>> GenerateSIAReportData(List<KeyValuePair<string, string>> selectedMembers, string section, string selectedUnitId)
+        public async Task<List<SIAProjectListModel>> GenerateSIAReportData(List<MemberListModel> selectedMembers, string section, string selectedUnitId, Action<string>? progress = null)
         {
             var approvals = new List<ApprovalsListModel>(); // await _approvalsService.GetApprovalListItems(selectedUnitId);
             TextInfo myTI = new CultureInfo("en-UA", false).TextInfo;
             var unitSiaProjects = new List<SIAProjectListModel>();
-            foreach (var member in selectedMembers)
+            // the Reading line names each Scout the short way, as the reports do
+            var shortNames = SignInSheetLayout.GetDisplayNames(selectedMembers, false);
+            foreach (var selectedMember in selectedMembers)
             {
+                var member = new KeyValuePair<string, string>(selectedMember.id, $"{selectedMember.first_name} {selectedMember.last_name}");
+                progress?.Invoke($"{(shortNames.TryGetValue(selectedMember.id, out var shortName) ? shortName : member.Value)} ({selectedMembers.IndexOf(selectedMember) + 1} of {selectedMembers.Count})");
                 try
                 {
                     var siaResultModel = await _terrainAPIService.GetSIAResultsForMember(member.Key);
                     var memberSiaProjects = siaResultModel.results.Where(r => r.section == section)
                         .Select(r => new SIAProjectListModel
                         {
+                            memberId = member.Key,
                             memberName = member.Value,
+                            memberPatrol = selectedMember.patrol_name ?? "",
                             area = myTI.ToTitleCase(r.answers.special_interest_area_selection.Replace("sia_", "").Replace("_", " ")),
                             projectName = r.answers.project_name,
                             status = myTI.ToTitleCase(r.status.Replace("_", " ")),
@@ -58,7 +65,9 @@ namespace Topo.Services
                 {
                     unitSiaProjects.Add(new SIAProjectListModel
                     {
+                        memberId = member.Key,
                         memberName = $"{member.Value}",
+                        memberPatrol = selectedMember.patrol_name ?? "",
                         area = "Error",
                         projectName = "Error",
                         status = "Error",
