@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using Topo.Model.Members;
+using Newtonsoft.Json;
 using Topo.Model.Milestone;
 
 namespace Topo.Services
@@ -27,10 +28,12 @@ namespace Topo.Services
         {
             var unitMilestoneSummary = new List<MilestoneSummaryListModel>();
             var members = (await _membersService.GetMembersAsync(selectedUnitId)).Where(m => m.isAdultLeader == 0).ToList();
+            // the Reading line names each Scout the short way, as the reports do
+            var shortNames = SignInSheetLayout.GetDisplayNames(members, false);
             for (var i = 0; i < members.Count; i++)
             {
                 var member = members[i];
-                progress?.Invoke($"{member.first_name} {member.last_name} ({i + 1} of {members.Count})");
+                progress?.Invoke($"{(shortNames.TryGetValue(member.id, out var shortName) ? shortName : member.first_name)} ({i + 1} of {members.Count})");
                 var memberMilestones = await _terrainAPIService.GetMilestoneResultsForMember(member.id);
                 MilestoneResult milestone1 = new MilestoneResult();
                 MilestoneResult milestone2 = new MilestoneResult();
