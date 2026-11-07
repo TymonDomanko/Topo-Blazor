@@ -11,5 +11,8 @@ namespace Topo.Model.SIA
         public string UnitName { get; set; } = string.Empty;
         public List<MemberListModel> Members { get; set; } = new List<MemberListModel>();
         public string GroupName { get; set; } = string.Empty;
+        public bool BreakByPatrol { get; set; }
+        // Names are shortened (first name and as much of the surname as tells Scouts apart) unless this is ticked
+        public bool UseFullNames { get; set; }
     }
 }
