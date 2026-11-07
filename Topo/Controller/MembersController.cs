@@ -27,6 +27,10 @@ namespace Topo.Controller
         public NavigationManager NavigationManager { get; set; }
 
         public MembersPageViewModel model = new MembersPageViewModel();
+        // Every member of the unit, the adult leaders too, for the patrol list that can include them
+        private List<MemberListModel> _allMembers = new List<MemberListModel>();
+
+        public string Section => _storageService.Section;
 
         protected override async Task OnInitializedAsync()
         {
@@ -35,7 +39,6 @@ namespace Topo.Controller
 
             model.Units = _storageService.Units;
             model.GroupName = _storageService.GroupNameDisplay;
-            model.SuppressLastName = _storageService.SuppressLastName;
             if (!string.IsNullOrEmpty(_storageService.UnitId))
             {
                 await UnitChange(_storageService.UnitId);
@@ -56,121 +59,59 @@ namespace Topo.Controller
                 _storageService.UnitId = model.UnitId;
                 model.UnitName = _storageService.UnitName;
                 model.Members = new List<MemberListModel>();
+                _allMembers = new List<MemberListModel>();
                 return;
             }
             model.UnitId = unitId;
             _storageService.UnitId = model.UnitId;
-            var allMembers = await _membersService.GetMembersAsync(model.UnitId);
-            model.Members = allMembers.Where(m => m.isAdultLeader == 0).OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();
+            _allMembers = await _membersService.GetMembersAsync(model.UnitId);
+            model.Members = MemberReportLayouts.Sorted(_allMembers.Where(m => m.isAdultLeader == 0), MemberListSort.Alphabetical);
             model.UnitName = _storageService.UnitName;
         }
-        internal async Task PatrolListPdfClick()
-        {
-            byte[] report = await PatrolList(model.IncludeLeaders, OutputType.PDF);
-            var fileName = $"Patrol_List_{model.UnitName.Replace(' ', '_')}.pdf";
 
-            // Send the data to JS to actually download the file
-            await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, "application/pdf", report);
-        }
+        internal void ViewChange(MemberReportView view) => model.View = view;
 
-        internal async Task PatrolListXlsxClick()
-        {
-            byte[] report = await PatrolList(model.IncludeLeaders, OutputType.Excel);
-            var fileName = $"Patrol_List_{model.UnitName.Replace(' ', '_')}.xlsx";
+        // What each report is made from. The preview and the downloaded report are made from the same members, so they match.
+        private List<MemberListModel> PatrolListMembers => MemberReportLayouts.PatrolListMembers(_allMembers, model.IncludeLeaders, model.UseFullNames);
+        private List<MemberListModel> MemberListMembers => MemberReportLayouts.MemberListMembers(_allMembers, model.Sort, model.UseFullNames);
+        private List<MemberListModel> PatrolSheetMembers => MemberReportLayouts.PatrolSheetMembers(_allMembers, model.UseFullNames);
 
-            // Send the data to JS to actually download the file
-            await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, "application/vnd.ms-excel", report);
-        }
+        public PatrolListLayout PatrolList => MemberReportLayouts.PatrolList(PatrolListMembers, model.IncludeLeaders);
+        public List<MemberListRow> MemberList => MemberReportLayouts.MemberList(MemberListMembers, Section);
+        public List<PatrolGroup> PatrolSheets => MemberReportLayouts.Patrols(PatrolSheetMembers);
 
-        private async Task<byte[]> PatrolList(bool includeLeaders, OutputType outputType = OutputType.PDF)
-        {
-            var groupName = _storageService.GroupName ?? "Group Name";
-            var unitName = _storageService.UnitName ?? "Unit Name";
-            var section = _storageService.Section;
+        // The pdf or spreadsheet of whichever report is showing
+        internal async Task ReportPdfClick() => await Download(OutputType.PDF, "pdf", "application/pdf");
 
-            var allMembers = await _membersService.GetMembersAsync(model.UnitId);
-            var sortedPatrolList = new List<MemberListModel>();
-            if (includeLeaders)
-                sortedPatrolList = allMembers.OrderBy(m => m.patrol_name).ToList();
-            else
-                sortedPatrolList = allMembers.Where(m => m.isAdultLeader == 0).OrderBy(m => m.patrol_name).ToList();
-            var serialisedSortedMemberList = JsonConvert.SerializeObject(sortedPatrolList);
+        internal async Task ReportXlsxClick() => await Download(OutputType.Excel, "xlsx", "application/vnd.ms-excel");
 
-            var report = await _reportService.GetPatrolListReport(groupName, section, unitName, outputType, serialisedSortedMemberList, includeLeaders);
-            return report;
-        }
-
-        internal async Task MemberListPdfClick()
-        {
-            byte[] report = await MemberList(OutputType.PDF);
-            var fileName = $"Members_{model.UnitName.Replace(' ', '_')}.pdf";
-
-            // Send the data to JS to actually download the file
-            await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, "application/pdf", report);
-        }
-
-        internal async Task MemberListXlsxClick()
-        {
-            byte[] report = await MemberList(OutputType.Excel);
-            var fileName = $"Members_{model.UnitName.Replace(' ', '_')}.xlsx";
-
-            // Send the data to JS to actually download the file
-            await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, "application/vnd.ms-excel", report);
-        }
-        private async Task<byte[]> MemberList(OutputType outputType = OutputType.PDF)
+        private async Task Download(OutputType outputType, string extension, string contentType)
         {
             var groupName = _storageService.GroupName ?? "Group Name";
             var unitName = _storageService.UnitName ?? "Unit Name";
             var section = _storageService.Section;
-            var sortedMemberList = model.Members.Where(m => m.isAdultLeader == 0).OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();
-            var serialisedSortedMemberList = JsonConvert.SerializeObject(sortedMemberList);
 
-            var report = await _reportService.GetMemberListReport(groupName, section, unitName, outputType, serialisedSortedMemberList);
-            return report;
-        }
-
-        internal async Task PatrolSheetPdfClick()
-        {
-            byte[] report = await PatrolSheet(OutputType.PDF);
-            var fileName = $"Patrol_Sheets_{model.UnitName.Replace(' ', '_')}.pdf";
-
-            // Send the data to JS to actually download the file
-            await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, "application/pdf", report);
-        }
-
-        internal async Task PatrolSheetXlsxClick()
-        {
-            byte[] report = await PatrolSheet(OutputType.Excel);
-            var fileName = $"Patrol_Sheets_{model.UnitName.Replace(' ', '_')}.xlsx";
-
-            // Send the data to JS to actually download the file
-            await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, "application/vnd.ms-excel", report);
-        }
-
-        private async Task<byte[]> PatrolSheet(OutputType outputType = OutputType.PDF)
-        {
-            var groupName = _storageService.GroupName ?? "Group Name";
-            var unitName = _storageService.UnitName ?? "Unit Name";
-            var section = _storageService.Section;
-            _storageService.SuppressLastName = model.SuppressLastName;
-            List<MemberListModel> sortedMemberList = new List<MemberListModel>();
-            foreach (var member in model.Members.Where(m => m.isAdultLeader == 0).OrderBy(m => m.patrol_name))
+            byte[] report;
+            string name;
+            switch (model.View)
             {
-                string lastName = _storageService.SuppressLastName ? member.last_name.Substring(0, 1).ToUpper() : member.last_name;
-                MemberListModel memberCopy = new MemberListModel
-                {
-                    patrol_name = member.patrol_name,
-                    first_name = member.first_name,
-                    last_name = lastName,
-                    isAdultLeader = member.isAdultLeader,
-                    patrol_duty = member.patrol_duty
-                };
-                sortedMemberList.Add(memberCopy);
+                case MemberReportView.PatrolList:
+                    name = "Patrol_List";
+                    report = await _reportService.GetPatrolListReport(groupName, section, unitName, outputType, JsonConvert.SerializeObject(PatrolListMembers), model.IncludeLeaders);
+                    break;
+                case MemberReportView.PatrolSheets:
+                    name = "Patrol_Sheets";
+                    report = await _reportService.GetPatrolSheetsReport(groupName, section, unitName, outputType, JsonConvert.SerializeObject(PatrolSheetMembers));
+                    break;
+                default:
+                    name = "Members";
+                    report = await _reportService.GetMemberListReport(groupName, section, unitName, outputType, JsonConvert.SerializeObject(MemberListMembers));
+                    break;
             }
-            var serialisedSortedMemberList = JsonConvert.SerializeObject(sortedMemberList);
+            var fileName = $"{name}_{model.UnitName.Replace(' ', '_')}.{extension}";
 
-            var report = await _reportService.GetPatrolSheetsReport(groupName, section, unitName, outputType, serialisedSortedMemberList);
-            return report;
+            // Send the data to JS to actually download the file
+            await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, contentType, report);
         }
 
         internal async Task MemberRefreshClick()
