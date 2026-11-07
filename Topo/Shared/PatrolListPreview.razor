@@ -1,0 +1,73 @@
+@using Topo.Model.Members
+
+@* The patrol list as it will be printed: each patrol with its leaders shaded first, and the unit council (and the adult leaders when
+   they are asked for) beside them. *@
+<div class="patrol-list">
+    <div class="patrols">
+        @foreach (var patrol in Layout.Patrols)
+        {
+            <div class="patrol">
+                <div class="heading">@patrol.DisplayName (@patrol.Members.Count)</div>
+                <table class="table table-sm table-bordered">
+                    <tbody>
+                        @foreach (var member in patrol.Members)
+                        {
+                            <tr class="@(member.HasDuty ? "duty" : "")">
+                                <td>@member.FirstName</td>
+                                @if (Layout.ShowLastName)
+                                {
+                                    <td>@member.LastName</td>
+                                }
+                                <td>@member.Duty</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="council">
+        <div class="heading">Unit Council</div>
+        <table class="table table-sm table-bordered">
+            <tbody>
+                @foreach (var member in Layout.UnitCouncil)
+                {
+                    <tr>
+                        <td>@member.FirstName</td>
+                        @if (Layout.ShowLastName)
+                        {
+                            <td>@member.LastName</td>
+                        }
+                        <td>@member.Duty</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (Layout.AdultLeaders != null)
+        {
+            <div class="heading">Adult Leaders</div>
+            <table class="table table-sm table-bordered">
+                <tbody>
+                    @foreach (var member in Layout.AdultLeaders)
+                    {
+                        <tr>
+                            <td>@member.FirstName</td>
+                            @if (Layout.ShowLastName)
+                            {
+                                <td>@member.LastName</td>
+                            }
+                            <td>@member.Duty</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public PatrolListLayout Layout { get; set; } = new PatrolListLayout();
+}

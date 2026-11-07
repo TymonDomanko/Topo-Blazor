@@ -1,0 +1,55 @@
+@using Topo.Model.Members
+
+@* The member list as it will be printed: first name, last name, age, member number, duty and patrol, with the ages shaded when a
+   Scout is in their last years in the section. *@
+<table class="table table-sm member-list">
+    <thead>
+        <tr class="table-secondary">
+            <th>First Name</th>
+            @if (ShowLastName)
+            {
+                <th>Last Name</th>
+            }
+            <th>Age</th>
+            <th>Member</th>
+            <th>Duty</th>
+            <th>Patrol</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Rows)
+        {
+            <tr>
+                <td>@row.FirstName</td>
+                @if (ShowLastName)
+                {
+                    <td>@row.LastName</td>
+                }
+                <td class="@AgeClass(row.AgeBand)">@row.Age</td>
+                <td>@row.MemberNumber</td>
+                <td>@row.Duty</td>
+                <td>@row.Patrol</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<div class="legend">
+    <span class="swatch second-last"></span> Second last year in section
+    <span class="swatch last ms-3"></span> Last year in section
+</div>
+
+@code {
+    [Parameter]
+    public List<MemberListRow> Rows { get; set; } = new List<MemberListRow>();
+
+    // Left out when no one has anything in it, as in the printed list
+    private bool ShowLastName => MemberReportLayouts.ShowLastName(Rows);
+
+    private static string AgeClass(AgeBand band) => band switch
+    {
+        AgeBand.SecondLast => "second-last",
+        AgeBand.Last => "last",
+        _ => ""
+    };
+}
