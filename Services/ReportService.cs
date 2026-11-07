@@ -26,7 +26,7 @@ namespace Topo.Services
 {
     public interface IReportService
     {
-        public IWorkbook GenerateAdditionalAwardsWorkbook(List<AdditionalAwardSpecificationListModel> awardSpecificationsList, List<AdditionalAwardListModel> sortedAdditionalAwardsList, List<string>? distinctAwards, string groupName, string section, string unitName);
+        public IWorkbook GenerateAdditionalAwardsWorkbook(List<AdditionalAwardSpecificationListModel> awardSpecificationsList, List<AdditionalAwardListModel> sortedAdditionalAwardsList, List<string>? distinctAwards, string groupName, string section, string unitName, bool breakByPatrol = false);
         public IWorkbook GeneratePatrolListWorkbook(List<MemberListModel> sortedPatrolList, string groupName, string section, string unitName, bool includeLeaders);
         public IWorkbook GenerateMemberListWorkbook(List<MemberListModel> sortedMemberList, string groupName, string section, string unitName);
         public IWorkbook GeneratePatrolSheetsWorkbook(List<MemberListModel> sortedPatrolList, string section);
@@ -752,19 +752,41 @@ namespace Topo.Services
             AddLogoToSheet(workbook, 0, groupName, section, lastHeadingCol);
             return workbook;
         }
-        public IWorkbook GenerateAdditionalAwardsWorkbook(List<AdditionalAwardSpecificationListModel> awardSpecificationsList, List<AdditionalAwardListModel> sortedAdditionalAwardsList, List<string>? distinctAwards, string groupName, string section, string unitName)
+        private static Color Colour(string hex) =>
+            Color.FromArgb(Convert.ToInt32(hex.Substring(1, 2), 16), Convert.ToInt32(hex.Substring(3, 2), 16), Convert.ToInt32(hex.Substring(5, 2), 16));
+
+        public IWorkbook GenerateAdditionalAwardsWorkbook(List<AdditionalAwardSpecificationListModel> awardSpecificationsList, List<AdditionalAwardListModel> sortedAdditionalAwardsList, List<string>? distinctAwards, string groupName, string section, string unitName, bool breakByPatrol = false)
         {
-            var workbook = CreateWorkbookWithLogo(groupName, section, 16);
-            IWorksheet sheet = workbook.Worksheets[0];
+            // one sheet for the unit, or one for each patrol
+            var tables = AwardsTable.BuildSheets(new AdditionalAwardsReportDataModel
+            {
+                AwardSpecificationsList = awardSpecificationsList,
+                SortedAdditionalAwardsList = sortedAdditionalAwardsList,
+                DistinctAwards = distinctAwards ?? new List<string>()
+            }, breakByPatrol);
+            var workbook = CreateWorkbookWithSheets(tables.Count);
+            for (var i = 0; i < tables.Count; i++)
+            {
+                AddLogoToSheet(workbook, i, groupName, section, 16);
+                if (breakByPatrol)
+                    workbook.Worksheets[i].Name = string.IsNullOrEmpty(tables[i].Patrol) ? "Unit" : tables[i].Patrol;
+                AddAdditionalAwardsSheet(workbook, workbook.Worksheets[i], tables[i], unitName);
+            }
+            return workbook;
+        }
+
+        private void AddAdditionalAwardsSheet(IWorkbook workbook, IWorksheet sheet, AwardsTable table, string unitName)
+        {
             int rowNumber = 1;
-            int columnOffset = 3;
+            // the awards start after the Scout, KMs and Nights columns
+            int columnOffset = 4;
 
             IStyle headingStyle = workbook.Styles["headingStyle"];
 
             // Add Title
             rowNumber++;
             var title = sheet.Range[rowNumber, 2];
-            title.Text = $"Additional Badges Awarded as at {DateTime.Now.ToShortDateString()}";
+            title.Text = $"{(string.IsNullOrEmpty(table.Patrol) ? "" : table.Patrol + " ")}Additional Badges Awarded as at {DateTime.Now.ToShortDateString()}";
             title.CellStyle = headingStyle;
             sheet.Range[rowNumber, 2, rowNumber, 16].Merge();
             sheet.SetRowHeight(rowNumber, 30);
@@ -779,19 +801,18 @@ namespace Topo.Services
 
             //Add Heading Row
             rowNumber++;
-            var columnNumber = 1;
             sheet.Range[rowNumber, 1].Text = "Scout";
             sheet.Range[rowNumber, 1].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
             sheet.Range[rowNumber, 2].Text = "KMs";
             sheet.Range[rowNumber, 2].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
             sheet.Range[rowNumber, 3].Text = "Nights";
             sheet.Range[rowNumber, 3].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
-            var usedAwards = awardSpecificationsList.Where(x => distinctAwards.Contains(x.id));
-            foreach (var award in usedAwards.OrderBy(x => x.additionalAwardSortIndex))
+            for (var column = 0; column < table.Columns.Count; column++)
             {
-                columnNumber = distinctAwards.IndexOf(award.id) + columnOffset;
-                var cell = sheet.Range[rowNumber, columnNumber];
-                cell.Text = " " + award.name;
+                if (table.Columns[column].Heading == "")
+                    continue;
+                var cell = sheet.Range[rowNumber, column + columnOffset];
+                cell.Text = " " + table.Columns[column].Heading;
                 cell.CellStyle.Rotation = 90;
                 cell.CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
                 cell.CellStyle.VerticalAlignment = ExcelVAlign.VAlignBottom;
@@ -799,61 +820,37 @@ namespace Topo.Services
             }
             rowNumber++;
             // Add detail rows
-            foreach (var additionalAward in sortedAdditionalAwardsList.GroupBy(x => x.MemberName))
+            foreach (var awardRow in table.Rows)
             {
                 sheet.SetRowHeight(rowNumber, 15);
-                sheet.Range[rowNumber, 1].Text = additionalAward.Key;
+                sheet.Range[rowNumber, 1].Text = awardRow.Name;
                 sheet.Range[rowNumber, 1].BorderAround();
                 sheet.Range[rowNumber, 1].CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
-                sheet.Range[rowNumber, 2].Text = additionalAward.FirstOrDefault().KMsHiked.ToString();
+                sheet.Range[rowNumber, 2].Text = awardRow.KMsHiked.ToString();
                 sheet.Range[rowNumber, 2].BorderAround();
                 sheet.Range[rowNumber, 2].CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
-                sheet.Range[rowNumber, 3].Text = additionalAward.FirstOrDefault().NightsCamped.ToString();
+                sheet.Range[rowNumber, 3].Text = awardRow.NightsCamped.ToString();
                 sheet.Range[rowNumber, 3].BorderAround();
+                sheet.Range[rowNumber, 3].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
                 sheet.Range[rowNumber, 3].CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
-                // Set style for date boxes
-                for (int i = 0; i < distinctAwards.Count(); i++)
+                if (awardRow.KMsColour != null)
+                    sheet.Range[rowNumber, 2].CellStyle.Color = Colour(awardRow.KMsColour);
+                if (awardRow.NightsColour != null)
+                    sheet.Range[rowNumber, 3].CellStyle.Color = Colour(awardRow.NightsColour);
+                for (var column = 0; column < awardRow.Cells.Count; column++)
                 {
-                    var cell = sheet.Range[rowNumber, i + columnOffset];
+                    var cell = sheet.Range[rowNumber, column + columnOffset];
                     cell.CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
                     cell.CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
                     cell.BorderAround();
-                }
-                // Populate award dates
-                foreach (var x in additionalAward)
-                {
-                    columnNumber = distinctAwards.IndexOf(x.AwardId) + columnOffset;
-                    var cell = sheet.Range[rowNumber, columnNumber];
-                    if (x.AwardDate.HasValue)
+                    var award = awardRow.Cells[column];
+                    if (award.Date.HasValue)
                     {
-                        cell.DateTime = x.AwardDate.Value;
-                        cell.CellStyle.Color = Color.Orange;
-                        if (x.PresentedDate.HasValue)
-                        {
-                            cell.DateTime = x.PresentedDate.Value;
-                            cell.CellStyle.Color = Color.LightGreen;
-                        }
+                        cell.DateTime = award.Date.Value;
                         cell.NumberFormat = "dd/MM/yy";
                     }
-                    else
-                    {
-                        if (x.AwardId.StartsWith("walkabout"))
-                        {
-                            if (x.KMsHiked >= x.AwardUnits)
-                            {
-                                cell.CellStyle.Color = Color.Red;
-                                sheet.Range[rowNumber, 2].CellStyle.Color = Color.Red;
-                            }
-                        }
-                        if (x.AwardId.StartsWith("camper"))
-                        {
-                            if (x.NightsCamped >= x.AwardUnits)
-                            {
-                                cell.CellStyle.Color = Color.Red;
-                                sheet.Range[rowNumber, 3].CellStyle.Color = Color.Red;
-                            }
-                        }
-                    }
+                    if (award.Colour != null)
+                        cell.CellStyle.Color = Colour(award.Colour);
                 }
                 rowNumber++;
             }
@@ -863,14 +860,14 @@ namespace Topo.Services
             sheet.Range[rowNumber, 1].BorderAround();
             sheet.Range[rowNumber, 1].CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
             sheet.Range[rowNumber, 2].BorderAround();
-            sheet.Range[rowNumber, 2].CellStyle.Color = Color.Red;
+            sheet.Range[rowNumber, 2].CellStyle.Color = Colour(AwardsTable.NotAwarded);
 
             rowNumber++;
             sheet.Range[rowNumber, 1].Text = "Presented";
             sheet.Range[rowNumber, 1].BorderAround();
             sheet.Range[rowNumber, 1].CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
             sheet.Range[rowNumber, 2].BorderAround();
-            sheet.Range[rowNumber, 2].CellStyle.Color = Color.LightGreen;
+            sheet.Range[rowNumber, 2].CellStyle.Color = Colour(AwardsTable.Presented);
 
 
             sheet.UsedRange.AutofitColumns();
@@ -884,8 +881,6 @@ namespace Topo.Services
             sheet.PageSetup.HeaderMargin = 0;
             sheet.PageSetup.FooterMargin = 0;
             sheet.PageSetup.IsFitToPage = true;
-
-            return workbook;
         }
 
         public IWorkbook GeneratePatrolListWorkbook(List<MemberListModel> sortedPatrolList, string groupName, string section, string unitName, bool includeLeaders)

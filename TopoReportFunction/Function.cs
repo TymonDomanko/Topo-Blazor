@@ -311,7 +311,7 @@ public class Function
         if (reportData != null)
         {
             var workbook = reportService.GenerateAdditionalAwardsWorkbook(reportData.AwardSpecificationsList, reportData.SortedAdditionalAwardsList, reportData.DistinctAwards, reportGenerationRequest.GroupName, reportGenerationRequest.Section
-                , reportGenerationRequest.UnitName);
+                , reportGenerationRequest.UnitName, reportGenerationRequest.BreakByPatrol);
             return workbook;
         }
         return reportService.CreateWorkbookWithSheets(1);
