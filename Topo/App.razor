@@ -26,21 +26,9 @@ else
     </Router>
 }
 
-@* Duplicates Shared/Spinner.razor's .spinner-container styling rather than reusing that component:
-   Spinner.razor is driven by SpinnerService's show/hide events, but nothing fires those this early -
-   this one is tied to _restoring instead. There is no sidebar yet, so it is centred on the whole screen. *@
-<style>
-    .spinner-container {
-        display: flex;
-        flex-direction: column;
-        position: fixed;
-        width: max-content;
-        z-index: 999;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-    }
-</style>
+@* The spinner while the session is restored is styled with the page's own (wwwroot/css/app.css). It is a separate use of the figures
+   because Spinner.razor is driven by SpinnerService's show/hide events, and nothing fires those this early - this one is tied to
+   _restoring instead. There is no sidebar yet, so it is centred on the whole screen. *@
 
 @code {
     private bool _restoring = true;
