@@ -24,10 +24,12 @@ namespace Topo.Services
             var approvals = new List<ApprovalsListModel>(); // await _approvalsService.GetApprovalListItems(selectedUnitId);
             TextInfo myTI = new CultureInfo("en-UA", false).TextInfo;
             var unitSiaProjects = new List<SIAProjectListModel>();
+            // the Reading line names each Scout the short way, as the reports do
+            var shortNames = SignInSheetLayout.GetDisplayNames(selectedMembers, false);
             foreach (var selectedMember in selectedMembers)
             {
                 var member = new KeyValuePair<string, string>(selectedMember.id, $"{selectedMember.first_name} {selectedMember.last_name}");
-                progress?.Invoke($"{member.Value} ({selectedMembers.IndexOf(selectedMember) + 1} of {selectedMembers.Count})");
+                progress?.Invoke($"{(shortNames.TryGetValue(selectedMember.id, out var shortName) ? shortName : member.Value)} ({selectedMembers.IndexOf(selectedMember) + 1} of {selectedMembers.Count})");
                 try
                 {
                     var siaResultModel = await _terrainAPIService.GetSIAResultsForMember(member.Key);
