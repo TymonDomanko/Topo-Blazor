@@ -1,5 +1,6 @@
 ﻿@page "/members"
 @inherits Controller.MembersController
+@using Topo.Model.Members
 
 <PageTitle>Topo / Members</PageTitle>
 
@@ -32,84 +33,81 @@
 
     @if (model.Members != null && model.Members.Any())
     {
-        <div class="row header">
-            <div class="col-sm">
-                <strong>First Name</strong>
+        <ul class="nav nav-tabs mb-3">
+            <li class="nav-item">
+                <button type="button" class="nav-link @(model.View == MemberReportView.MemberList ? "active" : "")" @onclick="() => ViewChange(MemberReportView.MemberList)">Member list</button>
+            </li>
+            <li class="nav-item">
+                <button type="button" class="nav-link @(model.View == MemberReportView.PatrolList ? "active" : "")" @onclick="() => ViewChange(MemberReportView.PatrolList)">Patrol list</button>
+            </li>
+            <li class="nav-item">
+                <button type="button" class="nav-link @(model.View == MemberReportView.PatrolSheets ? "active" : "")" @onclick="() => ViewChange(MemberReportView.PatrolSheets)">Patrol sheets</button>
+            </li>
+        </ul>
+
+        <div class="mb-3">
+            <div class="form-check-inline">
+                <InputCheckbox id="useFullNames" class="form-check-input" @bind-Value="model.UseFullNames" />
+                <label class="form-check-label" for="useFullNames">
+                    Use full names (otherwise first name plus enough of the surname to tell people apart)
+                </label>
             </div>
+            @if (model.View == MemberReportView.MemberList)
+            {
+                <div class="form-check-inline ms-3">
+                    <label for="sort" class="form-check-label me-1">Sort by</label>
+                    <select id="sort" class="form-select form-select-sm d-inline-block w-auto" @bind="model.Sort">
+                        <option value="@MemberListSort.Alphabetical">Alphabetical</option>
+                        <option value="@MemberListSort.Positions">Positions</option>
+                        <option value="@MemberListSort.Patrols">Patrols</option>
+                        <option value="@MemberListSort.Age">Age (oldest first)</option>
+                        <option value="@MemberListSort.MemberNumber">Member number</option>
+                    </select>
+                </div>
+            }
+        </div>
+
+        <div class="mt-3 mb-3 row">
             <div class="col-sm">
-                <strong>Last Name</strong>
-            </div>
-            <div class="col-sm">
-                <strong>Member Number</strong>
-            </div>
-            <div class="col-sm">
-                <strong>Patrol</strong>
-            </div>
-            <div class="col-sm">
-                <strong>Role</strong>
-            </div>
-            <div class="col-sm">
-                <strong>Unit Council</strong>
+                <button type="button" class="btn btn-primary" @onclick="ReportPdfClick">@ReportName (pdf)</button>
+                <button type="button" class="btn btn-success" @onclick="ReportXlsxClick">@ReportName (xlsx)</button>
+                @if (model.View == MemberReportView.PatrolList)
+                {
+                    <div class="form-check-inline ms-3">
+                        <InputCheckbox id="includeLeaders" class="form-check-input" @bind-Value="model.IncludeLeaders" />
+                        <label for="includeLeaders" class="form-check-label">
+                            Include Leaders
+                        </label>
+                    </div>
+                }
             </div>
         </div>
 
-        @foreach (var item in model?.Members)
+        @if (model.View == MemberReportView.MemberList)
         {
-            <div class="row striped">
-                <div class="col-sm">
-                    @item.first_name
-                </div>
-                <div class="col-sm">
-                    @item.last_name
-                </div>
-                <div class="col-sm">
-                    @item.member_number
-                </div>
-                <div class="col-sm">
-                    @item.patrol_name
-                </div>
-                <div class="col-sm">
-                    @item.patrol_duty
-                </div>
-                <div class="col-sm align-content-center">
-                    @(item.unit_council ? "Yes" : "")
-                </div>
-            </div>
+            <MemberListPreview Rows="MemberList" />
         }
-
-        <div class="mt-3 mb-3 row">
-            <div class="col-sm">
-                <button type="submit" name="button" @onclick="PatrolListPdfClick" class="btn btn-primary">Generate Patrol list (pdf)</button>
-                <button type="submit" name="button" @onclick="PatrolListXlsxClick" class="btn btn-success">Generate Patrol list (xlsx)</button>
-                <div class="form-check-inline">
-                    <InputCheckbox id="includeLeaders" class="form-check-input"
-                               @bind-Value="model.IncludeLeaders" />
-                    <label for="unit" class="form-check-label">
-                        Include Leaders
-                    </label>
-                </div>
-            </div>
-        </div>
-        <div class="mt-3 mb-3 row">
-            <div class="col-sm">
-                <button type="submit" name="button" @onclick="MemberListPdfClick" class="btn btn-primary">Generate Member list (pdf)</button>
-                <button type="submit" name="button" @onclick="MemberListXlsxClick" class="btn btn-success">Generate Member list (xlsx)</button>
-            </div>
-        </div>
-        <div class="mt-3 mb-3 row">
-            <div class="col-sm">
-                <button type="submit" name="button" @onclick="PatrolSheetPdfClick" class="btn btn-primary">Generate Patrol sheets (pdf)</button>
-                <button type="submit" name="button" @onclick="PatrolSheetXlsxClick" class="btn btn-success">Generate Patrol sheets (xlsx)</button>
-                <div class="form-check-inline">
-                    <InputCheckbox id="suppressLastName" class="form-check-input"
-                                   @bind-Value="model.SuppressLastName" />
-                    <label class="form-check-label" for="suppressLastName">
-                        Suppress Last Name
-                    </label>
-                </div>
-            </div>
-        </div>
+        else if (model.View == MemberReportView.PatrolList)
+        {
+            <PatrolListPreview Layout="PatrolList" />
+        }
+        else
+        {
+            <PatrolSheetsPreview Patrols="PatrolSheets" />
+        }
+    }
+    else if (!string.IsNullOrEmpty(model.UnitId))
+    {
+        <div class="mt-3 mb-3 text-muted">No youth members in this unit.</div>
     }
 
 </EditForm>
 
+@code {
+    private string ReportName => model.View switch
+    {
+        MemberReportView.PatrolList => "Patrol list",
+        MemberReportView.PatrolSheets => "Patrol sheets",
+        _ => "Member list"
+    };
+}
