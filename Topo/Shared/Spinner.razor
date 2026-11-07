@@ -2,25 +2,6 @@
 
 @inject SpinnerService SpinnerService
 
-<style>
-    .spinner-container {
-        display: flex;
-        flex-direction: column;
-        position: fixed;
-        width: max-content;
-        z-index: 999;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-    }
-
-    /* Centre it in the page beside the 250px sidebar, not across the sidebar and menu */
-    @@media (min-width: 641px) {
-        .spinner-container {
-            left: calc(50% + 125px);
-        }
-    }
-</style>
 @if (IsVisible)
 {
     <div class="spinner-container">
