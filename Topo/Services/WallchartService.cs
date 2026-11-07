@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+﻿using Topo.Model.Members;
+using System.Globalization;
 using Topo.Model.Approvals;
 using Topo.Model.Milestone;
 using Topo.Model.Progress;
@@ -9,7 +10,7 @@ namespace Topo.Services
 {
     public interface IWallchartService
     {
-        Task<List<WallchartItemModel>> GetWallchartItems(string selectedUnitId);
+        Task<List<WallchartItemModel>> GetWallchartItems(string selectedUnitId, Action<string>? progress = null);
     }
     public class WallchartService : IWallchartService
     {
@@ -27,7 +28,7 @@ namespace Topo.Services
             _membersService = membersService;
         }
 
-        public async Task<List<WallchartItemModel>> GetWallchartItems(string selectedUnitId)
+        public async Task<List<WallchartItemModel>> GetWallchartItems(string selectedUnitId, Action<string>? progress = null)
         {
             var members = await _membersService.GetMembersAsync(selectedUnitId);
             var cachedWallchartItems = _storageService.CachedWallchartItems.Where(cm => cm.Key == selectedUnitId).FirstOrDefault().Value;
@@ -47,8 +48,12 @@ namespace Topo.Services
             await _terrainAPIService.RevokeAssumedProfiles();
 
             var wallchartItems = new List<WallchartItemModel>();
-            foreach (var member in members.Where(m => m.isAdultLeader == 0).OrderBy(m => m.last_name).ThenBy(m => m.first_name))
+            var youth = members.Where(m => m.isAdultLeader == 0).OrderBy(m => m.last_name).ThenBy(m => m.first_name).ToList();
+            // the Reading line names each Scout the short way, as the reports do
+            var shortNames = SignInSheetLayout.GetDisplayNames(youth, false);
+            foreach (var member in youth)
             {
+                progress?.Invoke($"{(shortNames.TryGetValue(member.id, out var shortName) ? shortName : member.first_name)} ({youth.IndexOf(member) + 1} of {youth.Count})");
                 var wallchartItem = new WallchartItemModel();
 
                 // Get Milestone for member
