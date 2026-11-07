@@ -1,0 +1,35 @@
+@using Topo.Model.Members
+
+@* The patrol sheets as they will be printed, a page for each patrol: its name in large type with its members, the leaders shaded first. *@
+@{
+    // every sheet has the same columns, with the surname left out when no one has one, as in the printed sheets
+    var showLastName = MemberReportLayouts.ShowLastName(Patrols);
+}
+<div class="sheets">
+    @foreach (var patrol in Patrols)
+    {
+        <div class="sheet">
+            <div class="patrol-name">@patrol.DisplayName</div>
+            <table class="table table-bordered">
+                <tbody>
+                    @foreach (var member in patrol.Members)
+                    {
+                        <tr class="@(member.HasDuty ? "duty" : "")">
+                            <td>@member.FirstName</td>
+                            @if (showLastName)
+                            {
+                                <td>@member.LastName</td>
+                            }
+                            <td>@member.Duty</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public List<PatrolGroup> Patrols { get; set; } = new List<PatrolGroup>();
+}
