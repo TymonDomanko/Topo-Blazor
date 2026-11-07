@@ -29,6 +29,14 @@ namespace Topo.Controller
         public ISIAService _SIAService { get; set; }
 
         public SIAPageViewModel model = new SIAPageViewModel();
+        public bool Loading;
+        public string Progress = "";
+        public string ErrorMessage = "";
+        // Laid out again whenever an option changes, from what was read for the unit
+        public List<SiaProjectsSheet>? Sheets;
+        // The ids of the Scouts ticked beside their names; with none ticked the report is for everyone
+        public HashSet<string> Ticked => model.Members.Where(m => m.selected).Select(m => m.id).ToHashSet();
+        private List<SIAProjectListModel>? _data;
 
         protected override async Task OnInitializedAsync()
         {
@@ -51,6 +59,9 @@ namespace Topo.Controller
 
         internal async Task UnitChange(string unitId)
         {
+            Sheets = null;
+            _data = null;
+            ErrorMessage = "";
             if (string.IsNullOrEmpty(unitId))
             {
                 model.UnitId = unitId;
@@ -64,62 +75,84 @@ namespace Topo.Controller
             var allMembers = await _membersService.GetMembersAsync(model.UnitId);
             model.Members = allMembers.Where(m => m.isAdultLeader == 0).OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();
             model.UnitName = _storageService.UnitName;
-        }
-
-        internal async Task SelectAllChange(ChangeEventArgs e)
-        {
-            var selectAll = (bool)e.Value;
+            // the members are kept for the unit, so a tick left from another visit is cleared
             foreach (var member in model.Members)
+                member.selected = false;
+            await Load();
+        }
+
+        // Reads every Scout's projects once; the options then change what is shown without reading Terrain again
+        private async Task Load()
+        {
+            if (model.Members.Count == 0)
+                return;
+
+            Loading = true;
+            try
             {
-                member.selected = selectAll;
+                _data = await _SIAService.GenerateSIAReportData(model.Members, _storageService.Section, model.UnitId, step => { Progress = step; InvokeAsync(StateHasChanged); });
+                Recalculate();
+            }
+            catch (Exception)
+            {
+                ErrorMessage = "Couldn't read the projects from Terrain.";
+            }
+            finally
+            {
+                Loading = false;
+                Progress = "";
             }
         }
 
-        internal async Task SIAReportPdfClick()
-        {
-            byte[] report = await SIAReport(OutputType.PDF);
-            var fileName = $"SIA_Projects_{model.UnitName.Replace(' ', '_')}.pdf";
+        internal void OptionChanged() => Recalculate();
 
-            // Send the data to JS to actually download the file
-            await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, "application/pdf", report);
+        // Ticking a Scout beside their name puts them in the report; it is for everyone while none are ticked
+        internal void Toggle((string Id, bool Ticked) change)
+        {
+            var member = model.Members.FirstOrDefault(m => m.id == change.Id);
+            if (member != null)
+                member.selected = change.Ticked;
         }
 
-        internal async Task SIAReportXlsxClick()
+        internal void ClearTicks()
         {
-            byte[] report = await SIAReport(OutputType.Excel);
-            var fileName = $"SIA_Projects_{model.UnitName.Replace(' ', '_')}.xlsx";
-
-            // Send the data to JS to actually download the file
-            await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, "application/vnd.ms-excel", report);
+            foreach (var member in model.Members)
+                member.selected = false;
         }
 
-        internal async Task<byte[]> SIAReport(OutputType outputType = OutputType.PDF)
+        // The Scouts ticked, or everyone when none are, named as the options ask
+        private List<SIAProjectListModel>? ReportData() =>
+            _data == null ? null : SiaProjectsLayout.ForMembers(_data, ReportScope.Names(model.Members, model.UseFullNames));
+
+        // The page shows everyone, so a Scout can be ticked; the report is made from those ticked
+        private void Recalculate() =>
+            Sheets = _data == null ? null : SiaProjectsLayout.Build(SiaProjectsLayout.ForMembers(_data, ReportScope.AllNames(model.Members, model.UseFullNames)), model.BreakByPatrol);
+
+        internal async Task SIAReportPdfClick() => await Download(OutputType.PDF, "pdf", "application/pdf");
+
+        internal async Task SIAReportXlsxClick() => await Download(OutputType.Excel, "xlsx", "application/vnd.ms-excel");
+
+        // The report is made from what is on the page, so it is the same as the preview
+        private async Task Download(OutputType outputType, string extension, string contentType)
         {
-            if (!model.Members.Any(m => m.selected))
+            var reportData = ReportData();
+            if (reportData == null || reportData.Count == 0)
+                return;
+
+            try
             {
-                foreach (var member in model.Members)
-                {
-                    member.selected = true;
-                }
-            }
-            var selectedMembers = model.Members.Where(m => m.selected).Select(m => m.id).ToList();
+                var groupName = _storageService.GroupName ?? "";
+                var unitName = _storageService.UnitName ?? "";
+                var report = await _reportService.GetSIAReport(groupName, _storageService.Section, unitName, outputType, JsonConvert.SerializeObject(reportData), model.BreakByPatrol);
+                var fileName = $"SIA_Projects_{model.UnitName.Replace(' ', '_')}.{extension}";
 
-            var memberKVP = new List<KeyValuePair<string, string>>();
-            foreach (var member in selectedMembers)
+                // Send the data to JS to actually download the file
+                await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, contentType, report);
+            }
+            catch (Exception)
             {
-                var memberName = model.Members.Where(m => m.id == member).Select(m => m.first_name + " " + m.last_name).FirstOrDefault();
-                memberKVP.Add(new KeyValuePair<string, string>(member, memberName ?? ""));
+                ErrorMessage = "Couldn't build the report.";
             }
-
-            var groupName = _storageService.GroupName ?? "";
-            var unitName = _storageService.UnitName ?? "";
-            var section = _storageService.Section;
-
-            var reportData = await _SIAService.GenerateSIAReportData(memberKVP, section, model.UnitId);
-            var serialisedReportData = JsonConvert.SerializeObject(reportData);
-
-            var report = await _reportService.GetSIAReport(groupName, section, unitName, outputType, serialisedReportData);
-            return report;
         }
     }
 }
