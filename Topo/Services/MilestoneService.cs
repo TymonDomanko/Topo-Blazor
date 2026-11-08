@@ -7,7 +7,7 @@ namespace Topo.Services
     public interface IMilestoneService
     {
         public Task<List<MilestoneSummaryListModel>> GetMilestoneSummaries(string selectedUnitId, Action<string>? progress = null);
-        // Names the summaries again, for when the last names are shown or hidden after they were read
+        // Names the summaries again, for when full names are switched on or off after they were read
         public Task RenameMembers(string selectedUnitId, List<MilestoneSummaryListModel> summaries);
     }
 
@@ -35,6 +35,7 @@ namespace Topo.Services
             var milestonesByMember = (await _terrainAPIService.GetUnitAchievementsOfType<GetMilestoneResultModel>(selectedUnitId, "milestone")).results.ToLookup(r => r.member_id);
             // the Reading line names each Scout the short way, as the reports do
             var shortNames = SignInSheetLayout.GetDisplayNames(members, false);
+            var names = await _membersService.GetDisplayNamesAsync(selectedUnitId);
             for (var i = 0; i < members.Count; i++)
             {
                 var member = members[i];
@@ -104,7 +105,7 @@ namespace Topo.Services
                     new MilestoneSummaryListModel
                     {
                         memberId = member.id,
-                        memberName = await MemberName(selectedUnitId, member),
+                        memberName = names.TryGetValue(member.id, out var name) ? name : member.first_name,
                         memberPatrol = member.patrol_name,
                         currentLevel = currentLevel,
                         percentComplete = percentComplete,
@@ -158,18 +159,13 @@ namespace Topo.Services
 
         public async Task RenameMembers(string selectedUnitId, List<MilestoneSummaryListModel> summaries)
         {
-            var members = await _membersService.GetMembersAsync(selectedUnitId);
+            var names = await _membersService.GetDisplayNamesAsync(selectedUnitId);
             foreach (var summary in summaries)
             {
-                var member = members.FirstOrDefault(m => m.id == summary.memberId);
-                if (member != null)
-                    summary.memberName = await MemberName(selectedUnitId, member);
+                if (names.TryGetValue(summary.memberId, out var name))
+                    summary.memberName = name;
             }
         }
-
-        // The first name and as much of the last as the Suppress Last Name setting allows
-        private async Task<string> MemberName(string selectedUnitId, Topo.Model.Members.MemberListModel member) =>
-            $"{member.first_name} {await _membersService.GetMemberLastName(selectedUnitId, member.id)}";
 
         private static bool IsAwardedOrApproved(string status) => status == "awarded" || status == "approved";
 
