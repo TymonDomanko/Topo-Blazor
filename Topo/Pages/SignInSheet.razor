@@ -58,7 +58,7 @@
         <div class="col-sm-6">
             <select class="form-select" value="@EventId" @onchange="EventChange"
                     disabled="@(model.Events == null || !model.Events.Any())">
-                <option value="">@(model.Events != null && model.Events.Any() ? "No event (leave the title blank)" : "No events found for these calendars")</option>
+                <option value="">@(model.Events != null && model.Events.Any() ? "No event (leave the title blank)" : "No events to show.")</option>
                 @if (model.Events != null)
                 {
                     @foreach (var item in model.Events)
@@ -131,14 +131,8 @@
 
     @if (PreviewMembers != null)
     {
-        <div class="mt-3 mb-3 row">
-            <div class="col-sm-2">
-            </div>
-            <div class="col-sm-10">
-                <button type="button" class="btn btn-primary" @onclick="@(() => DownloadClick(OutputType.PDF))">Sign In Sheet (pdf)</button>
-                <button type="button" class="btn btn-success" @onclick="@(() => DownloadClick(OutputType.Excel))">Sign In Sheet (xlsx)</button>
-            </div>
-        </div>
+        <ReportButtons Name="Sign In Sheet" Disabled="@(PreviewMembers.Count == 0)"
+                       OnPdf="@(() => DownloadClick(OutputType.PDF))" OnXlsx="@(() => DownloadClick(OutputType.Excel))" />
         <div class="mt-3 mb-3 row">
             <label class="col-sm-2 col-form-label">Preview</label>
             <div class="col-sm-10">
@@ -148,10 +142,6 @@
     }
     else if (PreviewFailed)
     {
-        <div class="mt-3 mb-3 row">
-            <div class="col-sm-2">
-            </div>
-            <div class="col-sm-10 text-danger">Couldn't load the invitees for that event.</div>
-        </div>
+        <PageStatus Error="Couldn't load the invitees for that event." />
     }
 </EditForm>

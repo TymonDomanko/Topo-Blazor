@@ -69,11 +69,11 @@
     <div class="mt-3 mb-3 row">
         <label class="col-sm-2 col-form-label">From Date</label>
         <div class="col-sm-3">
-            <InputDate @bind-Value="@model.From" class="form-control" />
+            <InputDate @bind-Value="@model.From" @bind-Value:after="DatesChanged" class="form-control" />
         </div>
         <label class="col-sm-2 col-form-label">To Date</label>
         <div class="col-sm-3">
-            <InputDate @bind-Value="@model.To" class="form-control" />
+            <InputDate @bind-Value="@model.To" @bind-Value:after="DatesChanged" class="form-control" />
         </div>
     </div>
     <div class="mt-3 mb-3 row">
@@ -85,32 +85,18 @@
         </div>
     </div>
 
-    <div class="mt-3 mb-3 row">
-        <div class="col-sm-2"></div>
-        <div class="col-sm-10">
-            <button type="button" class="btn btn-primary" disabled="@Busy" @onclick="GenerateClick">Generate Section Report</button>
-            @if (Busy)
-            {
-                <span class="ms-3">Reading @Progress... this can take a few minutes.</span>
-            }
-            @if (!string.IsNullOrEmpty(model.ErrorMessage))
-            {
-                <span class="ms-3 text-danger">@model.ErrorMessage</span>
-            }
-        </div>
-    </div>
+    <PageStatus Loading="Busy" Progress="@Progress" Error="@model.ErrorMessage" />
 </EditForm>
 
 @if (Result != null)
 {
-    <div class="mb-3">
-        <button type="button" class="btn btn-primary" @onclick="@(() => DownloadClick(OutputType.PDF))">Section Report (pdf)</button>
-        <button type="button" class="btn btn-success" @onclick="@(() => DownloadClick(OutputType.Excel))">Section Report (xlsx)</button>
+    <ReportButtons Name="Section Report" Disabled="@(Result.Report.Sections.Count == 0)"
+                   OnPdf="@(() => DownloadClick(OutputType.PDF))" OnXlsx="@(() => DownloadClick(OutputType.Excel))">
         @if (!string.IsNullOrEmpty(model.Message))
         {
             <span class="ms-3 text-success">@model.Message</span>
         }
-    </div>
+    </ReportButtons>
 
     <SectionReportView Report="Result.Report" />
 }

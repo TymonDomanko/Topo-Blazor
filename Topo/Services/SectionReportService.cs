@@ -26,7 +26,7 @@ namespace Topo.Services
 
     public interface ISectionReportService
     {
-        public Task<SectionReportResult> GetSectionReport(SectionReportRequest request, Action<string>? progress = null);
+        public Task<SectionReportResult> GetSectionReport(SectionReportRequest request, Action<string>? progress = null, CancellationToken cancellationToken = default);
     }
 
     public class SectionReportService : ISectionReportService
@@ -44,7 +44,7 @@ namespace Topo.Services
             _unitReportService = unitReportService;
         }
 
-        public async Task<SectionReportResult> GetSectionReport(SectionReportRequest request, Action<string>? progress = null)
+        public async Task<SectionReportResult> GetSectionReport(SectionReportRequest request, Action<string>? progress = null, CancellationToken cancellationToken = default)
         {
             var now = DateTime.Now;
             var result = new SectionReportResult
@@ -72,6 +72,7 @@ namespace Topo.Services
 
             foreach (var unitId in request.UnitIds)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var profile = _storageService.GetProfilesResult?.profiles?.FirstOrDefault(p => p.unit?.id == unitId);
                 var unitName = profile?.unit?.name ?? "";
                 var section = profile?.unit?.section ?? "";
@@ -97,15 +98,18 @@ namespace Topo.Services
                 var calendarKey = string.Join(",", calendarIds.OrderBy(c => c));
                 if (calendarIds.Length > 0 && !eventsByCalendars.ContainsKey(calendarKey))
                 {
-                    eventsByCalendars[calendarKey] = await _unitReportService.GetEventsForCalendars(request.From, request.To, calendarIds);
+                    eventsByCalendars[calendarKey] = await _unitReportService.GetEventsForCalendars(request.From, request.To, calendarIds, cancellationToken, step => progress?.Invoke($"{unitName}: {step}"));
                 }
                 if (calendarIds.Length > 0)
                     input.Events = eventsByCalendars[calendarKey];
 
                 var youth = members.Where(m => !UnitReportBuilder.IsLeader(m)).ToList();
+                // the Reading line names each Scout the short way, as the other reports do
+                var shortNames = SignInSheetLayout.GetDisplayNames(youth, false);
                 for (var i = 0; i < youth.Count; i++)
                 {
-                    progress?.Invoke($"{unitName}: members' records {i + 1} of {youth.Count}");
+                    cancellationToken.ThrowIfCancellationRequested();
+                    progress?.Invoke($"{unitName}: {(shortNames.TryGetValue(youth[i].id, out var shortName) ? shortName : youth[i].first_name)} ({i + 1} of {youth.Count})");
                     input.Records[youth[i].id] = await GetRecords(youth[i].id, records, withBadges: true);
                 }
 
@@ -120,6 +124,7 @@ namespace Topo.Services
                     var nextMembers = (await _membersService.GetMembersAsync(nextUnit.id)).Where(m => !UnitReportBuilder.IsLeader(m)).ToList();
                     foreach (var next in nextMembers)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         input.NextSectionMembers.Add(new NextSectionMember
                         {
                             Person = new RosterPerson { Id = next.id, MemberNumber = next.member_number, Name = $"{next.first_name} {next.last_name}".Trim() },

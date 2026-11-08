@@ -7,7 +7,7 @@ using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class ReadyToSubmitController : ComponentBase
+    public class ReadyToSubmitController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -29,10 +29,16 @@ namespace Topo.Controller
 
         public ReadyToSubmitPageViewModel model = new ReadyToSubmitPageViewModel();
         public bool Loading;
+        // The unit has no youth, so there is nothing to read
+        public bool NoYouth;
         public string Progress = "";
         // Worked out again whenever an option changes, from what was read for the unit
         public ReadyToSubmitReport? Report;
         private ReadyToSubmitData? _data;
+        // The unit can be changed while one is still being read, so a read that has been overtaken is dropped
+        private int _loadId;
+        // Stops the read for a unit that was changed away from, or when the page is left, so it doesn't carry on in the background
+        private CancellationTokenSource? _loading;
 
         protected override async Task OnInitializedAsync()
         {
@@ -56,8 +62,17 @@ namespace Topo.Controller
             model.ErrorMessage = "";
             Report = null;
             _data = null;
+            NoYouth = false;
+            var loadId = ++_loadId;
+            _loading?.Cancel();
+            _loading = new CancellationTokenSource();
+            var token = _loading.Token;
             if (string.IsNullOrEmpty(unitId))
+            {
+                Loading = false;
+                Progress = "";
                 return;
+            }
 
             _storageService.UnitId = unitId;
             Loading = true;
@@ -65,18 +80,39 @@ namespace Topo.Controller
             {
                 var members = await _membersService.GetMembersAsync(unitId);
                 var youth = members.Where(m => m.isAdultLeader == 0).ToList();
-                _data = await _readyToSubmitService.LoadAsync(youth, _storageService.Section, step => { Progress = step; InvokeAsync(StateHasChanged); });
+                if (youth.Count == 0)
+                {
+                    NoYouth = loadId == _loadId;
+                    return;
+                }
+                var data = await _readyToSubmitService.LoadAsync(youth, _storageService.Section, step => { if (loadId == _loadId) { Progress = step; InvokeAsync(StateHasChanged); } }, token);
+                if (loadId != _loadId)
+                    return;
+                _data = data;
                 Recalculate();
+            }
+            catch (OperationCanceledException)
+            {
             }
             catch (Exception)
             {
-                model.ErrorMessage = "Couldn't read the badges from Terrain.";
+                if (loadId == _loadId)
+                    model.ErrorMessage = "Couldn't read the badges from Terrain.";
             }
             finally
             {
-                Loading = false;
-                Progress = "";
+                if (loadId == _loadId)
+                {
+                    Loading = false;
+                    Progress = "";
+                }
             }
+        }
+
+        public void Dispose()
+        {
+            _loading?.Cancel();
+            _loading?.Dispose();
         }
 
         // The preview follows the options as they are ticked, without reading Terrain again

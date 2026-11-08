@@ -12,7 +12,7 @@ namespace Topo.Services
 
     public interface IReadyToSubmitService
     {
-        public Task<ReadyToSubmitData> LoadAsync(List<MemberListModel> youth, string section, Action<string>? progress = null);
+        public Task<ReadyToSubmitData> LoadAsync(List<MemberListModel> youth, string section, Action<string>? progress = null, CancellationToken cancellationToken = default);
     }
 
     public class ReadyToSubmitService : IReadyToSubmitService
@@ -33,7 +33,7 @@ namespace Topo.Services
             _terrainAPIService = terrainAPIService;
         }
 
-        public async Task<ReadyToSubmitData> LoadAsync(List<MemberListModel> youth, string section, Action<string>? progress = null)
+        public async Task<ReadyToSubmitData> LoadAsync(List<MemberListModel> youth, string section, Action<string>? progress = null, CancellationToken cancellationToken = default)
         {
             var data = new ReadyToSubmitData();
             var ordered = ReadyToSubmitBuilder.InPatrolOrder(youth);
@@ -42,6 +42,7 @@ namespace Topo.Services
             var shortNames = ReadyToSubmitBuilder.DisplayNames(named, false);
             for (var i = 0; i < ordered.Count; i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var member = ordered[i];
                 progress?.Invoke($"{shortNames[named[i]]} ({i + 1} of {ordered.Count})");
                 var responses = await Task.WhenAll(Types.Select(type => _terrainAPIService.GetAchievementsJsonAsync(member.id, type)));
@@ -63,6 +64,7 @@ namespace Topo.Services
             var done = 0;
             foreach (var path in formPaths)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 progress?.Invoke($"Checking what the forms ask ({++done} of {formPaths.Count + oasPaths.Count})");
                 if (!_formTemplates.ContainsKey(path))
                 {
@@ -76,6 +78,7 @@ namespace Topo.Services
             }
             foreach (var path in oasPaths)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 progress?.Invoke($"Checking what the stages ask ({++done} of {formPaths.Count + oasPaths.Count})");
                 if (!_oasTemplates.ContainsKey(path))
                 {

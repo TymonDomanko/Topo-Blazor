@@ -1,13 +1,14 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Newtonsoft.Json;
+using Topo.Model.Common;
 using Topo.Model.Program;
 using Topo.Model.ReportGeneration;
 using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class ProgramIdeasController : ComponentBase
+    public class ProgramIdeasController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -28,7 +29,13 @@ namespace Topo.Controller
 
         public ProgramIdeasPageViewModel model = new ProgramIdeasPageViewModel();
 
+        public bool Loading;
+        public const string FetchFailedMessage = "Could not load program history from Terrain for that range. Try a narrower \"How far back to look\" option (for example Last year) rather than All time.";
         private bool _select2Bound;
+        private DotNetObjectReference<ProgramIdeasController>? _selfReference;
+        // The ideas are read again a moment after the calendars or the ranges change, rather than from a button
+        private readonly AutoRun _auto = new AutoRun();
+        private const int OptionDelayMilliseconds = 500;
 
         protected override async Task OnAfterRenderAsync(bool firstRender)
         {
@@ -38,7 +45,44 @@ namespace Topo.Controller
             {
                 _select2Bound = true;
                 await JS.InvokeVoidAsync("BindSelect2");
+                _selfReference = DotNetObjectReference.Create(this);
+                await JS.InvokeVoidAsync("bindSelect2Change", _select2Reference, _selfReference);
+                if (model.SelectedCalendars != null && model.SelectedCalendars.Length > 0)
+                {
+                    await _auto.RunAsync(LoadIdeas);
+                    // nothing else redraws the page once a read that began after the render has finished
+                    StateHasChanged();
+                }
             }
+        }
+
+        public void Dispose()
+        {
+            _auto.Dispose();
+            _selfReference?.Dispose();
+        }
+
+        // Called from the calendar picker when the person changes the selection
+        [JSInvokable]
+        public async Task OnCalendarsChanged()
+        {
+            if (!await GetSelections())
+            {
+                _auto.Stop();
+                model.Ideas = null;
+                Loading = false;
+                StateHasChanged();
+                return;
+            }
+            await _auto.RunAsync(LoadIdeas);
+            StateHasChanged();
+        }
+
+        internal async Task OptionChanged()
+        {
+            if (model.SelectedCalendars == null || model.SelectedCalendars.Length == 0)
+                return;
+            await _auto.RunAsync(LoadIdeas, OptionDelayMilliseconds);
         }
 
         protected override async Task OnInitializedAsync()
@@ -82,19 +126,27 @@ namespace Topo.Controller
             };
         }
 
-        internal async Task ShowProgramIdeasClick()
+        // Reads the ideas for the chosen calendars and ranges. A read that has been overtaken by a newer change is dropped.
+        private async Task LoadIdeas(CancellationToken cancellationToken)
         {
-            if (!await GetSelections())
-                return;
-
             var fromDate = ResolveFromDate(model.HistoryRange, model.HistoryFromDate);
             DateTime? highlightFromDate = model.HighlightRange == ProgramIdeasRangeOption.None
                 ? null
                 : ResolveFromDate(model.HighlightRange, model.HighlightFromDate);
 
-            var ideas = await _programService.GetProgramIdeas(fromDate, highlightFromDate, model.SelectedCalendars);
-            model.FetchFailed = ideas == null;
-            model.Ideas = ApplySort(ideas ?? new List<ProgramIdeaItemModel>(), model.SortColumn, model.SortDescending);
+            Loading = true;
+            try
+            {
+                var ideas = await _programService.GetProgramIdeas(fromDate, highlightFromDate, model.SelectedCalendars);
+                cancellationToken.ThrowIfCancellationRequested();
+                model.FetchFailed = ideas == null;
+                model.Ideas = ApplySort(ideas ?? new List<ProgramIdeaItemModel>(), model.SortColumn, model.SortDescending);
+            }
+            finally
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                    Loading = false;
+            }
         }
 
         // One shared sort state applies across every Challenge Area group/sheet, not per-group.
