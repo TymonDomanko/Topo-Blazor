@@ -11,7 +11,8 @@ namespace Topo.Services
         public Task<List<MemberListModel>> GetMembersForPatrol(string patrolId, string patrolName);
         public void ClearMemberCache(string unitId);
         public Task<MemberListModel> GetMember(string unitId, string memberId);
-        public Task<string> GetMemberLastName(string unitId, string memberId);
+        // How the unit's youth are named in reports: first name plus enough of the surname to tell people apart, or full names
+        public Task<Dictionary<string, string>> GetDisplayNamesAsync(string unitId);
         public Task SetMemberGenderAsync(string unitId, string memberId, string gender);
     }
 
@@ -144,23 +145,10 @@ namespace Topo.Services
             return member ?? new MemberListModel();
         }
 
-        public async Task<string> GetMemberLastName(string unitId, string memberId)
+        public async Task<Dictionary<string, string>> GetDisplayNamesAsync(string unitId)
         {
             var members = await GetMembersAsync(unitId);
-            var member = members.Where(m => m.id == memberId).FirstOrDefault();
-            if (member == null || string.IsNullOrEmpty(member.last_name))
-            {
-                return "";
-            }
-            if (_storageService.SuppressLastName)
-            {
-                var lastName = member.last_name.Substring(0, 1).ToUpper();
-                return lastName;
-            }
-            else
-            {
-                return member.last_name;
-            }
+            return SignInSheetLayout.GetDisplayNames(members.Where(m => m.isAdultLeader == 0), _storageService.UseFullNames);
         }
 
         private string GetAgeFromBirthdate(string dateOfBirth)

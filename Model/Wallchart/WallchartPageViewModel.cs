@@ -13,6 +13,6 @@ namespace Topo.Model.Wallchart
         public string ErrorMessage { get; set; } = string.Empty;
         public bool BreakByPatrol { get; set; }
 
-        public bool SuppressLastName { get; set; }
+        public bool UseFullNames { get; set; }
     }
 }
