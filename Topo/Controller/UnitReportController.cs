@@ -1,13 +1,14 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Newtonsoft.Json;
+using Topo.Model.Common;
 using Topo.Model.ReportGeneration;
 using Topo.Model.UnitReport;
 using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class UnitReportController : ComponentBase
+    public class UnitReportController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -33,6 +34,11 @@ namespace Topo.Controller
 
         public bool Busy;
         public string Progress = "";
+        // The report is read again a moment after the unit, calendars or period change, rather than from a button
+        private readonly AutoRun _auto = new AutoRun();
+        private const int OptionDelayMilliseconds = 800;
+
+        public void Dispose() => _auto.Dispose();
 
         protected override async Task OnInitializedAsync()
         {
@@ -48,13 +54,15 @@ namespace Topo.Controller
             if (!string.IsNullOrEmpty(_storageService.UnitId))
             {
                 SelectUnit(_storageService.UnitId);
+                await _auto.RunAsync(Generate);
             }
         }
 
-        internal void UnitChange(ChangeEventArgs e)
+        internal async Task UnitChange(ChangeEventArgs e)
         {
             SelectUnit(e.Value?.ToString() ?? "");
             model.Report = null;
+            await _auto.RunAsync(Generate);
         }
 
         private void SelectUnit(string unitId)
@@ -68,32 +76,46 @@ namespace Topo.Controller
                 model.SelectedCalendars = new HashSet<string> { match };
         }
 
-        internal void AllTimeChange(ChangeEventArgs e)
+        internal async Task AllTimeChange(ChangeEventArgs e)
         {
             model.AllTime = (bool)(e.Value ?? false);
+            await _auto.RunAsync(Generate, OptionDelayMilliseconds);
         }
+
+        internal async Task DatesChanged() => await _auto.RunAsync(Generate, OptionDelayMilliseconds);
 
         public List<List<KeyValuePair<string, string>>> CalendarColumns() => CalendarMatcher.Columns(model.Calendars);
 
-        internal void ToggleCalendar(string calendarId, bool selected)
+        internal async Task ToggleCalendar(string calendarId, bool selected)
         {
             if (selected)
                 model.SelectedCalendars.Add(calendarId);
             else
                 model.SelectedCalendars.Remove(calendarId);
+            await _auto.RunAsync(Generate, OptionDelayMilliseconds);
         }
 
-        internal async Task GenerateClick()
+        // Reads the report for what is chosen. A read that has been overtaken by a newer change stops, and leaves the page to the newer one.
+        private async Task Generate(CancellationToken cancellationToken)
         {
             model.ErrorMessage = "";
+            // no unit chosen yet, so there is nothing to read and nothing to complain about
             if (string.IsNullOrEmpty(model.UnitId))
-                model.ErrorMessage = "Please select a unit.";
-            else if (model.SelectedCalendars.Count == 0)
+            {
+                model.Report = null;
+                Busy = false;
+                return;
+            }
+            if (model.SelectedCalendars.Count == 0)
                 model.ErrorMessage = "Please select at least one calendar.";
             else if (!model.AllTime && model.ToDate < model.FromDate)
                 model.ErrorMessage = "The to date must be after the from date.";
             if (model.ErrorMessage != "")
+            {
+                model.Report = null;
+                Busy = false;
                 return;
+            }
 
             Busy = true;
             model.Report = null;
@@ -102,18 +124,22 @@ namespace Topo.Controller
                 var from = model.AllTime ? EarliestDate : model.FromDate;
                 var to = model.AllTime ? DateTime.Today : model.ToDate;
                 var report = await _unitReportService.GetUnitReport(model.UnitId, from, to, model.SelectedCalendars.ToArray(),
-                    step => { Progress = step; InvokeAsync(StateHasChanged); });
+                    step => { if (!cancellationToken.IsCancellationRequested) { Progress = step; InvokeAsync(StateHasChanged); } }, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 report.AllTime = model.AllTime;
                 model.Report = report;
             }
-            catch (Exception)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 model.ErrorMessage = "Couldn't build the unit report.";
             }
             finally
             {
-                Busy = false;
-                Progress = "";
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    Busy = false;
+                    Progress = "";
+                }
             }
         }
 

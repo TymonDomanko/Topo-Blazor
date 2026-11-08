@@ -97,23 +97,15 @@
         </div>
     </div>
 
-    @if (Loading)
-    {
-        <div class="mt-3 mb-3">Reading @Progress...</div>
-    }
-    @if (!string.IsNullOrEmpty(model.ErrorMessage))
-    {
-        <div class="mt-3 mb-3 text-danger">@model.ErrorMessage</div>
-    }
+    <PageStatus Loading="Loading" Progress="@Progress" Error="@model.ErrorMessage" />
 
-    @if (Report != null)
+    @if (!Loading && !string.IsNullOrEmpty(model.UnitId) && model.Members.Count == 0)
     {
-        <div class="mt-3 mb-3 row">
-            <div class="col-sm">
-                <button type="button" class="btn btn-primary" disabled="@(!CanExport)" @onclick="PdfClick">SIA Progress (pdf)</button>
-                <button type="button" class="btn btn-success" disabled="@(!CanExport)" @onclick="XlsxClick">SIA Progress (xlsx)</button>
-            </div>
-        </div>
+        <div class="mt-3 mb-3 text-muted">No youth members in this unit.</div>
+    }
+    else if (Report != null)
+    {
+        <ReportButtons Name="SIA Progress" OnPdf="PdfClick" OnXlsx="XlsxClick" Disabled="@(!CanExport)" />
 
         <div class="mt-3 mb-3 row">
             <label class="col-sm-2 col-form-label">Preview</label>

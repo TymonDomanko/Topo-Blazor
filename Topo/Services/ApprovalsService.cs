@@ -9,7 +9,7 @@ namespace Topo.Services
 {
     public interface IApprovalsService
     {
-        public Task<List<ApprovalsListModel>> GetApprovalListItems(string unitId);
+        public Task<List<ApprovalsListModel>> GetApprovalListItems(string unitId, Action<string>? progress = null);
         public Task<List<ApprovalsListModel>> ReadApprovalListFromLocalStorage(string unitId);
         public Task UpdateApproval(string unitId, ApprovalsListModel approval);
         public Task<string> DownloadApprovalList(string unitId);
@@ -154,12 +154,15 @@ namespace Topo.Services
         //    return myTI.ToTitleCase(name);
         //}
 
-        public async Task<List<ApprovalsListModel>> GetApprovalListItems(string unitId)
+        public async Task<List<ApprovalsListModel>> GetApprovalListItems(string unitId, Action<string>? progress = null)
         {
+            progress?.Invoke("the pending approvals");
             var pendingApprovals = await _terrainAPIService.GetUnitApprovals(unitId, "pending");
+            progress?.Invoke("the finalised approvals");
             var finalisedApprovals = await _terrainAPIService.GetUnitApprovals(unitId, "finalised");
             var approvals = finalisedApprovals.results.Concat(pendingApprovals.results).ToList();
             var achievementApprovals = approvals.GroupBy(r => r.achievement.id).ToList();
+            progress?.Invoke("the members");
             var memberList = await _memberService.GetMembersAsync(unitId);
             List<ApprovalsListModel> approvalList = new List<ApprovalsListModel>();
             foreach (var result in achievementApprovals)

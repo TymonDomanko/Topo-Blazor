@@ -1,0 +1,22 @@
+@* What a page is doing and what went wrong, the same on every page and in the same place, under the options: a "Reading ..." line
+   while something is being read from Terrain, and the error in red when it couldn't be. *@
+@if (Loading)
+{
+    <div class="mt-3 mb-3">Reading @Progress...</div>
+}
+@if (!string.IsNullOrEmpty(Error))
+{
+    <div class="mt-3 mb-3 text-danger">@Error</div>
+}
+
+@code {
+    [Parameter]
+    public bool Loading { get; set; }
+
+    // What is being read, such as a Scout's name and how far through the unit it is
+    [Parameter]
+    public string Progress { get; set; } = "";
+
+    [Parameter]
+    public string? Error { get; set; }
+}
