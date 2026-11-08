@@ -5,7 +5,7 @@ namespace Topo.Services
 {
     public interface IHistoryService
     {
-        public Task<ScoutingHistoryModel> GetScoutingHistory(string memberId, string memberName, string currentRole);
+        public Task<ScoutingHistoryModel> GetScoutingHistory(string memberId, string memberName, string currentRole, Action<string>? progress = null);
     }
 
     public class HistoryService : IHistoryService
@@ -19,7 +19,7 @@ namespace Topo.Services
             _terrainAPIService = terrainAPIService;
         }
 
-        public async Task<ScoutingHistoryModel> GetScoutingHistory(string memberId, string memberName, string currentRole)
+        public async Task<ScoutingHistoryModel> GetScoutingHistory(string memberId, string memberName, string currentRole, Action<string>? progress = null)
         {
             var input = new ScoutingHistoryInput
             {
@@ -29,15 +29,22 @@ namespace Topo.Services
                 CurrentSection = SafeSection()
             };
 
+            progress?.Invoke($"{memberName}: milestones");
             input.Milestones = await _terrainAPIService.GetMilestoneResultsForMember(memberId);
+            progress?.Invoke($"{memberName}: Outdoor Adventure Skills");
             input.Oas = await _terrainAPIService.GetOASResultsForMember(memberId);
+            progress?.Invoke($"{memberName}: Special Interest Areas");
             input.Sia = await _terrainAPIService.GetSIAResultsForMember(memberId);
+            progress?.Invoke($"{memberName}: additional awards");
             input.AdditionalAwards = await _terrainAPIService.GetAdditionalAwardResultsForMember(memberId);
+            progress?.Invoke($"{memberName}: introductions");
             input.IntroToScouting = await _terrainAPIService.GetIntroductionToScoutingResultsForMember(memberId);
             input.IntroToSection = await _terrainAPIService.GetIntroductionToSectionResultsForMember(memberId);
+            progress?.Invoke($"{memberName}: all achievements");
             input.AllAchievements = await _terrainAPIService.GetAllAchievementsForMember(memberId);
             input.UnitNames = await GetUnitNames();
             input.AwardNames = await AdditionalAwardNames.Get(_terrainAPIService);
+            progress?.Invoke($"{memberName}: logbook");
             input.Logbook = await GetLogbook(memberId);
 
             return ScoutingHistoryBuilder.Build(input);
