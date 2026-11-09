@@ -3,6 +3,7 @@ using Syncfusion.XlsIO;
 using Syncfusion.XlsIO.Implementation;
 using Topo.Model.AdditionalAwards;
 using Topo.Model.Approvals;
+using Topo.Model.Attendance;
 using Topo.Model.Program;
 using Topo.Model.Logbook;
 using Topo.Model.Members;
@@ -47,6 +48,7 @@ namespace Topo.Services
         public IWorkbook GenerateProgramIdeasWorkbook(List<ProgramIdeaItemModel> programIdeas, string groupName, string section, string unitName, bool forPdfOutput);
         public IWorkbook GenerateSiaProgressWorkbook(SiaProgressReport report, string groupName, string section);
         public IWorkbook GenerateReadyToSubmitWorkbook(ReadyToSubmitReport report, string groupName, string section);
+        public IWorkbook GenerateAttendanceAnalysisWorkbook(AttendanceReport report, string groupName, string section);
         public IWorkbook CreateWorkbookWithSheets(int sheetsToCreate);
     }
     public class ReportService : IReportService
@@ -423,6 +425,151 @@ namespace Topo.Services
 
         // The badges that have everything done but have not been sent in, listed Scout by Scout. The stages waiting only on the
         // Scout's logbook tick, and those a few ticks short, are each on a page of their own.
+        // A sheet for each table (one for the unit, or one for each patrol), laid out as the page shows it
+        public IWorkbook GenerateAttendanceAnalysisWorkbook(AttendanceReport report, string groupName, string section)
+        {
+            const string dateFormat = "d MMM yyyy";
+            var culture = CultureInfo.InvariantCulture;
+            var tables = report.Tables.Count > 0 ? report.Tables : new List<AttendanceTable> { new AttendanceTable() };
+            var workbook = CreateWorkbookWithSheets(tables.Count);
+            IStyle headingStyle = workbook.Styles["headingStyle"];
+            var lastColumn = Math.Max(4, 2 + report.Columns.Count);
+
+            Color Hex(string colour) => Color.FromArgb(Convert.ToInt32(colour.Substring(1, 2), 16), Convert.ToInt32(colour.Substring(3, 2), 16), Convert.ToInt32(colour.Substring(5, 2), 16));
+
+            // a sheet name is at most 31 characters, without these ones
+            string SheetName(string patrol, int index) =>
+                string.IsNullOrWhiteSpace(patrol) ? "Attendance" : new string(patrol.Where(c => !"[]:*?/\\".Contains(c)).Take(31).ToArray()) is { Length: > 0 } name ? name : $"Patrol {index + 1}";
+
+            for (var index = 0; index < tables.Count; index++)
+            {
+                var table = tables[index];
+                var sheet = AddLogoToSheet(workbook, index, groupName, section, lastColumn);
+                sheet.Name = SheetName(table.Patrol, index);
+                var row = 1;
+
+                row++;
+                sheet.Range[row, 2].Text = "Attendance";
+                sheet.Range[row, 2, row, lastColumn].Merge();
+                sheet.Range[row, 2].CellStyle = headingStyle;
+                sheet.SetRowHeight(row, 40);
+                row++;
+                sheet.Range[row, 2].Text = table.Patrol == "" ? report.UnitName : $"{report.UnitName} - {table.Patrol}";
+                sheet.Range[row, 2, row, lastColumn].Merge();
+                sheet.Range[row, 2].CellStyle = headingStyle;
+                sheet.SetRowHeight(row, 30);
+
+                // the logo hangs down from the top left corner, so leave room for it before the lines beside it begin
+                var logoPoints = sheet.Pictures.Count > 0 ? sheet.Pictures[0].Height * 0.75 : 0.0;
+                if (logoPoints + 6 > 100)
+                {
+                    row++;
+                    sheet.SetRowHeight(row, logoPoints + 6 - 100);
+                }
+
+                row++;
+                sheet.Range[row, 1].Text = $"For the period {report.From.ToString(dateFormat, culture)} to {report.To.ToString(dateFormat, culture)}: {report.EventsCounted} {(report.EventsCounted == 1 ? "event" : "events")}"
+                    + (report.MeetingDay == "" ? "" : $", Scout nights on a {report.MeetingDay}");
+                if (report.EventsLeftOut > 0)
+                {
+                    row++;
+                    sheet.Range[row, 1].Text = $"{report.EventsLeftOut} {(report.EventsLeftOut == 1 ? "event" : "events")} with no attendance recorded {(report.EventsLeftOut == 1 ? "is" : "are")} left out.";
+                }
+
+                if (report.EventsCounted == 0)
+                {
+                    row += 2;
+                    sheet.Range[row, 1].Text = "No events to show.";
+                    continue;
+                }
+                if (table.Rows.Count == 0)
+                {
+                    row += 2;
+                    sheet.Range[row, 1].Text = "No youth members in this unit.";
+                    continue;
+                }
+
+                // the headings: the measure over its columns, then what each column counts
+                row += 2;
+                var groupRow = row;
+                var headingRow = row + 1;
+                foreach (var (text, column) in new[] { ("Name", 1), ("Role", 2) })
+                {
+                    sheet.Range[groupRow, column, headingRow, column].Merge();
+                    sheet.Range[groupRow, column].Text = text;
+                }
+                var first = 0;
+                while (first < report.Columns.Count)
+                {
+                    var last = first;
+                    while (last + 1 < report.Columns.Count && report.Columns[last + 1].Group == report.Columns[first].Group)
+                        last++;
+                    if (last > first)
+                        sheet.Range[groupRow, 3 + first, groupRow, 3 + last].Merge();
+                    sheet.Range[groupRow, 3 + first].Text = report.Columns[first].Group;
+                    first = last + 1;
+                }
+                for (var column = 0; column < report.Columns.Count; column++)
+                    sheet.Range[headingRow, 3 + column].Text = report.Columns[column].Heading;
+                var headings = sheet.Range[groupRow, 1, headingRow, 2 + report.Columns.Count];
+                headings.CellStyle.Font.Bold = true;
+                headings.CellStyle.ColorIndex = ExcelKnownColors.Grey_25_percent;
+                headings.CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                headings.CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
+                headings.CellStyle.WrapText = true;
+                sheet.SetRowHeight(groupRow, 32);
+                for (var r = groupRow; r <= headingRow; r++)
+                    for (var c = 1; c <= 2 + report.Columns.Count; c++)
+                        sheet.Range[r, c].BorderAround();
+                row = headingRow;
+
+                foreach (var person in table.Rows)
+                {
+                    row++;
+                    sheet.Range[row, 1].Text = person.Name;
+                    sheet.Range[row, 2].Text = person.Role;
+                    for (var column = 0; column < person.Cells.Count; column++)
+                    {
+                        var cell = sheet.Range[row, 3 + column];
+                        cell.Text = person.Cells[column].Text;
+                        cell.CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                        if (person.Cells[column].Colour != "")
+                            cell.CellStyle.Color = Hex(person.Cells[column].Colour);
+                    }
+                    for (var c = 1; c <= 2 + report.Columns.Count; c++)
+                        sheet.Range[row, c].BorderAround();
+                }
+
+                row++;
+                sheet.Range[row, 1].Text = "Average";
+                for (var column = 0; column < table.Average.Count; column++)
+                {
+                    sheet.Range[row, 3 + column].Text = table.Average[column].Text;
+                    sheet.Range[row, 3 + column].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                }
+                sheet.Range[row, 1, row, 2 + report.Columns.Count].CellStyle.Font.Bold = true;
+                for (var c = 1; c <= 2 + report.Columns.Count; c++)
+                    sheet.Range[row, c].BorderAround();
+
+                sheet.SetColumnWidth(1, 22);
+                sheet.SetColumnWidth(2, 7);
+                // the challenge areas have their own name and the number of events over them, so need more room than the counts
+                for (var column = 0; column < report.Columns.Count; column++)
+                    sheet.SetColumnWidth(3 + column, report.Columns[column].Group == "Challenge areas" ? 13 : report.Columns[column].IsPercent ? 8 : 7);
+
+                sheet.PageSetup.Orientation = ExcelPageOrientation.Landscape;
+                sheet.PageSetup.BottomMargin = 0.25;
+                sheet.PageSetup.TopMargin = 0.25;
+                sheet.PageSetup.LeftMargin = 0.25;
+                sheet.PageSetup.RightMargin = 0.25;
+                sheet.PageSetup.HeaderMargin = 0;
+                sheet.PageSetup.FooterMargin = 0;
+                sheet.PageSetup.FitToPagesWide = 1;
+                sheet.PageSetup.FitToPagesTall = 0;
+            }
+            return workbook;
+        }
+
         public IWorkbook GenerateReadyToSubmitWorkbook(ReadyToSubmitReport report, string groupName, string section)
         {
             const string dateFormat = "d MMM yyyy";

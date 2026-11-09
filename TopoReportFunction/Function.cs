@@ -19,6 +19,7 @@ using Topo.Model.Approvals;
 using Topo.Model.Progress;
 using Topo.Model.History;
 using Topo.Model.UnitReport;
+using Topo.Model.Attendance;
 using Topo.Model.SectionReport;
 using Topo.Model.SiaProgress;
 using Topo.Model.ReadyToSubmit;
@@ -125,6 +126,9 @@ public class Function
                         break;
                     case ReportType.ReadyToSubmit:
                         workbook = GenerateReadyToSubmitWorkbook(reportGenerationRequest);
+                        break;
+                    case ReportType.AttendanceAnalysis:
+                        workbook = GenerateAttendanceAnalysisWorkbook(reportGenerationRequest);
                         break;
                 }
 
@@ -377,6 +381,16 @@ public class Function
         if (reportData != null)
         {
             return reportService.GenerateSiaProgressWorkbook(reportData, reportGenerationRequest.GroupName, reportGenerationRequest.Section);
+        }
+        return reportService.CreateWorkbookWithSheets(1);
+    }
+
+    private IWorkbook GenerateAttendanceAnalysisWorkbook(ReportGenerationRequest reportGenerationRequest)
+    {
+        var reportData = JsonConvert.DeserializeObject<AttendanceReport>(reportGenerationRequest.ReportData);
+        if (reportData != null)
+        {
+            return reportService.GenerateAttendanceAnalysisWorkbook(reportData, reportGenerationRequest.GroupName, reportGenerationRequest.Section);
         }
         return reportService.CreateWorkbookWithSheets(1);
     }

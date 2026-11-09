@@ -22,7 +22,8 @@
         UnitReport,
         SectionReport,
         SiaProgress,
-        ReadyToSubmit
+        ReadyToSubmit,
+        AttendanceAnalysis
     }
 
     public enum OutputType
