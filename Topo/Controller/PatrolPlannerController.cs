@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Newtonsoft.Json;
 using System.Text;
+using Topo.Model.Common;
 using Topo.Model.Members;
 using Topo.Model.PatrolPlanner;
 using Topo.Model.ReportGeneration;
@@ -13,10 +14,16 @@ namespace Topo.Controller
     // Backs the Patrol Planner drag-and-drop board. Everything here is a local, in-memory "what if"
     // plan: there is no Terrain API to write patrol membership back, so nothing is saved to Terrain
     // automatically. The leader applies the plan by hand, using the exported patrol list/changes CSV.
-    public class PatrolPlannerController : ComponentBase
+    public class PatrolPlannerController : ComponentBase, IDisposable
     {
         [Inject]
         public IMembersService _membersService { get; set; }
+
+        [Inject]
+        public IAttendanceService _attendanceService { get; set; }
+
+        [Inject]
+        public SpinnerService _spinnerService { get; set; }
 
         [Inject]
         public StorageService _storageService { get; set; }
@@ -34,6 +41,16 @@ namespace Topo.Controller
         public NavigationManager NavigationManager { get; set; }
 
         public PatrolPlannerPageViewModel model = new PatrolPlannerPageViewModel();
+
+        // How many Scout nights the attendance figures look back over
+        private const int RecentNightsCount = 10;
+
+        public bool Loading;
+        public string Progress = "";
+        // The attendance is read after the board is up, and again when the unit changes; the one before is stopped
+        private readonly AutoRun _auto = new AutoRun();
+
+        public void Dispose() => _auto.Dispose();
 
         private string? _draggedMemberId;
         private List<string> _originalPatrolNames = new();
@@ -68,6 +85,9 @@ namespace Topo.Controller
                 model.Members = new List<PatrolPlannerMember>();
                 model.PatrolNames = new List<string>();
                 _originalPatrolNames = new List<string>();
+                model.AttendanceNote = "";
+                _auto.Stop();
+                Loading = false;
                 return;
             }
 
@@ -99,6 +119,54 @@ namespace Topo.Controller
                 .OrderBy(n => n)
                 .ToList();
             _originalPatrolNames = new List<string>(model.PatrolNames);
+            model.AttendanceNote = "";
+            // in the background, so the board can be used while it is read
+            _ = _auto.RunAsync(LoadAttendance);
+        }
+
+        // How many of the last Scout nights each youth came to, from the calendar named after the unit
+        private async Task LoadAttendance(CancellationToken cancellationToken)
+        {
+            // the Reading line says what is happening, so the spinner is not put over the board
+            _spinnerService.BeQuiet();
+            Loading = true;
+            try
+            {
+                var recent = await _attendanceService.GetRecentNights(model.UnitId, RecentNightsCount,
+                    step => { if (!cancellationToken.IsCancellationRequested) { Progress = step; InvokeAsync(StateHasChanged); } }, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (recent == null)
+                {
+                    model.AttendanceNote = "Attendance isn't shown because there is no calendar named after this unit.";
+                    return;
+                }
+                if (recent.Nights == 0)
+                {
+                    model.AttendanceNote = "Attendance isn't shown because no Scout nights with attendance were found in the last six months.";
+                    return;
+                }
+
+                foreach (var member in model.Members)
+                {
+                    member.NightsCounted = recent.PossibleByMemberId.TryGetValue(member.Id, out var possible) ? possible : recent.Nights;
+                    member.NightsAttended = recent.AttendedByMemberId.TryGetValue(member.Id, out var attended) ? attended : 0;
+                }
+                model.AttendanceNote = $"Attendance is the share of the last {recent.Nights} Scout nights each youth came to, counting only those since they joined the section.";
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                model.AttendanceNote = "Couldn't read the attendance from Terrain.";
+            }
+            finally
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    Loading = false;
+                    Progress = "";
+                }
+                // nothing is waiting on this, so the page has to be told it has finished
+                await InvokeAsync(StateHasChanged);
+            }
         }
 
         internal async Task RefreshClick()
@@ -274,6 +342,13 @@ namespace Topo.Controller
                 members.Count(m => m.Gender == "NB"),
                 members.Count(m => string.IsNullOrEmpty(m.Gender)),
                 averageAge);
+        }
+
+        // The average attendance of the members now in a column, so it follows them as they are moved; blank when none of them has any
+        internal string GetColumnAttendance(string patrolName)
+        {
+            var shares = GetColumnMembers(patrolName).Select(m => m.AttendanceShare).Where(s => s != null).Select(s => s!.Value).ToList();
+            return shares.Count == 0 ? "" : $"{Math.Round(shares.Average() * 100)}%";
         }
 
         // Flags a column's count badge when it's more than one member away from the average across

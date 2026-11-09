@@ -29,6 +29,8 @@
     </div>
 </div>
 
+<PageStatus Loading="Loading" Progress="@Progress" />
+
 @if (model.Members.Any())
 {
     <p class="text-muted">
@@ -36,6 +38,10 @@
         Click the right badge to cycle role (Member/APL/PL/UL) &mdash; promoting to APL or higher also adds them to Unit Council.
         Nothing is sent to Terrain automatically &mdash; use the buttons below once you're happy with the plan.
     </p>
+    @if (!string.IsNullOrEmpty(model.AttendanceNote))
+    {
+        <p class="text-muted small">@model.AttendanceNote</p>
+    }
 
     <div class="mb-3 row">
         <div class="col-sm-auto">
@@ -108,6 +114,8 @@
                     @tally.male M &nbsp; @tally.female F &nbsp; @tally.nonBinary NB
                     @(tally.unspecified > 0 ? $"  {tally.unspecified}–" : "")
                     @(string.IsNullOrEmpty(tally.averageAge) ? "" : $"· avg {tally.averageAge}")
+                    @{ var attendance = GetColumnAttendance(patrolName); }
+                    @(attendance == "" ? "" : $" · attendance {attendance}")
                 </div>
                 <div class="patrol-cards">
                     @foreach (var member in GetColumnMembers(patrolName))

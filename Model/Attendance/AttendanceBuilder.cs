@@ -83,6 +83,16 @@ namespace Topo.Model.Attendance
         }
     }
 
+    // How many of the most recent Scout nights each youth came to
+    public class RecentNights
+    {
+        // How many of the last Scout nights there were
+        public int Nights { get; set; }
+        public Dictionary<string, int> AttendedByMemberId { get; set; } = new Dictionary<string, int>();
+        // How many of them each youth could have come to, the ones since they joined the section
+        public Dictionary<string, int> PossibleByMemberId { get; set; } = new Dictionary<string, int>();
+    }
+
     public static class AttendanceBuilder
     {
         public static AttendanceData Analyse(AttendanceInput input)
@@ -134,6 +144,21 @@ namespace Topo.Model.Attendance
                 })
                 .ToList();
             return data;
+        }
+
+        // The last Scout nights up to now, and how many of them each youth came to
+        public static RecentNights Recent(AttendanceData data, int nights)
+        {
+            var last = data.Events.Where(e => e.Kind == AttendanceKind.ScoutNight).OrderByDescending(e => e.Start).Take(nights).ToList();
+            var recent = new RecentNights { Nights = last.Count };
+            foreach (var member in data.Youth)
+            {
+                var joined = data.JoinedOn(member);
+                var possible = last.Where(e => joined == null || e.Start.Date >= joined.Value).ToList();
+                recent.PossibleByMemberId[member.id] = possible.Count;
+                recent.AttendedByMemberId[member.id] = possible.Count(e => e.Attended.Contains(AttendanceData.Key(member)));
+            }
+            return recent;
         }
 
         // When a youth was invested into the section: the earliest awarded Introduction to Section for it

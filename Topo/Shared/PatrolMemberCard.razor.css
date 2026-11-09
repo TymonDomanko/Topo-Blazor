@@ -85,3 +85,13 @@
 .duty-ul {
     background-color: #6366f1;
 }
+
+/* How much of the last Scout nights the member came to */
+.attendance-badge {
+    flex: 0 0 auto;
+    font-size: 0.7rem;
+    padding: 0 0.35rem;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.75);
+    color: #333;
+}
