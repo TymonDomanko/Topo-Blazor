@@ -9,6 +9,8 @@ namespace Topo.Model.PatrolPlanner
         public List<PatrolPlannerMember> Members { get; set; } = new List<PatrolPlannerMember>();
         public List<string> PatrolNames { get; set; } = new List<string>();
         public string NewPatrolName { get; set; } = string.Empty;
+        // What the attendance figures are based on, or why there are none
+        public string AttendanceNote { get; set; } = string.Empty;
     }
 
     public class PatrolPlannerMember
@@ -24,6 +26,11 @@ namespace Topo.Model.PatrolPlanner
         public string OriginalPatrolDuty { get; set; } = string.Empty;
         public string PatrolName { get; set; } = string.Empty;
         public string PatrolDuty { get; set; } = string.Empty;
+
+        // How many of the last Scout nights this member came to, out of how many there were; null when that isn't known
+        public int? NightsAttended { get; set; }
+        public int NightsCounted { get; set; }
+        public double? AttendanceShare => NightsAttended == null || NightsCounted == 0 ? null : (double)NightsAttended.Value / NightsCounted;
 
         // Drives both the "changed" card highlight on the board and what shows up in the
         // "Changes to make in Terrain" list/export - anything not reflected here is invisible to the leader.

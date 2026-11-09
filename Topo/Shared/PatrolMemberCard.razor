@@ -8,6 +8,10 @@
     <span class="member-name">@Member.FirstName @Member.LastName</span>
     <span class="duty-badge @DutyClass(Member.PatrolDuty)" title="Click to change role" @onclick="CycleDuty">@Member.PatrolDuty</span>
     <span class="member-age">@Member.Age</span>
+    @if (Member.AttendanceShare != null)
+    {
+        <span class="attendance-badge" title="Came to @Member.NightsAttended of the last @Member.NightsCounted Scout nights">@Math.Round(Member.AttendanceShare.Value * 100)%</span>
+    }
 </div>
 
 @code {
