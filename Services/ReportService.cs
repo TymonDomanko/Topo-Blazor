@@ -387,7 +387,8 @@ namespace Topo.Services
             const string dateFormat = "d MMM yyyy";
             var culture = CultureInfo.InvariantCulture;
             var tables = report.Tables.Count > 0 ? report.Tables : new List<AttendanceTable> { new AttendanceTable() };
-            var workbook = CreateWorkbookWithSheets(tables.Count);
+            // a last sheet for those who have missed several Scout nights in a row, when there are any
+            var workbook = CreateWorkbookWithSheets(tables.Count + (report.NotSeen.Count > 0 ? 1 : 0));
             IStyle headingStyle = workbook.Styles["headingStyle"];
             var lastColumn = Math.Max(4, 2 + report.Columns.Count);
 
@@ -511,7 +512,7 @@ namespace Topo.Services
                 sheet.SetColumnWidth(2, 7);
                 // the challenge areas have their own name and the number of events over them, so need more room than the counts
                 for (var column = 0; column < report.Columns.Count; column++)
-                    sheet.SetColumnWidth(3 + column, report.Columns[column].Group == "Challenge areas" ? 13 : report.Columns[column].IsPercent ? 8 : 7);
+                    sheet.SetColumnWidth(3 + column, report.Columns[column].Group == "Challenge areas" ? 13 : report.Columns[column].Group == "Last seen" && report.Columns[column].Heading == "Date" ? 12 : report.Columns[column].IsPercent ? 8 : 7);
 
                 sheet.PageSetup.Orientation = ExcelPageOrientation.Landscape;
                 sheet.PageSetup.BottomMargin = 0.25;
@@ -520,6 +521,58 @@ namespace Topo.Services
                 sheet.PageSetup.RightMargin = 0.25;
                 sheet.PageSetup.HeaderMargin = 0;
                 sheet.PageSetup.FooterMargin = 0;
+                sheet.PageSetup.FitToPagesWide = 1;
+                sheet.PageSetup.FitToPagesTall = 0;
+            }
+
+            if (report.NotSeen.Count > 0)
+            {
+                var sheet = AddLogoToSheet(workbook, tables.Count, groupName, section, 5);
+                sheet.Name = "Not seen lately";
+                var row = 1;
+                row++;
+                sheet.Range[row, 2].Text = "Not seen lately";
+                sheet.Range[row, 2, row, 5].Merge();
+                sheet.Range[row, 2].CellStyle = headingStyle;
+                sheet.SetRowHeight(row, 40);
+                row++;
+                sheet.Range[row, 2].Text = report.UnitName;
+                sheet.Range[row, 2, row, 5].Merge();
+                sheet.Range[row, 2].CellStyle = headingStyle;
+                sheet.SetRowHeight(row, 30);
+                var logoPoints = sheet.Pictures.Count > 0 ? sheet.Pictures[0].Height * 0.75 : 0.0;
+                if (logoPoints + 6 > 100)
+                {
+                    row++;
+                    sheet.SetRowHeight(row, logoPoints + 6 - 100);
+                }
+                row++;
+                sheet.Range[row, 1].Text = $"{AttendanceData.AmberNights} or more Scout nights since they last came to anything, as at {report.To.ToString(dateFormat, culture)}";
+
+                row += 2;
+                var headingStart = row;
+                var titles = new[] { "Name", "Patrol", "Nights since last seen", "Last seen" };
+                for (var column = 0; column < titles.Length; column++)
+                    sheet.Range[row, 1 + column].Text = titles[column];
+                sheet.Range[row, 1, row, 4].CellStyle.Font.Bold = true;
+                sheet.Range[row, 1, row, 4].CellStyle.ColorIndex = ExcelKnownColors.Grey_25_percent;
+                foreach (var flag in report.NotSeen)
+                {
+                    row++;
+                    sheet.Range[row, 1].Text = flag.Name;
+                    sheet.Range[row, 2].Text = flag.Patrol;
+                    sheet.Range[row, 3].Text = flag.NightsSince.ToString();
+                    sheet.Range[row, 3].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                    sheet.Range[row, 3].CellStyle.Color = Hex(AttendanceLayout.FlagColour(flag.Level));
+                    sheet.Range[row, 4].Text = flag.LastSeen == "" ? "Not found in the year before the period" : flag.LastSeen;
+                }
+                for (var r = headingStart; r <= row; r++)
+                    for (var c = 1; c <= 4; c++)
+                        sheet.Range[r, c].BorderAround();
+                sheet.SetColumnWidth(1, 22);
+                sheet.SetColumnWidth(2, 22);
+                sheet.SetColumnWidth(3, 22);
+                sheet.SetColumnWidth(4, 38);
                 sheet.PageSetup.FitToPagesWide = 1;
                 sheet.PageSetup.FitToPagesTall = 0;
             }

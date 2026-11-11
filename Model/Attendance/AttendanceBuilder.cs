@@ -42,6 +42,8 @@ namespace Topo.Model.Attendance
         public DateTime AsOf { get; set; } = DateTime.Now;
         public List<MemberListModel> Members { get; set; } = new List<MemberListModel>();
         public List<UnitEventInput> Events { get; set; } = new List<UnitEventInput>();
+        // Events from before the period, read only to find when someone who was not seen in it was last seen
+        public List<UnitEventInput> EarlierEvents { get; set; } = new List<UnitEventInput>();
         // When each youth was invested into the section (member id), where Terrain has it
         public Dictionary<string, DateTime> InvestedOn { get; set; } = new Dictionary<string, DateTime>();
     }
@@ -60,6 +62,8 @@ namespace Topo.Model.Attendance
         public List<AttendanceEvent> Events { get; set; } = new List<AttendanceEvent>();
         // Events nobody was recorded at, left out because they would count as everyone missing
         public int EventsLeftOut { get; set; }
+        // Events from before the period, oldest first; only used for when a youth was last seen, so empty unless someone was not seen in it
+        public List<AttendanceEvent> Earlier { get; set; } = new List<AttendanceEvent>();
         public DayOfWeek? MeetingDay { get; set; }
         public Dictionary<string, DateTime> InvestedOn { get; set; } = new Dictionary<string, DateTime>();
 
@@ -74,6 +78,34 @@ namespace Topo.Model.Attendance
             DateTime? invested = InvestedOn.TryGetValue(member.id, out var date) ? date : null;
             return invested == null ? first : first == null ? invested : (first < invested ? first : invested);
         }
+
+        // Scout nights since a youth was last seen before they are flagged, and before the flag turns red
+        public const int AmberNights = 3;
+        public const int RedNights = 4;
+
+        // The last day a youth came to any event (looking back before the period when events from then were read), and how many Scout nights
+        // there have been since (only those since they joined the section count). Nights are counted, not weeks, so school holidays with no
+        // nights do not flag anyone, and coming to a camp counts as seen. Someone never seen and with no investiture has no known join date,
+        // so how many nights they have missed is not known (null) rather than every night there has been, as they may only just have joined.
+        public (int? NightsSince, DateTime? LastSeen) NotSeen(MemberListModel member)
+        {
+            var key = Key(member);
+            var joined = JoinedOn(member);
+            var events = Earlier.Concat(Events).ToList();
+            var lastSeen = events.Where(e => e.Attended.Contains(key)).Select(e => (DateTime?)e.Start.Date).OrderByDescending(d => d).FirstOrDefault();
+            if (lastSeen == null && joined == null)
+                return (null, null);
+            var nights = events.Count(e => e.Kind == AttendanceKind.ScoutNight && (joined == null || e.Start.Date >= joined.Value) && (lastSeen == null || e.Start.Date > lastSeen.Value));
+            return (nights, lastSeen);
+        }
+
+        // The youth who were not seen at any event in the period, so there is something to look further back for
+        public List<MemberListModel> NotSeenInPeriod() => Events.Any(e => e.Kind == AttendanceKind.ScoutNight)
+            ? Youth.Where(m => !Events.Any(e => e.Attended.Contains(Key(m)))).ToList()
+            : new List<MemberListModel>();
+
+        // "amber" from three nights since they were last seen, "red" from four, otherwise blank
+        public static string NotSeenLevel(int? nightsSince) => nightsSince >= RedNights ? "red" : nightsSince >= AmberNights ? "amber" : "";
 
         // The events a youth could have come to: those since they joined the section
         public List<AttendanceEvent> PossibleFor(MemberListModel member, Func<AttendanceEvent, bool>? counts = null)
@@ -93,29 +125,8 @@ namespace Topo.Model.Attendance
                 Youth = input.Members.Where(m => !UnitReportBuilder.IsLeader(m)).ToList()
             };
 
-            var seen = new HashSet<string>();
-            var counted = new List<(GetEventResultModel Event, HashSet<string> Attended)>();
-            foreach (var item in input.Events)
-            {
-                var evt = item.Event;
-                if (!seen.Add(evt.id))
-                    continue;
-                // only events that have happened in the period, not cancelled, and for the whole unit
-                if (evt.start_datetime.Date < input.From.Date || evt.start_datetime.Date > input.To.Date || evt.start_datetime > input.AsOf)
-                    continue;
-                if (evt.status.Contains("cancel", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                if (item.Scope == "patrol" || item.Scope == "member")
-                    continue;
-
-                var attended = Attendees(evt);
-                if (attended.Count == 0)
-                {
-                    data.EventsLeftOut++;
-                    continue;
-                }
-                counted.Add((evt, attended));
-            }
+            var (counted, leftOut) = Counted(input.Events, input.From, input.To, input.AsOf);
+            data.EventsLeftOut = leftOut;
 
             // The meeting night is the day most single day events fall on, leaving out hikes and unit councils
             data.MeetingDay = counted
@@ -125,16 +136,50 @@ namespace Topo.Model.Attendance
                 .Select(g => (DayOfWeek?)g.Key)
                 .FirstOrDefault();
 
-            data.Events = counted
-                .OrderBy(c => c.Event.start_datetime)
+            data.Events = ToEvents(counted, data.MeetingDay);
+            if (input.EarlierEvents.Count > 0)
+                data.Earlier = ToEvents(Counted(input.EarlierEvents, DateTime.MinValue, input.From.Date.AddDays(-1), input.AsOf).Counted, data.MeetingDay);
+            return data;
+        }
+
+        // The events in the range that have happened, were not cancelled, were for the whole unit and have attendance recorded, each once;
+        // and how many had nobody recorded
+        private static (List<(GetEventResultModel Event, HashSet<string> Attended)> Counted, int LeftOut) Counted(IEnumerable<UnitEventInput> items, DateTime from, DateTime to, DateTime asOf)
+        {
+            var seen = new HashSet<string>();
+            var counted = new List<(GetEventResultModel Event, HashSet<string> Attended)>();
+            var leftOut = 0;
+            foreach (var item in items)
+            {
+                var evt = item.Event;
+                if (!seen.Add(evt.id))
+                    continue;
+                if (evt.start_datetime.Date < from.Date || evt.start_datetime.Date > to.Date || evt.start_datetime > asOf)
+                    continue;
+                if (evt.status.Contains("cancel", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (item.Scope == "patrol" || item.Scope == "member")
+                    continue;
+
+                var attended = Attendees(evt);
+                if (attended.Count == 0)
+                {
+                    leftOut++;
+                    continue;
+                }
+                counted.Add((evt, attended));
+            }
+            return (counted, leftOut);
+        }
+
+        private static List<AttendanceEvent> ToEvents(List<(GetEventResultModel Event, HashSet<string> Attended)> counted, DayOfWeek? meetingDay) =>
+            counted.OrderBy(c => c.Event.start_datetime)
                 .Select(c => new AttendanceEvent
                 {
                     Id = c.Event.id, Title = c.Event.title, Start = c.Event.start_datetime, ChallengeArea = c.Event.challenge_area,
-                    Kind = Classify(c.Event, data.MeetingDay), Attended = c.Attended
+                    Kind = Classify(c.Event, meetingDay), Attended = c.Attended
                 })
                 .ToList();
-            return data;
-        }
 
         // When a youth was invested into the section: the earliest awarded Introduction to Section for it
         public static DateTime? InvestedOn(GetIntroductionResultsModel introductions, string section)
