@@ -1,0 +1,49 @@
+/* The table scrolls sideways inside its own box, so a wide one does not widen the page */
+.scroller {
+    overflow-x: auto;
+    width: 0;
+    min-width: 100%;
+}
+
+.program {
+    border-collapse: collapse;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 0.85rem;
+}
+
+.program th,
+.program td {
+    padding: 0.15rem 0.5rem;
+    border: 1px solid #7f7f7f;
+}
+
+.program thead th {
+    background-color: #d9d9d9;
+}
+
+.program tbody tr:nth-child(even) td:not(.month) {
+    background-color: #f2f2f2;
+}
+
+.program .break td {
+    background-color: #a6a6a6;
+    text-align: center;
+    font-weight: bold;
+}
+
+/* A month with several rows reads sideways, as in the printed program */
+.program .month {
+    text-align: center;
+    vertical-align: middle;
+    background-color: #fff;
+}
+
+.program .month.turned span {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+}
+
+.small-table {
+    min-width: 18rem;
+}

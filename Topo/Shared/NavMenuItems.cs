@@ -89,6 +89,7 @@ namespace Topo.Shared
                 new("Patrol Planner", "patrolplanner", "oi-random"),
                 new("Sign In Sheet", "signinsheet", "oi-pencil"),
                 new("Program Ideas", "programideas", "oi-lightbulb"),
+                new("Program Builder", "programbuilder", "oi-calendar"),
             }),
             new("Settings", NavAudience.SignedIn, new NavItem[]
             {

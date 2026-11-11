@@ -1,0 +1,103 @@
+@using Topo.Model.ProgramBuilder
+
+@* What the downloaded program will show: the calendar of section nights and activities, the challenge area counts, and the locations and
+   contact details, as switched on. *@
+@if (Document.Rows.Count == 0)
+{
+    <div class="text-muted">No section nights to show.</div>
+}
+else
+{
+    <h5 class="text-center mt-3">@Document.Title</h5>
+    <div class="scroller">
+        <table class="program">
+            <thead>
+                <tr>
+                    <th colspan="2">Date</th>
+                    <th>Activity</th>
+                    @foreach (var column in Document.Columns)
+                    {
+                        <th>@Heading(column)</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Document.Rows)
+                {
+                    @if (row.IsBreak)
+                    {
+                        <tr class="break"><td colspan="@(3 + Document.Columns.Count)">@row.BreakLabel</td></tr>
+                        continue;
+                    }
+                    <tr>
+                        @if (row.Month != "")
+                        {
+                            <td class="month @(row.MonthSpan >= 3 ? "turned" : "")" rowspan="@row.MonthSpan"><span>@(row.MonthSpan >= 3 ? row.Month : row.Month.Substring(0, Math.Min(3, row.Month.Length)))</span></td>
+                        }
+                        <td class="text-nowrap">@row.DateText</td>
+                        <td>@row.Activity</td>
+                        @foreach (var column in Document.Columns)
+                        {
+                            <td>@Value(row, column)</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (Document.ChallengeAreas.Count > 0)
+    {
+        <h5 class="text-center mt-4">Challenge Areas</h5>
+        <table class="program small-table">
+            <thead><tr><th>Challenge Area</th><th>Activities</th></tr></thead>
+            <tbody>
+                @foreach (var area in Document.ChallengeAreas)
+                {
+                    <tr><td>@area.Area</td><td class="text-center">@area.Count</td></tr>
+                }
+            </tbody>
+        </table>
+    }
+    @if (Document.Locations.Count > 0)
+    {
+        <h5 class="text-center mt-4">Locations</h5>
+        <table class="program small-table">
+            <thead><tr><th>Location</th><th>Address</th></tr></thead>
+            <tbody>
+                @foreach (var location in Document.Locations)
+                {
+                    <tr><td>@location.Name</td><td>@location.Address</td></tr>
+                }
+            </tbody>
+        </table>
+    }
+    @if (Document.Contacts.Count > 0)
+    {
+        <h5 class="text-center mt-4">Contact Details</h5>
+        <table class="program small-table">
+            <thead><tr><th>Leader</th><th>Position</th><th>Email</th></tr></thead>
+            <tbody>
+                @foreach (var contact in Document.Contacts)
+                {
+                    <tr><td>@contact.Name</td><td>@contact.Position</td><td>@contact.Email</td></tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    [Parameter]
+    public ProgramDocument Document { get; set; } = new ProgramDocument();
+
+    private static string Heading(string column) => column switch
+    {
+        "game" => "Game", "location" => "Location", "challenge" => "Challenge Area", "duty" => "Duty Patrol", _ => "LIC"
+    };
+
+    private static string Value(ProgramDocRow row, string column) => column switch
+    {
+        "game" => row.Game, "location" => row.Location, "challenge" => row.ChallengeArea, "duty" => row.DutyPatrol, _ => row.Leader
+    };
+}

@@ -1,0 +1,437 @@
+@page "/programbuilder"
+@inherits Controller.ProgramBuilderController
+@using Topo.Model.ProgramBuilder
+@using Topo.Model.ReportGeneration
+
+<PageTitle>Topo / Program Builder</PageTitle>
+
+<div class="mt-3 mb-3 row">
+    <h2>Program Builder @GroupName</h2>
+</div>
+
+<div class="form-group mb-3 row">
+    <label for="unit" class="col-sm-2 col-form-label">Select Unit</label>
+    <div class="col-sm-3">
+        <select id="unit" class="form-select" value="@UnitId" @onchange="UnitChange">
+            <option value="">Select unit</option>
+            @foreach (var unit in Units)
+            {
+                <option value="@unit.Key">@unit.Value</option>
+            }
+        </select>
+    </div>
+    @if (UnitId != "")
+    {
+        <div class="col-sm-3">
+            <button type="button" class="btn btn-outline-danger" @onclick="ClearClick">Clear</button>
+        </div>
+    }
+</div>
+
+<PageStatus Loading="Busy" Progress="@Progress" Error="@ErrorMessage" />
+@if (!string.IsNullOrEmpty(Message))
+{
+    <div class="mt-2 mb-3 text-success">@Message</div>
+}
+
+@if (UnitId != "")
+{
+    var nights = Nights;
+    var document = Document;
+
+    <datalist id="locationNames">
+        @foreach (var location in draft.Locations.Where(l => l.Name != ""))
+        {
+            <option value="@location.Name"></option>
+        }
+    </datalist>
+    <datalist id="leaderNames">
+        @foreach (var name in LeaderNames)
+        {
+            <option value="@name"></option>
+        }
+    </datalist>
+
+    <details class="pb-section" open>
+        <summary><h4>Set up</h4></summary>
+        <div class="form-group mb-3 row">
+            <label class="col-sm-2 col-form-label">Title</label>
+            <div class="col-sm-6">
+                <input class="form-control" @bind="draft.Title" @bind:after="Save" />
+            </div>
+        </div>
+        <div class="form-group mb-3 row">
+            <label class="col-sm-2 col-form-label">Section night</label>
+            <div class="col-sm-3">
+                <select class="form-select" @bind="draft.MeetingDay" @bind:after="Save">
+                    @foreach (var day in new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday })
+                    {
+                        <option value="@day">@day</option>
+                    }
+                </select>
+            </div>
+            <div class="col-sm-4">
+                <button type="button" class="btn btn-outline-secondary" @onclick="FindSectionNight" disabled="@Busy">Find from the calendar</button>
+            </div>
+        </div>
+        <div class="form-group mb-3 row">
+            <label class="col-sm-2 col-form-label">Start Date</label>
+            <div class="col-sm-3">
+                <input type="date" class="form-control" @bind="draft.Start" @bind:after="Save" />
+            </div>
+            <label class="col-sm-2 col-form-label">End Date</label>
+            <div class="col-sm-3">
+                <input type="date" class="form-control" @bind="draft.End" @bind:after="Save" />
+            </div>
+        </div>
+        <div class="form-group mb-3 row">
+            <label class="col-sm-2 col-form-label">Breaks</label>
+            <div class="col-sm-10">
+                @foreach (var item in draft.Breaks)
+                {
+                    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                        <input type="date" class="form-control form-control-sm w-auto" @bind="item.From" @bind:after="Save" />
+                        to
+                        <input type="date" class="form-control form-control-sm w-auto" @bind="item.To" @bind:after="Save" />
+                        <input class="form-control form-control-sm w-auto" @bind="item.Label" @bind:after="Save" placeholder="Term Break" />
+                        <button type="button" class="btn btn-link btn-sm" @onclick="() => RemoveBreak(item)">Remove</button>
+                    </div>
+                }
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="AddBreak">Add a break</button>
+                <span class="text-muted small ms-2">There are no section nights in a break.</span>
+            </div>
+        </div>
+        <div class="form-group mb-3 row">
+            <label class="col-sm-2 col-form-label">Usual times</label>
+            <div class="col-sm-10 col-form-label">
+                <div class="d-flex flex-wrap gap-4 align-items-center">
+                    <span>Section night <input type="time" class="form-control form-control-sm d-inline-block w-auto" value="@draft.NightStart" @onchange="e => SetTime(v => draft.NightStart = v, e)" /> to <input type="time" class="form-control form-control-sm d-inline-block w-auto" value="@draft.NightEnd" @onchange="e => SetTime(v => draft.NightEnd = v, e)" /></span>
+                    <span>Camp <input type="time" class="form-control form-control-sm d-inline-block w-auto" value="@draft.CampStart" @onchange="e => SetTime(v => draft.CampStart = v, e)" /> on the first day to <input type="time" class="form-control form-control-sm d-inline-block w-auto" value="@draft.CampEnd" @onchange="e => SetTime(v => draft.CampEnd = v, e)" /> on the last</span>
+                    <span>Anything else <input type="time" class="form-control form-control-sm d-inline-block w-auto" value="@draft.OtherStart" @onchange="e => SetTime(v => draft.OtherStart = v, e)" /> to <input type="time" class="form-control form-control-sm d-inline-block w-auto" value="@draft.OtherEnd" @onchange="e => SetTime(v => draft.OtherEnd = v, e)" /></span>
+                </div>
+                <div class="text-muted small">Each night, camp or activity can have its own times below; these are used where it has none.</div>
+            </div>
+        </div>
+        <div class="form-group mb-3 row">
+            <label class="col-sm-2 col-form-label">Usually</label>
+            <div class="col-sm-10 col-form-label">
+                <div class="d-flex flex-wrap gap-4 align-items-center">
+                    <span>Location <input class="form-control form-control-sm d-inline-block w-auto" list="locationNames" @bind="draft.DefaultLocation" @bind:after="Save" /></span>
+                    <span>Leader in charge <input class="form-control form-control-sm d-inline-block w-auto" list="leaderNames" @bind="draft.DefaultLeader" @bind:after="Save" /></span>
+                    <span>Challenge area
+                        <select class="form-select form-select-sm d-inline-block w-auto" @bind="draft.DefaultChallengeArea" @bind:after="Save">
+                            <option value="">None</option>
+                            <option value="outdoors">Outdoors</option>
+                            <option value="community">Community</option>
+                            <option value="personal_growth">Personal Growth</option>
+                            <option value="creative">Creative</option>
+                        </select>
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="form-group mb-3 row">
+            <label class="col-sm-2 col-form-label">Duty patrols</label>
+            <div class="col-sm-10">
+                <div class="duty-cycle mb-2">
+                @for (var i = 0; i < draft.DutyPatrols.Count; i++)
+                {
+                    var patrol = draft.DutyPatrols[i];
+                    var first = i == 0;
+                    var last = i == draft.DutyPatrols.Count - 1;
+                    <div class="duty-chip" style="@DutyChipStyle(patrol)">
+                        <span class="duty-number">@(i + 1)</span>
+                        <span class="duty-name">@patrol</span>
+                        <span class="duty-actions">
+                            <button type="button" class="duty-button" title="Earlier in the cycle" aria-label="Move @patrol earlier" disabled="@first" @onclick="() => MoveDutyPatrol(patrol, -1)">&uarr;</button>
+                            <button type="button" class="duty-button" title="Later in the cycle" aria-label="Move @patrol later" disabled="@last" @onclick="() => MoveDutyPatrol(patrol, 1)">&darr;</button>
+                            <button type="button" class="duty-button duty-remove" title="Take out of the cycle" aria-label="Remove @patrol" @onclick="() => RemoveDutyPatrol(patrol)">&times;</button>
+                        </span>
+                    </div>
+                }
+            </div>
+                <div class="d-flex flex-wrap gap-3 align-items-center">
+                    <span>First on duty
+                        <select class="form-select form-select-sm d-inline-block w-auto" @bind="draft.FirstDutyPatrol" @bind:after="Save">
+                            @foreach (var patrol in draft.DutyPatrols)
+                            {
+                                <option value="@patrol">@patrol</option>
+                            }
+                        </select>
+                    </span>
+                    @if (PatrolsNotInCycle.Any())
+                    {
+                        <span>Add a patrol
+                            <select class="form-select form-select-sm d-inline-block w-auto" @onchange="AddDutyPatrol">
+                                <option value="">Select patrol</option>
+                                @foreach (var patrol in PatrolsNotInCycle)
+                                {
+                                    <option value="@patrol">@patrol</option>
+                                }
+                            </select>
+                        </span>
+                    }
+                </div>
+            </div>
+        </div>
+    </details>
+
+    <details class="pb-section" open>
+        <summary><h4>Program ideas</h4></summary>
+        <p class="text-muted">Add the things the section might do, then drag each onto a night below. Drag what is on a night to another night to move it, or back here to take it off.</p>
+        <div class="ideas-pool mb-3" @ondragover:preventDefault="true" @ondrop="DropOnIdeas">
+            @if (draft.Ideas.Count == 0)
+            {
+                <span class="text-muted">No ideas to show.</span>
+            }
+            @foreach (var idea in draft.Ideas)
+            {
+                var card = idea;
+                <div class="idea-card" draggable="true" @ondragstart="() => DragIdea(card)">
+                    <span class="idea-title">@card.Title</span>
+                    @if (card.Game != "")
+                    {
+                        <span class="idea-detail">Game: @card.Game</span>
+                    }
+                    @if (card.ChallengeArea != "")
+                    {
+                        <span class="idea-detail">@ProgramLayout.AreaLabel(card.ChallengeArea)</span>
+                    }
+                    <button type="button" class="idea-remove" title="Remove idea" @onclick="() => RemoveIdea(card)">&times;</button>
+                </div>
+            }
+        </div>
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+            <input class="form-control form-control-sm w-auto" placeholder="New idea" @bind="NewIdea.Title" @bind:event="oninput" @onkeydown="@(e => { if (e.Key == "Enter") return AddIdea(); return Task.CompletedTask; })" />
+            <input class="form-control form-control-sm w-auto" placeholder="Game" @bind="NewIdea.Game" />
+            <input class="form-control form-control-sm w-auto" list="locationNames" placeholder="Location" @bind="NewIdea.Location" />
+            <select class="form-select form-select-sm w-auto" @bind="NewIdea.ChallengeArea">
+                <option value="">Challenge area</option>
+                <option value="outdoors">Outdoors</option>
+                <option value="community">Community</option>
+                <option value="personal_growth">Personal Growth</option>
+                <option value="creative">Creative</option>
+            </select>
+            <button type="button" class="btn btn-outline-primary btn-sm" @onclick="AddIdea">Add idea</button>
+        </div>
+    </details>
+
+    <details class="pb-section" open>
+        <summary><h4>Section nights</h4></summary>
+        @if (nights.Count == 0)
+        {
+            <div class="mb-3 text-muted">No section nights to show.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle program-nights">
+                    <thead>
+                        <tr>
+                            <th>Night</th><th>Activity</th><th>Game</th><th>Location</th><th>Duty patrol</th><th>Leader in charge</th><th>Challenge area</th><th>Start</th><th>End</th><th>Skip</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var night in nights)
+                        {
+                            var edit = EditFor(night.Date);
+                            <tr class="@(night.Skipped ? "text-muted" : "")">
+                                <td class="text-nowrap">@night.Date.ToString("ddd d MMM")</td>
+                                <td @ondragover:preventDefault="@(!night.Skipped)" @ondrop="() => DropOnNight(night.Date)">
+                                    <div class="d-flex align-items-center gap-1">
+                                        @if (edit.Activity != "" && !night.Skipped)
+                                        {
+                                            <span class="drag-handle" draggable="true" title="Drag to another night, or back to the ideas" @ondragstart="() => DragNight(night.Date)">&#8942;&#8942;</span>
+                                        }
+                                        <input class="form-control form-control-sm" placeholder="Drop an idea here" @bind="edit.Activity" @bind:after="Save" disabled="@night.Skipped" />
+                                    </div>
+                                </td>
+                                <td><input class="form-control form-control-sm" @bind="edit.Game" @bind:after="Save" disabled="@night.Skipped" /></td>
+                                <td><input class="form-control form-control-sm" list="locationNames" placeholder="@draft.DefaultLocation" @bind="edit.Location" @bind:after="Save" disabled="@night.Skipped" /></td>
+                                <td>
+                                    <select class="form-select form-select-sm" value="@DutyChoice(edit)" @onchange="e => SetDutyChoice(edit, e)" disabled="@night.Skipped">
+                                        <option value="">Cycle@(edit.DutyPatrol == "" && !edit.NoDuty && night.Duty != "" ? " (" + ProgramPlanner.ShortPatrol(night.Duty) + ")" : "")</option>
+                                        @foreach (var patrol in draft.DutyPatrols)
+                                        {
+                                            <option value="@patrol">@ProgramPlanner.ShortPatrol(patrol)</option>
+                                        }
+                                        <option value="@NoDutyChoice">None</option>
+                                    </select>
+                                </td>
+                                <td><input class="form-control form-control-sm" list="leaderNames" placeholder="@draft.DefaultLeader" @bind="edit.Leader" @bind:after="Save" disabled="@night.Skipped" /></td>
+                                <td>
+                                    <select class="form-select form-select-sm" @bind="edit.ChallengeArea" @bind:after="Save" disabled="@night.Skipped">
+                                        <option value="">@(draft.DefaultChallengeArea == "" ? "None" : "Usual")</option>
+                                        <option value="outdoors">Outdoors</option>
+                                        <option value="community">Community</option>
+                                        <option value="personal_growth">Personal Growth</option>
+                                        <option value="creative">Creative</option>
+                                    </select>
+                                </td>
+                                <td><input type="time" class="form-control form-control-sm" title="Blank for the usual @draft.NightStart" value="@edit.StartTime" @onchange="e => SetTime(v => edit.StartTime = v, e)" disabled="@night.Skipped" /></td>
+                                <td><input type="time" class="form-control form-control-sm" title="Blank for the usual @draft.NightEnd" value="@edit.EndTime" @onchange="e => SetTime(v => edit.EndTime = v, e)" disabled="@night.Skipped" /></td>
+                                <td><input type="checkbox" class="form-check-input" @bind="edit.Skipped" @bind:after="Save" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </details>
+
+    <details class="pb-section" open>
+        <summary><h4>Camps, hikes and other activities</h4></summary>
+        @if (draft.Extras.Count > 0)
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle program-nights">
+                    <thead>
+                        <tr>
+                            <th>Kind</th><th>From</th><th>To</th><th>Activity</th><th>Location</th><th>Leader in charge</th><th>Challenge area</th><th>Start</th><th>End</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in draft.Extras.OrderBy(r => r.Date))
+                        {
+                            var extra = row;
+                            <tr>
+                                <td>
+                                    <select class="form-select form-select-sm" @bind="extra.Kind" @bind:after="Save">
+                                        <option value="@ProgramRowKind.Camp">Camp</option>
+                                        <option value="@ProgramRowKind.Hike">Hike</option>
+                                        <option value="@ProgramRowKind.Weekend">Weekend</option>
+                                        <option value="@ProgramRowKind.Other">Other</option>
+                                    </select>
+                                </td>
+                                <td><input type="date" class="form-control form-control-sm" @bind="extra.Date" @bind:after="Save" /></td>
+                                <td><input type="date" class="form-control form-control-sm" @bind="extra.EndDate" @bind:after="Save" /></td>
+                                <td><input class="form-control form-control-sm" @bind="extra.Activity" @bind:after="Save" /></td>
+                                <td><input class="form-control form-control-sm" list="locationNames" placeholder="@draft.DefaultLocation" @bind="extra.Location" @bind:after="Save" /></td>
+                                <td><input class="form-control form-control-sm" list="leaderNames" placeholder="@draft.DefaultLeader" @bind="extra.Leader" @bind:after="Save" /></td>
+                                <td>
+                                    <select class="form-select form-select-sm" @bind="extra.ChallengeArea" @bind:after="Save">
+                                        <option value="">@(draft.DefaultChallengeArea == "" ? "None" : "Usual")</option>
+                                        <option value="outdoors">Outdoors</option>
+                                        <option value="community">Community</option>
+                                        <option value="personal_growth">Personal Growth</option>
+                                        <option value="creative">Creative</option>
+                                    </select>
+                                </td>
+                                <td><input type="time" class="form-control form-control-sm" title="Blank for the usual" value="@extra.StartTime" @onchange="e => SetTime(v => extra.StartTime = v, e)" /></td>
+                                <td><input type="time" class="form-control form-control-sm" title="Blank for the usual" value="@extra.EndTime" @onchange="e => SetTime(v => extra.EndTime = v, e)" /></td>
+                                <td><button type="button" class="btn btn-link btn-sm" @onclick="() => RemoveExtra(extra)">Remove</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <div class="mb-3">
+            <button type="button" class="btn btn-outline-secondary btn-sm me-1" @onclick="() => AddExtra(ProgramRowKind.Camp)">Add a camp</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm me-1" @onclick="() => AddExtra(ProgramRowKind.Hike)">Add a hike</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm me-1" @onclick="() => AddExtra(ProgramRowKind.Weekend)">Add a weekend activity</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => AddExtra(ProgramRowKind.Other)">Add an activity off the section night</button>
+        </div>
+    </details>
+
+    <details class="pb-section" open>
+        <summary><h4>Locations and contacts</h4></summary>
+        <div class="row">
+            <div class="col-lg-6">
+                @foreach (var location in draft.Locations)
+                {
+                    var place = location;
+                    <div class="d-flex gap-2 mb-2">
+                        <input class="form-control form-control-sm" placeholder="Location" @bind="place.Name" @bind:after="Save" />
+                        <input class="form-control form-control-sm" placeholder="Address" @bind="place.Address" @bind:after="Save" />
+                        <button type="button" class="btn btn-link btn-sm" @onclick="() => RemoveLocation(place)">Remove</button>
+                    </div>
+                }
+                <button type="button" class="btn btn-outline-secondary btn-sm mb-3" @onclick="AddLocation">Add a location</button>
+            </div>
+            <div class="col-lg-6">
+                @foreach (var contact in draft.Contacts)
+                {
+                    var person = contact;
+                    <div class="d-flex gap-2 mb-2">
+                        <input class="form-control form-control-sm" placeholder="Leader" list="leaderNames" @bind="person.Name" @bind:after="Save" />
+                        <input class="form-control form-control-sm" placeholder="Position" @bind="person.Position" @bind:after="Save" />
+                        <input class="form-control form-control-sm" placeholder="Email" @bind="person.Email" @bind:after="Save" />
+                        <button type="button" class="btn btn-link btn-sm" @onclick="() => RemoveContact(person)">Remove</button>
+                    </div>
+                }
+                <button type="button" class="btn btn-outline-secondary btn-sm mb-3" @onclick="AddContact">Add a contact</button>
+            </div>
+        </div>
+    </details>
+
+    <details class="pb-section" open>
+        <summary><h4>What the program shows</h4></summary>
+        <div class="mb-3 d-flex flex-wrap gap-4">
+            <label><input type="checkbox" @bind="draft.ShowGame" @bind:after="Save" /> Game</label>
+            <label><input type="checkbox" @bind="draft.ShowLocation" @bind:after="Save" /> Location</label>
+            <label><input type="checkbox" @bind="draft.ShowChallengeArea" @bind:after="Save" /> Challenge area</label>
+            <label><input type="checkbox" @bind="draft.ShowDutyPatrol" @bind:after="Save" /> Duty patrol</label>
+            <label><input type="checkbox" @bind="draft.ShowLeader" @bind:after="Save" /> Leader in charge</label>
+            <label><input type="checkbox" @bind="draft.ShowLocations" @bind:after="Save" /> Locations</label>
+            <label><input type="checkbox" @bind="draft.ShowContacts" @bind:after="Save" /> Contact details</label>
+        </div>
+    </details>
+
+    <details class="pb-section" open>
+        <summary><h4>The program</h4></summary>
+        <ReportButtons Name="Program" OnPdf="@(() => Download(OutputType.PDF))" OnXlsx="@(() => Download(OutputType.Excel))" Disabled="@(document.Rows.Count == 0)">
+            <ReportButton Name="Program" Format="docx" Disabled="@(document.Rows.Count == 0)" OnClick="WordClick" />
+        </ReportButtons>
+        <ProgramPreview Document="document" />
+    </details>
+
+    <details class="pb-section" open>
+        <summary><h4>Terrain</h4></summary>
+        <p class="text-muted">
+            Fill the program from the activities already on the unit's calendar in Terrain, or check it against them to see what to add or change there.
+            Nothing is sent to Terrain automatically &mdash; use the buttons below once you're happy with the program.
+        </p>
+        <div class="mb-3">
+            <button type="button" class="btn btn-primary me-1" @onclick="FillFromTerrainClick" disabled="@Busy">Fill from Terrain</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="CheckTerrainClick" disabled="@Busy">Check against Terrain</button>
+        </div>
+        @if (TerrainRead)
+        {
+            var changes = Changes;
+            <div class="export-panel mb-3">
+                <div class="export-panel-label">Changes to make in Terrain</div>
+                <div>
+                    <button type="button" class="btn btn-warning me-1" @onclick="ChangesCsvClick" disabled="@(changes.Count == 0)">Changes to Apply in Terrain (CSV)</button>
+                    <button type="button" class="btn btn-success" @onclick="ImportZipClick" disabled="@(ToAdd.Count == 0)">Activities for Terrain's import (@ToAdd.Count, zip of JSON)</button>
+                </div>
+                <div class="text-muted small mt-1">The import has an activity to a file, for those not in Terrain already; the ones filled in from Terrain are left out.</div>
+            </div>
+            @if (changes.Count == 0)
+            {
+                <div class="mb-3 text-muted">No changes to show: Terrain matches the program.</div>
+            }
+            else
+            {
+                <table class="table table-sm table-striped">
+                    <thead>
+                        <tr><th>Action</th><th>Date</th><th>Activity</th><th>Location</th><th>Leader in charge</th><th>Details</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var change in changes)
+                        {
+                            <tr>
+                                <td>@change.Action</td>
+                                <td class="text-nowrap">@change.Date.ToString("ddd d MMM")@(change.EndDate == null ? "" : " - " + change.EndDate.Value.ToString("ddd d MMM"))</td>
+                                <td>@change.Activity</td>
+                                <td>@change.Location</td>
+                                <td>@change.Leader</td>
+                                <td>@change.Details</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        }
+    </details>
+}
