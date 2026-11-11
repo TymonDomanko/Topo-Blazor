@@ -20,6 +20,7 @@ using Topo.Model.Progress;
 using Topo.Model.History;
 using Topo.Model.UnitReport;
 using Topo.Model.Attendance;
+using Topo.Model.ProgramBuilder;
 using Topo.Model.SectionReport;
 using Topo.Model.SiaProgress;
 using Topo.Model.ReadyToSubmit;
@@ -129,6 +130,9 @@ public class Function
                         break;
                     case ReportType.AttendanceAnalysis:
                         workbook = GenerateAttendanceAnalysisWorkbook(reportGenerationRequest);
+                        break;
+                    case ReportType.ProgramCalendar:
+                        workbook = GenerateProgramCalendarWorkbook(reportGenerationRequest);
                         break;
                 }
 
@@ -391,6 +395,16 @@ public class Function
         if (reportData != null)
         {
             return reportService.GenerateAttendanceAnalysisWorkbook(reportData, reportGenerationRequest.GroupName, reportGenerationRequest.Section);
+        }
+        return reportService.CreateWorkbookWithSheets(1);
+    }
+
+    private IWorkbook GenerateProgramCalendarWorkbook(ReportGenerationRequest reportGenerationRequest)
+    {
+        var reportData = JsonConvert.DeserializeObject<ProgramDocument>(reportGenerationRequest.ReportData);
+        if (reportData != null)
+        {
+            return reportService.GenerateProgramCalendarWorkbook(reportData);
         }
         return reportService.CreateWorkbookWithSheets(1);
     }

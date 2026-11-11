@@ -59,6 +59,24 @@
 
 </script>
 <script type="text/javascript">
+    // A row dragged by its handle (Program Builder) moves with the mouse as a whole row, not just the handle.
+    // Only the handle is draggable, so the text boxes in the row can still be used normally.
+    document.addEventListener("dragstart", function (e) {
+        const handle = e.target instanceof Element ? e.target.closest(".drag-handle") : null;
+        const row = handle ? handle.closest("tr") : null;
+        if (!row || !e.dataTransfer) return;
+        const box = row.getBoundingClientRect();
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", "");
+        e.dataTransfer.setDragImage(row, e.clientX - box.left, e.clientY - box.top);
+        // dim the row left behind, after the browser has taken its picture of it
+        setTimeout(function () { row.classList.add("row-dragging"); }, 0);
+    });
+    document.addEventListener("dragend", function () {
+        document.querySelectorAll(".row-dragging").forEach(function (r) { r.classList.remove("row-dragging"); });
+    });
+</script>
+<script type="text/javascript">
 
     // In your Javascript (external .js resource or <script> tag)
     function BindSelect2() {

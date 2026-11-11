@@ -5,6 +5,7 @@ using Topo.Model.AdditionalAwards;
 using Topo.Model.Approvals;
 using Topo.Model.Attendance;
 using Topo.Model.Program;
+using Topo.Model.ProgramBuilder;
 using Topo.Model.Logbook;
 using Topo.Model.Members;
 using Topo.Model.Milestone;
@@ -49,6 +50,7 @@ namespace Topo.Services
         public IWorkbook GenerateSiaProgressWorkbook(SiaProgressReport report, string groupName, string section);
         public IWorkbook GenerateReadyToSubmitWorkbook(ReadyToSubmitReport report, string groupName, string section);
         public IWorkbook GenerateAttendanceAnalysisWorkbook(AttendanceReport report, string groupName, string section);
+        public IWorkbook GenerateProgramCalendarWorkbook(ProgramDocument program);
         public IWorkbook CreateWorkbookWithSheets(int sheetsToCreate);
     }
     public class ReportService : IReportService
@@ -423,8 +425,6 @@ namespace Topo.Services
             return workbook;
         }
 
-        // The badges that have everything done but have not been sent in, listed Scout by Scout. The stages waiting only on the
-        // Scout's logbook tick, and those a few ticks short, are each on a page of their own.
         // A sheet for each table (one for the unit, or one for each patrol), laid out as the page shows it
         public IWorkbook GenerateAttendanceAnalysisWorkbook(AttendanceReport report, string groupName, string section)
         {
@@ -570,6 +570,146 @@ namespace Topo.Services
             return workbook;
         }
 
+        // The program as a calendar: a landscape table of the section nights and activities with the columns that are switched on, then the
+        // challenge area counts, the locations and the contact details. It has no logo, as a leaders' calendar has none.
+        public IWorkbook GenerateProgramCalendarWorkbook(ProgramDocument program)
+        {
+            var workbook = CreateWorkbookWithSheets(1);
+            var sheet = workbook.Worksheets[0];
+            sheet.Name = "Program";
+            IStyle headingStyle = workbook.Styles["headingStyle"];
+            var headings = new Dictionary<string, string> { ["game"] = "Game", ["location"] = "Location", ["challenge"] = "Challenge Area", ["duty"] = "Duty Patrol", ["leader"] = "LIC" };
+            var widths = new Dictionary<string, double> { ["game"] = 22, ["location"] = 28, ["challenge"] = 18, ["duty"] = 14, ["leader"] = 16 };
+            var last = 3 + program.Columns.Count;
+            var grey = Color.FromArgb(217, 217, 217);
+            var band = Color.FromArgb(242, 242, 242);
+
+            void Border(int fromRow, int fromColumn, int toRow, int toColumn)
+            {
+                for (var r = fromRow; r <= toRow; r++)
+                    for (var c = fromColumn; c <= toColumn; c++)
+                        sheet.Range[r, c].BorderAround();
+            }
+
+            var row = 1;
+            sheet.Range[row, 1].Text = program.Title;
+            sheet.Range[row, 1, row, last].Merge();
+            sheet.Range[row, 1].CellStyle = headingStyle;
+            sheet.SetRowHeight(row, 30);
+
+            row += 2;
+            var headingRow = row;
+            sheet.Range[row, 1].Text = "Date";
+            sheet.Range[row, 1, row, 2].Merge();
+            sheet.Range[row, 3].Text = "Activity";
+            for (var i = 0; i < program.Columns.Count; i++)
+                sheet.Range[row, 4 + i].Text = headings[program.Columns[i]];
+            sheet.Range[row, 1, row, last].CellStyle.Font.Bold = true;
+            sheet.Range[row, 1, row, last].CellStyle.Color = grey;
+            Border(row, 1, row, last);
+
+            var shaded = false;
+            foreach (var line in program.Rows)
+            {
+                row++;
+                if (line.IsBreak)
+                {
+                    sheet.Range[row, 1, row, last].Merge();
+                    sheet.Range[row, 1].Text = line.BreakLabel;
+                    sheet.Range[row, 1, row, last].CellStyle.Font.Bold = true;
+                    sheet.Range[row, 1, row, last].CellStyle.Color = Color.FromArgb(166, 166, 166);
+                    sheet.Range[row, 1, row, last].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                    Border(row, 1, row, last);
+                    shaded = false;
+                    continue;
+                }
+
+                if (line.Month != "")
+                {
+                    // a month of several rows reads sideways down its rows; one or two are too short for that, so it is three letters across
+                    var span = Math.Max(1, line.MonthSpan);
+                    sheet.Range[row, 1].Text = span >= 3 ? line.Month : line.Month.Substring(0, Math.Min(3, line.Month.Length));
+                    if (span > 1)
+                        sheet.Range[row, 1, row + span - 1, 1].Merge();
+                    sheet.Range[row, 1].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                    sheet.Range[row, 1].CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
+                    if (span >= 3)
+                        sheet.Range[row, 1].CellStyle.Rotation = 90;
+                }
+                sheet.Range[row, 2].Text = line.DateText;
+                sheet.Range[row, 3].Text = line.Activity;
+                for (var i = 0; i < program.Columns.Count; i++)
+                {
+                    var value = program.Columns[i] switch { "game" => line.Game, "location" => line.Location, "challenge" => line.ChallengeArea, "duty" => line.DutyPatrol, _ => line.Leader };
+                    sheet.Range[row, 4 + i].Text = value;
+                }
+                if (shaded)
+                    sheet.Range[row, 2, row, last].CellStyle.Color = band;
+                shaded = !shaded;
+                Border(row, 1, row, last);
+            }
+
+            // the tables under the calendar go in its first columns, so they have the width of the date, the activity and the next column
+            (int Start, string[] Headings, IEnumerable<string[]> Rows) Table(string title, string[] columnHeadings, IEnumerable<string[]> rows)
+            {
+                row += 2;
+                sheet.Range[row, 1].Text = title;
+                sheet.Range[row, 1].CellStyle = headingStyle;
+                sheet.Range[row, 1, row, last].Merge();
+                row++;
+                var start = row;
+                for (var i = 0; i < columnHeadings.Length; i++)
+                    sheet.Range[row, i + 1 + (i == 0 ? 0 : 1)].Text = columnHeadings[i];
+                return (start, columnHeadings, rows);
+            }
+
+            void Fill((int Start, string[] Headings, IEnumerable<string[]> Rows) table)
+            {
+                // the first column is the month and date, wide enough only for a short word, so a table's first column is merged across both
+                var columnCount = table.Headings.Length;
+                row = table.Start;
+                sheet.Range[row, 1, row, 2].Merge();
+                sheet.Range[row, 1, row, columnCount + 1].CellStyle.Font.Bold = true;
+                sheet.Range[row, 1, row, columnCount + 1].CellStyle.Color = grey;
+                Border(row, 1, row, columnCount + 1);
+                var banded = false;
+                foreach (var values in table.Rows)
+                {
+                    row++;
+                    sheet.Range[row, 1, row, 2].Merge();
+                    for (var i = 0; i < values.Length; i++)
+                        sheet.Range[row, i + 1 + (i == 0 ? 0 : 1)].Text = values[i];
+                    if (banded)
+                        sheet.Range[row, 1, row, columnCount + 1].CellStyle.Color = band;
+                    banded = !banded;
+                    Border(row, 1, row, columnCount + 1);
+                }
+            }
+
+            if (program.Locations.Count > 0)
+                Fill(Table("Locations", new[] { "Location", "Address" }, program.Locations.Select(l => new[] { l.Name, l.Address })));
+            if (program.Contacts.Count > 0)
+                Fill(Table("Contact Details", new[] { "Leader", "Position", "Email" }, program.Contacts.Select(c => new[] { c.Name, c.Position, c.Email })));
+
+            sheet.SetColumnWidth(1, 6);
+            sheet.SetColumnWidth(2, 11);
+            sheet.SetColumnWidth(3, 34);
+            for (var i = 0; i < program.Columns.Count; i++)
+                sheet.SetColumnWidth(4 + i, widths[program.Columns[i]]);
+
+            sheet.PageSetup.Orientation = ExcelPageOrientation.Landscape;
+            sheet.PageSetup.BottomMargin = 0.4;
+            sheet.PageSetup.TopMargin = 0.4;
+            sheet.PageSetup.LeftMargin = 0.4;
+            sheet.PageSetup.RightMargin = 0.4;
+            sheet.PageSetup.FitToPagesWide = 1;
+            sheet.PageSetup.FitToPagesTall = 0;
+            sheet.PageSetup.PrintTitleRows = $"${headingRow}:${headingRow}";
+            return workbook;
+        }
+
+        // The badges that have everything done but have not been sent in, listed Scout by Scout. The stages waiting only on the
+        // Scout's logbook tick, and those a few ticks short, are each on a page of their own.
         public IWorkbook GenerateReadyToSubmitWorkbook(ReadyToSubmitReport report, string groupName, string section)
         {
             const string dateFormat = "d MMM yyyy";

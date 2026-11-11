@@ -28,6 +28,7 @@ namespace Topo.Services
         public Task<byte[]> GetUnitReport(string groupName, string section, string unitName, OutputType outputType, string serialisedReportData);
         public Task<byte[]> GetSectionReport(string groupName, string section, string unitName, OutputType outputType, string serialisedReportData);
         public Task<byte[]> GetAttendanceAnalysisReport(string groupName, string section, string unitName, OutputType outputType, string serialisedReportData);
+        public Task<byte[]> GetProgramCalendarReport(string groupName, string section, string unitName, OutputType outputType, string serialisedReportData);
         public Task<byte[]> GetTermProgramReport(string groupName, string section, string unitName, OutputType outputType, string serialisedReportData);
         public Task<byte[]> GetProgramIdeasReport(string groupName, string section, string unitName, OutputType outputType, string serialisedReportData);
     }
@@ -333,6 +334,22 @@ namespace Topo.Services
             var reportGenerationRequest = new ReportGenerationRequest()
             {
                 ReportType = ReportType.AttendanceAnalysis,
+                GroupName = groupName,
+                Section = section,
+                UnitName = unitName,
+                OutputType = outputType,
+                ReportData = serialisedReportData
+            };
+
+            var report = await CallReportGeneratorFunction(reportGenerationRequest);
+            return report;
+        }
+
+        public async Task<byte[]> GetProgramCalendarReport(string groupName, string section, string unitName, OutputType outputType, string serialisedReportData)
+        {
+            var reportGenerationRequest = new ReportGenerationRequest()
+            {
+                ReportType = ReportType.ProgramCalendar,
                 GroupName = groupName,
                 Section = section,
                 UnitName = unitName,
