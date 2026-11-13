@@ -1,4 +1,5 @@
 ﻿using Topo.Model;
+using Topo.Model.Members;
 using Topo.Model.Approvals;
 using Topo.Model.Milestone;
 using Topo.Model.Progress;
@@ -73,9 +74,11 @@ namespace Topo.Services
             var peakAwardByMember = (await _terrainAPIService.GetUnitAchievementsOfType<GetPeakAwardsResultsModel>(selectedUnitId, "peak_award")).results.ToLookup(r => r.member_id);
 
             var wallchartItems = new List<WallchartItemModel>();
+            // the Reading line names each Scout the short way, as the reports do
+            var shortNames = SignInSheetLayout.GetDisplayNames(youth, false);
             foreach (var member in youth)
             {
-                progress?.Invoke($"{member.first_name} {member.last_name} ({youth.IndexOf(member) + 1} of {youth.Count})");
+                progress?.Invoke($"{(shortNames.TryGetValue(member.id, out var shortName) ? shortName : member.first_name)} ({youth.IndexOf(member) + 1} of {youth.Count})");
                 var wallchartItem = new WallchartItemModel();
 
                 // Get Milestone for member
