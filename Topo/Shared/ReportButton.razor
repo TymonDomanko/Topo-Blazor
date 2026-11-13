@@ -1,0 +1,17 @@
+@* One download button. The pdf is the primary colour and the xlsx the success colour on every page. *@
+<button type="button" class="btn @(Format == "pdf" ? "btn-primary" : "btn-success")" disabled="@Disabled" @onclick="OnClick">@Name (@Format)</button>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Name { get; set; } = "";
+
+    // "pdf" or "xlsx"
+    [Parameter, EditorRequired]
+    public string Format { get; set; } = "pdf";
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public EventCallback OnClick { get; set; }
+}

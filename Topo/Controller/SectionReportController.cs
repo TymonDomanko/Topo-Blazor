@@ -1,13 +1,14 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Newtonsoft.Json;
+using Topo.Model.Common;
 using Topo.Model.ReportGeneration;
 using Topo.Model.SectionReport;
 using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class SectionReportController : ComponentBase
+    public class SectionReportController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -34,6 +35,11 @@ namespace Topo.Controller
         public SectionReportResult? Result;
         public bool Busy;
         public string Progress = "";
+        // The report is read again a moment after the unit, calendars or period change, rather than from a button
+        private readonly AutoRun _auto = new AutoRun();
+        private const int OptionDelayMilliseconds = 800;
+
+        public void Dispose() => _auto.Dispose();
 
         // Only offered to someone who can see more than one unit
         public bool CanDoGroup => model.Units.Count > 1;
@@ -54,13 +60,17 @@ namespace Topo.Controller
             model.Calendars = await _programService.GetCalendars();
             SetPeriod(ThisQuarterStart(), ThisQuarterStart().AddMonths(3).AddDays(-1));
             if (!string.IsNullOrEmpty(_storageService.UnitId))
+            {
                 SelectUnit(_storageService.UnitId);
+                await _auto.RunAsync(Generate);
+            }
         }
 
-        internal void UnitChange(ChangeEventArgs e)
+        internal async Task UnitChange(ChangeEventArgs e)
         {
             SelectUnit(e.Value?.ToString() ?? "");
             Result = null;
+            await _auto.RunAsync(Generate);
         }
 
         private void SelectUnit(string unitId)
@@ -76,13 +86,16 @@ namespace Topo.Controller
                 model.SelectedCalendars = new HashSet<string> { match };
         }
 
-        internal void ToggleCalendar(string calendarId, bool selected)
+        internal async Task ToggleCalendar(string calendarId, bool selected)
         {
             if (selected)
                 model.SelectedCalendars.Add(calendarId);
             else
                 model.SelectedCalendars.Remove(calendarId);
+            await _auto.RunAsync(Generate, OptionDelayMilliseconds);
         }
+
+        internal async Task DatesChanged() => await _auto.RunAsync(Generate, OptionDelayMilliseconds);
 
         public List<List<KeyValuePair<string, string>>> CalendarColumns() => CalendarMatcher.Columns(model.Calendars);
 
@@ -94,28 +107,51 @@ namespace Topo.Controller
             model.To = to;
         }
 
-        internal void LastMonth()
+        internal async Task LastMonth()
         {
             var firstOfThisMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
             SetPeriod(firstOfThisMonth.AddMonths(-1), firstOfThisMonth.AddDays(-1));
+            await _auto.RunAsync(Generate, OptionDelayMilliseconds);
         }
 
-        internal void ThisQuarter() => SetPeriod(ThisQuarterStart(), ThisQuarterStart().AddMonths(3).AddDays(-1));
+        internal async Task ThisQuarter()
+        {
+            SetPeriod(ThisQuarterStart(), ThisQuarterStart().AddMonths(3).AddDays(-1));
+            await _auto.RunAsync(Generate, OptionDelayMilliseconds);
+        }
 
-        internal void LastQuarter() => SetPeriod(ThisQuarterStart().AddMonths(-3), ThisQuarterStart().AddDays(-1));
+        internal async Task LastQuarter()
+        {
+            SetPeriod(ThisQuarterStart().AddMonths(-3), ThisQuarterStart().AddDays(-1));
+            await _auto.RunAsync(Generate, OptionDelayMilliseconds);
+        }
 
-        internal void ThisYear() => SetPeriod(new DateTime(DateTime.Today.Year, 1, 1), new DateTime(DateTime.Today.Year, 12, 31));
+        internal async Task ThisYear()
+        {
+            SetPeriod(new DateTime(DateTime.Today.Year, 1, 1), new DateTime(DateTime.Today.Year, 12, 31));
+            await _auto.RunAsync(Generate, OptionDelayMilliseconds);
+        }
 
-        internal async Task GenerateClick()
+        // Reads the report for what is chosen. A read that has been overtaken by a newer change stops, and leaves the page to the newer one.
+        private async Task Generate(CancellationToken cancellationToken)
         {
             model.ErrorMessage = "";
             model.Message = "";
+            // no unit chosen yet, so there is nothing to read and nothing to complain about
             if (string.IsNullOrEmpty(model.UnitId))
-                model.ErrorMessage = "Please select a unit.";
-            else if (model.To < model.From)
+            {
+                Result = null;
+                Busy = false;
+                return;
+            }
+            if (model.To < model.From)
                 model.ErrorMessage = "The to date must be after the from date.";
             if (model.ErrorMessage != "")
+            {
+                Result = null;
+                Busy = false;
                 return;
+            }
 
             var unitIds = IsGroup ? model.Units.Keys.ToList() : new List<string> { model.UnitId };
             var request = new SectionReportRequest
@@ -141,16 +177,22 @@ namespace Topo.Controller
             Result = null;
             try
             {
-                Result = await _sectionReportService.GetSectionReport(request, step => { Progress = step; InvokeAsync(StateHasChanged); });
+                var result = await _sectionReportService.GetSectionReport(request,
+                    step => { if (!cancellationToken.IsCancellationRequested) { Progress = step; InvokeAsync(StateHasChanged); } }, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                Result = result;
             }
-            catch (Exception)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 model.ErrorMessage = "Couldn't build the report.";
             }
             finally
             {
-                Busy = false;
-                Progress = "";
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    Busy = false;
+                    Progress = "";
+                }
             }
         }
 

@@ -7,10 +7,11 @@ namespace Topo.Model.UnitReport
         public string UnitId { get; set; } = string.Empty;
         public Dictionary<string, string> Calendars { get; set; } = new Dictionary<string, string>();
         public HashSet<string> SelectedCalendars { get; set; } = new HashSet<string>();
-        // Search from the earliest date the report looks at, unless a range is chosen
-        public bool AllTime { get; set; } = true;
-        public DateTime FromDate { get; set; } = DateTime.Today.AddYears(-1).AddDays(1);
-        public DateTime ToDate { get; set; } = DateTime.Today;
+        // Search from the earliest date the report looks at, instead of the range
+        public bool AllTime { get; set; }
+        // The current quarter to start with, as the Section Report's "This quarter"
+        public DateTime FromDate { get; set; } = new DateTime(DateTime.Today.Year, (DateTime.Today.Month - 1) / 3 * 3 + 1, 1);
+        public DateTime ToDate { get; set; } = new DateTime(DateTime.Today.Year, (DateTime.Today.Month - 1) / 3 * 3 + 1, 1).AddMonths(3).AddDays(-1);
         public string ErrorMessage { get; set; } = string.Empty;
         public UnitReportModel? Report { get; set; }
     }
