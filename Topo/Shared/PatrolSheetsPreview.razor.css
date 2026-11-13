@@ -1,0 +1,30 @@
+.sheets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+}
+
+/* One printed page: a patrol on a sheet of its own, so a card each */
+.sheet {
+    flex: 1 1 18rem;
+    max-width: 26rem;
+    padding: 1rem;
+    border: 1px solid #d6d5d5;
+    border-radius: 0.25rem;
+}
+
+.patrol-name {
+    margin-bottom: 0.75rem;
+    text-align: center;
+    font-size: 1.6rem;
+    font-weight: bold;
+}
+
+.sheet table {
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.duty td {
+    background-color: #c0c0c0;
+}

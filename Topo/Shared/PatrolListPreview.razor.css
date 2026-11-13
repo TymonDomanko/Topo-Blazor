@@ -1,0 +1,26 @@
+.patrol-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    align-items: flex-start;
+}
+
+.patrols {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 22rem;
+}
+
+.council {
+    flex: 1 1 18rem;
+}
+
+.heading {
+    margin-top: 0.75rem;
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.duty td {
+    background-color: #c0c0c0;
+}
