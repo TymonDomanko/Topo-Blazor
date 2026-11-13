@@ -34,7 +34,7 @@ namespace Topo.Services
         public IWorkbook GenerateEventAttendanceWorkbook(EventListModel eventListModel, string groupName, string section, string unitName);
         public IWorkbook GenerateAttendanceReportWorkbook(AttendanceReportModel attendanceReportData, string groupName, string section, string unitName, DateTime fromDate, DateTime toDate, bool forPdfOutput);
         public IWorkbook GenerateOASWorksheetWorkbook(List<OASWorksheetAnswers> worksheetAnswers, string groupName, string section, string unitName, bool forPdfOutput, bool formatLikeTerrain, bool showByPatrol = false);
-        public IWorkbook GenerateSIAWorkbook(List<SIAProjectListModel> siaProjects, string groupName, string section, string unitName, bool forPdfOutput);
+        public IWorkbook GenerateSIAWorkbook(List<SIAProjectListModel> siaProjects, string groupName, string section, string unitName, bool forPdfOutput, bool breakByPatrol = false);
         public IWorkbook GenerateMilestoneWorkbook(List<MilestoneSummaryListModel> milestoneSummaries, string groupName, string section, string unitName, bool forPdfOutput, bool breakByPatrol = false);
         public IWorkbook GenerateLogbookWorkbook(List<MemberLogbookReportViewModel> logbookEntries, string groupName, string section, string unitName, bool forPdfOutput);
         public IWorkbook GenerateWallchartWorkbook(List<WallchartItemModel> wallchartEntries, string groupName, string section, string unitName, bool forPdfOutput, bool breakByPatrol = false);
@@ -1735,10 +1735,23 @@ namespace Topo.Services
         }
 
 
-        public IWorkbook GenerateSIAWorkbook(List<SIAProjectListModel> siaProjects, string groupName, string section, string unitName, bool forPdfOutput)
+        public IWorkbook GenerateSIAWorkbook(List<SIAProjectListModel> siaProjects, string groupName, string section, string unitName, bool forPdfOutput, bool breakByPatrol = false)
         {
-            var workbook = CreateWorkbookWithLogo(groupName, section, 6);
-            IWorksheet sheet = workbook.Worksheets[0];
+            // one sheet for the unit, or one for each patrol
+            var sheets = SiaProjectsLayout.Build(siaProjects, breakByPatrol);
+            var workbook = CreateWorkbookWithSheets(sheets.Count);
+            for (var i = 0; i < sheets.Count; i++)
+            {
+                AddLogoToSheet(workbook, i, groupName, section, 6);
+                if (breakByPatrol)
+                    workbook.Worksheets[i].Name = string.IsNullOrEmpty(sheets[i].Patrol) ? "Unit" : sheets[i].Patrol;
+                AddSiaProjectsSheet(workbook, workbook.Worksheets[i], sheets[i], unitName);
+            }
+            return workbook;
+        }
+
+        private void AddSiaProjectsSheet(IWorkbook workbook, IWorksheet sheet, SiaProjectsSheet projects, string unitName)
+        {
             int rowNumber = 1;
 
             IStyle headingStyle = workbook.Styles["headingStyle"];
@@ -1754,20 +1767,20 @@ namespace Topo.Services
             // Add Title
             rowNumber++;
             var title = sheet.Range[rowNumber, 2];
-            title.Text = $"SIA Project List as at {DateTime.Now.ToShortDateString()}";
+            title.Text = $"{(string.IsNullOrEmpty(projects.Patrol) ? "" : projects.Patrol + " ")}SIA Project List as at {DateTime.Now.ToShortDateString()}";
             title.CellStyle = headingStyle;
             sheet.Range[rowNumber, 2, rowNumber, 6].Merge();
             sheet.SetRowHeight(rowNumber, 30);
 
-            foreach (var memberSiaProject in siaProjects.GroupBy(sp => sp.memberName))
+            foreach (var memberSiaProject in projects.Scouts)
             {
                 rowNumber++;
-                sheet.Range[rowNumber, 1].Text = memberSiaProject.Key;
+                sheet.Range[rowNumber, 1].Text = memberSiaProject.Name;
                 sheet.Range[rowNumber, 1].CellStyle.Font.Bold = true;
                 sheet.Range[rowNumber, 1].CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
                 sheet.Range[rowNumber, 1, rowNumber, 2].Merge();
                 sheet.SetRowHeight(rowNumber, 20);
-                foreach (var siaProject in memberSiaProject.OrderBy(sia => sia.statusUpdated))
+                foreach (var siaProject in memberSiaProject.Projects)
                 {
                     rowNumber++;
                     sheet.Range[rowNumber, 2].Text = siaProject.area;
@@ -1793,8 +1806,6 @@ namespace Topo.Services
             sheet.PageSetup.HeaderMargin = 0;
             sheet.PageSetup.FooterMargin = 0;
             sheet.PageSetup.IsFitToPage = true;
-
-            return workbook;
         }
 
         public IWorkbook GenerateMilestoneWorkbook(List<MilestoneSummaryListModel> milestoneSummaries, string groupName, string section, string unitName, bool forPdfOutput, bool breakByPatrol = false)
