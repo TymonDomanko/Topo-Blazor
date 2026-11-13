@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Components.Forms;
 using Newtonsoft.Json;
 using System.Globalization;
+using Topo.Model;
 using Topo.Model.Approvals;
 using Topo.Model.Members;
 
@@ -320,7 +321,7 @@ namespace Topo.Services
             var approvalItem = savedApprovalItems.Where(a => a.achievement_id == approval.achievement_id && a.submission_type == approval.submission_type).FirstOrDefault();
             if (approvalItem != null)
             {
-                approvalItem.presented_date = approval.presented_date.HasValue ? approval.presented_date.Value.ToLocalTime() : null;
+                approvalItem.presented_date = ReportDate.ForReport(approval.presented_date);
             }
             await WriteApprovalsListToLocalStarage(savedApprovalItems.OrderBy(a => a.submission_date).ToList(), unitId);
         }
