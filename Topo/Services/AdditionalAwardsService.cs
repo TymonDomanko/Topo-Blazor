@@ -87,7 +87,7 @@ namespace Topo.Services
                     {
                         if (award.presented_date.HasValue)
                         {
-                            awardPresentedDate = award.presented_date.Value.ToLocalTime();
+                            awardPresentedDate = ReportDate.ForReport(award.presented_date.Value);
                         }
                     }
                     additionalAwardsList.Add(new AdditionalAwardListModel
