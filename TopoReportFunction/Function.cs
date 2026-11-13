@@ -21,6 +21,7 @@ using Topo.Model.History;
 using Topo.Model.UnitReport;
 using Topo.Model.SectionReport;
 using Topo.Model.SiaProgress;
+using Topo.Model.ReadyToSubmit;
 using System;
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
@@ -124,6 +125,9 @@ public class Function
                         break;
                     case ReportType.SiaProgress:
                         workbook = GenerateSiaProgressWorkbook(reportGenerationRequest);
+                        break;
+                    case ReportType.ReadyToSubmit:
+                        workbook = GenerateReadyToSubmitWorkbook(reportGenerationRequest);
                         break;
                 }
 
@@ -412,6 +416,16 @@ public class Function
         {
             return reportService.GenerateProposedActivitiesWorkbook(reportData, reportGenerationRequest.GroupName, reportGenerationRequest.Section
                 , reportGenerationRequest.UnitName);
+        }
+        return reportService.CreateWorkbookWithSheets(1);
+    }
+
+    private IWorkbook GenerateReadyToSubmitWorkbook(ReportGenerationRequest reportGenerationRequest)
+    {
+        var reportData = JsonConvert.DeserializeObject<ReadyToSubmitReport>(reportGenerationRequest.ReportData);
+        if (reportData != null)
+        {
+            return reportService.GenerateReadyToSubmitWorkbook(reportData, reportGenerationRequest.GroupName, reportGenerationRequest.Section);
         }
         return reportService.CreateWorkbookWithSheets(1);
     }
