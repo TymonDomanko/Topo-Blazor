@@ -594,6 +594,22 @@ namespace Topo.Services
             sheet.PageSetup.IsFitToPage = true;
         }
 
+        // A person's first name, surname (when the list has surnames) and duty, in boxes from the column given; the last column used
+        private static int AddPersonBoxes(IWorksheet sheet, int rowNumber, int firstColumn, PatrolLine person, bool showLastName)
+        {
+            var column = firstColumn;
+            sheet.Range[rowNumber, column].Text = person.FirstName;
+            sheet.Range[rowNumber, column++].BorderAround();
+            if (showLastName)
+            {
+                sheet.Range[rowNumber, column].Text = person.LastName;
+                sheet.Range[rowNumber, column++].BorderAround();
+            }
+            sheet.Range[rowNumber, column].Text = person.Duty;
+            sheet.Range[rowNumber, column].BorderAround();
+            return column;
+        }
+
         public IWorkbook GeneratePatrolListWorkbook(List<MemberListModel> sortedPatrolList, string groupName, string section, string unitName, bool includeLeaders)
         {
             var workbook = CreateWorkbookWithLogo(groupName, section, 9);
@@ -618,91 +634,70 @@ namespace Topo.Services
             sheet.Range[rowNumber, 2, rowNumber, 9].Merge();
             sheet.SetRowHeight(rowNumber, 40);
 
-            var groupedMembersList = sortedPatrolList.Where(pl => pl.isAdultLeader == 0).GroupBy(pl => pl.patrol_name).ToList();
-            foreach (var patrol in groupedMembersList)
+            var layout = MemberReportLayouts.PatrolList(sortedPatrolList, includeLeaders);
+            // without surnames each block is a column narrower, and the unit council moves in to match
+            var showLastName = layout.ShowLastName;
+            var patrolLastColumn = showLastName ? 3 : 2;
+            var councilColumn = showLastName ? 6 : 5;
+            foreach (var patrol in layout.Patrols)
             {
                 // Add Patrol Name
-                var patrolName = string.IsNullOrEmpty(patrol.Key) ? "Unassigned" : patrol.Key;
                 rowNumber++;
-                sheet.Range[rowNumber, 1].Text = $"{patrolName} ({patrol.Count()})";
+                sheet.Range[rowNumber, 1].Text = $"{patrol.DisplayName} ({patrol.Members.Count})";
                 sheet.Range[rowNumber, 1].CellStyle.Font.Bold = true;
                 sheet.Range[rowNumber, 1].CellStyle.Font.Size = 14;
                 sheet.Range[rowNumber, 1].CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
+                // the heading keeps three columns of room, as a long patrol name needs them
                 sheet.Range[rowNumber, 1, rowNumber, 3].Merge();
                 sheet.SetRowHeight(rowNumber, 20);
 
                 // Add Patrol members
-                foreach (var member in patrol.OrderByDescending(p => p.patrol_duty))
+                foreach (var member in patrol.Members)
                 {
                     rowNumber++;
-                    sheet.Range[rowNumber, 1].Text = member.first_name;
-                    sheet.Range[rowNumber, 1].BorderAround();
-                    sheet.Range[rowNumber, 2].Text = member.last_name;
-                    sheet.Range[rowNumber, 2].BorderAround();
-                    sheet.Range[rowNumber, 3].Text = member.patrol_duty;
-                    sheet.Range[rowNumber, 3].BorderAround();
-                    if (!string.IsNullOrEmpty(member.patrol_duty))
+                    AddPersonBoxes(sheet, rowNumber, 1, member, showLastName);
+                    if (member.HasDuty)
                     {
-                        sheet.Range[rowNumber, 1, rowNumber, 3].CellStyle.ColorIndex = ExcelKnownColors.Grey_25_percent;
+                        sheet.Range[rowNumber, 1, rowNumber, patrolLastColumn].CellStyle.ColorIndex = ExcelKnownColors.Grey_25_percent;
                     }
                 }
                 rowNumber++;
             }
 
             rowNumber = 3;
-            var unitCouncilList = sortedPatrolList.Where(pl => pl.unit_council)
-                .OrderBy(uc => uc.isAdultLeader)
-                .ThenBy(uc => uc.first_name)
-                .ThenBy(uc => uc.last_name)
-                .ToList();
             // Add Unit Council Name
             rowNumber++;
-            sheet.Range[rowNumber, 6].Text = "Unit Council";
-            sheet.Range[rowNumber, 6].CellStyle.Font.Bold = true;
-            sheet.Range[rowNumber, 6].CellStyle.Font.Size = 14;
-            sheet.Range[rowNumber, 6].CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
-            sheet.Range[rowNumber, 6, rowNumber, 9].Merge();
+            sheet.Range[rowNumber, councilColumn].Text = "Unit Council";
+            sheet.Range[rowNumber, councilColumn].CellStyle.Font.Bold = true;
+            sheet.Range[rowNumber, councilColumn].CellStyle.Font.Size = 14;
+            sheet.Range[rowNumber, councilColumn].CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
+            sheet.Range[rowNumber, councilColumn, rowNumber, councilColumn + 3].Merge();
             sheet.SetRowHeight(rowNumber, 20);
 
-            foreach (var member in unitCouncilList)
+            foreach (var member in layout.UnitCouncil)
             {
                 // Add Unit Council members
                 rowNumber++;
-                sheet.Range[rowNumber, 6].Text = member.first_name;
-                sheet.Range[rowNumber, 6].BorderAround();
-                sheet.Range[rowNumber, 7].Text = member.last_name;
-                sheet.Range[rowNumber, 7].BorderAround();
-                sheet.Range[rowNumber, 8].Text = member.patrol_duty;
-                sheet.Range[rowNumber, 8].BorderAround();
+                AddPersonBoxes(sheet, rowNumber, councilColumn, member, showLastName);
             }
             rowNumber++;
 
-            if (includeLeaders)
+            if (layout.AdultLeaders != null)
             {
-                var adultLeaderList = sortedPatrolList
-                    .Where(uc => uc.isAdultLeader == 1)
-                    .OrderBy(uc => uc.first_name)
-                    .ThenBy(uc => uc.last_name)
-                    .ToList();
                 // Add Adult Leaders Name
                 rowNumber++;
-                sheet.Range[rowNumber, 6].Text = "Adult Leaders";
-                sheet.Range[rowNumber, 6].CellStyle.Font.Bold = true;
-                sheet.Range[rowNumber, 6].CellStyle.Font.Size = 14;
-                sheet.Range[rowNumber, 6].CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
-                sheet.Range[rowNumber, 6, rowNumber, 9].Merge();
+                sheet.Range[rowNumber, councilColumn].Text = "Adult Leaders";
+                sheet.Range[rowNumber, councilColumn].CellStyle.Font.Bold = true;
+                sheet.Range[rowNumber, councilColumn].CellStyle.Font.Size = 14;
+                sheet.Range[rowNumber, councilColumn].CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
+                sheet.Range[rowNumber, councilColumn, rowNumber, councilColumn + 3].Merge();
                 sheet.SetRowHeight(rowNumber, 20);
 
-                foreach (var member in adultLeaderList)
+                foreach (var member in layout.AdultLeaders)
                 {
                     // Add Unit Council members
                     rowNumber++;
-                    sheet.Range[rowNumber, 6].Text = member.first_name;
-                    sheet.Range[rowNumber, 6].BorderAround();
-                    sheet.Range[rowNumber, 7].Text = member.last_name;
-                    sheet.Range[rowNumber, 7].BorderAround();
-                    sheet.Range[rowNumber, 8].Text = member.patrol_duty;
-                    sheet.Range[rowNumber, 8].BorderAround();
+                    AddPersonBoxes(sheet, rowNumber, councilColumn, member, showLastName);
                 }
             }
 
@@ -745,58 +740,56 @@ namespace Topo.Services
             sheet.Range[rowNumber, 2, rowNumber, 8].Merge();
             sheet.SetRowHeight(rowNumber, 40);
 
+            // the columns, leaving out the surname when no one has one
+            var rows = MemberReportLayouts.MemberList(sortedMemberList, section);
+            var columns = new List<(string Heading, Func<MemberListRow, string> Value)> { ("First Name", r => r.FirstName) };
+            if (MemberReportLayouts.ShowLastName(rows))
+                columns.Add(("Last Name", r => r.LastName));
+            columns.Add(("Age", r => r.Age));
+            columns.Add(("Member", r => r.MemberNumber));
+            columns.Add(("Duty", r => r.Duty));
+            columns.Add(("Patrol", r => r.Patrol));
+            var ageColumn = columns.FindIndex(c => c.Heading == "Age") + 2;
+
             // Add Header
             rowNumber++;
-            sheet.Range[rowNumber, 2].Text = "First Name";
-            sheet.Range[rowNumber, 2].BorderAround();
-            sheet.Range[rowNumber, 3].Text = "Last Name";
-            sheet.Range[rowNumber, 3].BorderAround();
-            sheet.Range[rowNumber, 4].Text = "Age";
-            sheet.Range[rowNumber, 4].BorderAround();
-            sheet.Range[rowNumber, 5].Text = "Member";
-            sheet.Range[rowNumber, 5].BorderAround();
-            sheet.Range[rowNumber, 6].Text = "Duty";
-            sheet.Range[rowNumber, 6].BorderAround();
-            sheet.Range[rowNumber, 7].Text = "Patrol";
-            sheet.Range[rowNumber, 7].BorderAround();
-            sheet.Range[rowNumber, 2, rowNumber, 7].CellStyle.ColorIndex = ExcelKnownColors.Grey_25_percent;
+            for (var column = 0; column < columns.Count; column++)
+            {
+                sheet.Range[rowNumber, column + 2].Text = columns[column].Heading;
+                sheet.Range[rowNumber, column + 2].BorderAround();
+            }
+            sheet.Range[rowNumber, 2, rowNumber, columns.Count + 1].CellStyle.ColorIndex = ExcelKnownColors.Grey_25_percent;
 
-            foreach (var member in sortedMemberList)
+            foreach (var member in rows)
             {
                 rowNumber++;
-                sheet.Range[rowNumber, 2].Text = member.first_name;
-                sheet.Range[rowNumber, 2].BorderAround();
-                sheet.Range[rowNumber, 3].Text = member.last_name;
-                sheet.Range[rowNumber, 3].BorderAround();
-                sheet.Range[rowNumber, 4].Text = member.age;
-                sheet.Range[rowNumber, 4].BorderAround();
-                sheet.Range[rowNumber, 5].Text = member.member_number;
-                sheet.Range[rowNumber, 5].BorderAround();
-                sheet.Range[rowNumber, 6].Text = member.patrol_duty;
-                sheet.Range[rowNumber, 6].BorderAround();
-                sheet.Range[rowNumber, 7].Text = member.patrol_name.Trim();
-                sheet.Range[rowNumber, 7].BorderAround();
+                for (var column = 0; column < columns.Count; column++)
+                {
+                    sheet.Range[rowNumber, column + 2].Text = columns[column].Value(member);
+                    sheet.Range[rowNumber, column + 2].BorderAround();
+                }
 
-                decimal.TryParse(member.age, out decimal approxYears);
-                if (member.age.StartsWith((UnitMaxAge(section) - 2).ToString()))
-                    sheet.Range[rowNumber, 4].CellStyle.ColorIndex = ExcelKnownColors.Yellow;
-                if (member.age.StartsWith(UnitMaxAge(section).ToString()) || member.age.StartsWith((UnitMaxAge(section) - 1).ToString()))
-                    sheet.Range[rowNumber, 4].CellStyle.ColorIndex = ExcelKnownColors.Rose;
+                if (member.AgeBand == AgeBand.SecondLast)
+                    sheet.Range[rowNumber, ageColumn].CellStyle.ColorIndex = ExcelKnownColors.Yellow;
+                if (member.AgeBand == AgeBand.Last)
+                    sheet.Range[rowNumber, ageColumn].CellStyle.ColorIndex = ExcelKnownColors.Rose;
             }
 
             rowNumber++;
             rowNumber++;
             sheet.Range[rowNumber, 2].Text = "Second last year in section";
-            sheet.Range[rowNumber, 2, rowNumber, 3].Merge();
-            sheet.Range[rowNumber, 4].Text = "";
-            sheet.Range[rowNumber, 4].BorderAround();
-            sheet.Range[rowNumber, 4].CellStyle.ColorIndex = ExcelKnownColors.Yellow;
+            if (ageColumn > 3)
+                sheet.Range[rowNumber, 2, rowNumber, ageColumn - 1].Merge();
+            sheet.Range[rowNumber, ageColumn].Text = "";
+            sheet.Range[rowNumber, ageColumn].BorderAround();
+            sheet.Range[rowNumber, ageColumn].CellStyle.ColorIndex = ExcelKnownColors.Yellow;
             rowNumber++;
             sheet.Range[rowNumber, 2].Text = "Last year in section";
-            sheet.Range[rowNumber, 2, rowNumber, 3].Merge();
-            sheet.Range[rowNumber, 4].Text = "";
-            sheet.Range[rowNumber, 4].BorderAround();
-            sheet.Range[rowNumber, 4].CellStyle.ColorIndex = ExcelKnownColors.Rose;
+            if (ageColumn > 3)
+                sheet.Range[rowNumber, 2, rowNumber, ageColumn - 1].Merge();
+            sheet.Range[rowNumber, ageColumn].Text = "";
+            sheet.Range[rowNumber, ageColumn].BorderAround();
+            sheet.Range[rowNumber, ageColumn].CellStyle.ColorIndex = ExcelKnownColors.Rose;
 
             sheet.UsedRange.AutofitColumns();
 
@@ -824,10 +817,12 @@ namespace Topo.Services
             //Initializes the SubstituteFont event to perform font substitution in Excel-to-PDF conversion.
             application.SubstituteFont += new SubstituteFontEventHandler(SubstituteFont);
 
-            var groupedMembersList = sortedPatrolList.Where(pl => pl.isAdultLeader == 0).GroupBy(pl => pl.patrol_name).ToList();
+            var patrols = MemberReportLayouts.Patrols(sortedPatrolList);
+            // every sheet has the same columns, with the surname left out when no one has one
+            var showLastName = MemberReportLayouts.ShowLastName(patrols);
 
             // Creating new workbook
-            IWorkbook workbook = application.Workbooks.Create(groupedMembersList.Count);
+            IWorkbook workbook = application.Workbooks.Create(patrols.Count);
 
             //Adding cell style.               
             IStyle headingStyle = workbook.Styles.Add("headingStyle");
@@ -843,7 +838,7 @@ namespace Topo.Services
             rowStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
 
             var sheetIndex = 0;
-            foreach (var patrol in groupedMembersList)
+            foreach (var patrol in patrols)
             {
                 IWorksheet sheet = workbook.Worksheets[sheetIndex];
 
@@ -864,25 +859,20 @@ namespace Topo.Services
                 }
 
                 // Add Patrol Name
-                sheet.Range[rowNumber, 2].Text = patrol.Key;
+                sheet.Range[rowNumber, 2].Text = patrol.DisplayName;
                 sheet.Range[rowNumber, 2].CellStyle = headingStyle;
                 sheet.Range[rowNumber, 2, rowNumber, 6].Merge();
                 sheet.SetRowHeight(rowNumber, 100);
 
                 // Add Patrol members
-                foreach (var member in patrol.OrderByDescending(p => p.patrol_duty))
+                foreach (var member in patrol.Members)
                 {
                     rowNumber++;
                     sheet.Range[rowNumber, 1, rowNumber, 5].CellStyle = rowStyle;
-                    sheet.Range[rowNumber, 2].Text = member.first_name;
-                    sheet.Range[rowNumber, 2].BorderAround();
-                    sheet.Range[rowNumber, 3].Text = member.last_name;
-                    sheet.Range[rowNumber, 3].BorderAround();
-                    sheet.Range[rowNumber, 4].Text = member.patrol_duty;
-                    sheet.Range[rowNumber, 4].BorderAround();
-                    if (!string.IsNullOrEmpty(member.patrol_duty))
+                    var lastColumn = AddPersonBoxes(sheet, rowNumber, 2, member, showLastName);
+                    if (member.HasDuty)
                     {
-                        sheet.Range[rowNumber, 2, rowNumber, 4].CellStyle.ColorIndex = ExcelKnownColors.Grey_25_percent;
+                        sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.ColorIndex = ExcelKnownColors.Grey_25_percent;
                     }
                 }
                 rowNumber++;
@@ -3627,24 +3617,6 @@ namespace Topo.Services
                 return $"{startDateTime.ToShortTimeString()} - {endDateTime.ToShortTimeString()}";
             else
                 return $"{startDateTime.ToString("ddd HH:mm")} - {endDateTime.ToString("ddd HH:mm")}";
-        }
-
-        private int UnitMaxAge(string unit)
-        {
-            switch (unit)
-            {
-                case "joey":
-                    return 8;
-                case "cub":
-                    return 11;
-                case "scout":
-                    return 15;
-                case "venturer":
-                    return 18;
-                case "rover":
-                default:
-                    return 26;
-            }
         }
 
         private ExcelKnownColors GetChallengeAreaColour(string challengeArea)
