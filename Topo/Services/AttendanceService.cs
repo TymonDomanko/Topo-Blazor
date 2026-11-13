@@ -1,5 +1,6 @@
 using Topo.Model.Attendance;
 using Topo.Model.Members;
+using Topo.Model.Progress;
 
 namespace Topo.Services
 {
@@ -39,20 +40,24 @@ namespace Topo.Services
             // so that the events before a youth joined the section are not counted against them (nothing to work out when there are no events)
             var section = profile?.unit?.section ?? "";
             var youth = members.Where(m => m.isAdultLeader == 0).ToList();
-            var names = SignInSheetLayout.GetDisplayNames(youth, false);
             var invested = new Dictionary<string, DateTime>();
-            for (var i = 0; i < youth.Count && events.Count > 0; i++)
+            // Nothing to work out when there are no events or no youth. Otherwise one read of the unit's introductions gives
+            // everyone's, so the unit isn't read once per youth; only those not already known are looked up (every record
+            // carries its member_id, and a youth with none gets an empty list).
+            if (events.Count > 0 && youth.Count > 0)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                var cacheKey = $"{section}/{youth[i].id}";
-                if (!_investedOn.TryGetValue(cacheKey, out var date))
+                if (youth.Any(y => !_investedOn.ContainsKey($"{section}/{y.id}")))
                 {
-                    progress?.Invoke($"{(names.TryGetValue(youth[i].id, out var name) ? name : youth[i].first_name)} ({i + 1} of {youth.Count})");
-                    date = AttendanceBuilder.InvestedOn(await _terrainAPIService.GetIntroductionToSectionResultsForMember(youth[i].id), section);
-                    _investedOn[cacheKey] = date;
+                    progress?.Invoke("when each Scout was invested");
+                    var introsByMember = (await _terrainAPIService.GetUnitAchievementsOfType<GetIntroductionResultsModel>(unitId, "intro_section"))
+                        .results.ToLookup(r => r.member_id);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    foreach (var member in youth)
+                        _investedOn[$"{section}/{member.id}"] = AttendanceBuilder.InvestedOn(new GetIntroductionResultsModel { results = introsByMember[member.id].ToArray() }, section);
                 }
-                if (date != null)
-                    invested[youth[i].id] = date.Value;
+                foreach (var member in youth)
+                    if (_investedOn.TryGetValue($"{section}/{member.id}", out var date) && date != null)
+                        invested[member.id] = date.Value;
             }
 
             return AttendanceBuilder.Analyse(new AttendanceInput

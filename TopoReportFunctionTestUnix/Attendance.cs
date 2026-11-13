@@ -280,6 +280,22 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public void TheInvestitureUsesTerrainsOwnAwardDateBeforeTheImportedOneOrWhenItLastChanged()
+        {
+            var updated = new DateTime(2026, 3, 20, 9, 30, 0);
+            var onlyTerrains = new Topo.Model.Progress.GetIntroductionResultsModel { results = new[]
+                { new Topo.Model.Progress.Result { section = "scout", status = "awarded", date_awarded = "2025-06-01", status_updated = updated } } };
+            var both = new Topo.Model.Progress.GetIntroductionResultsModel { results = new[]
+                { new Topo.Model.Progress.Result { section = "scout", status = "awarded", date_awarded = "2025-06-01", imported = new Topo.Model.Progress.Imported { date_awarded = "2024-01-15" }, status_updated = updated } } };
+            var onlyUpdated = new Topo.Model.Progress.GetIntroductionResultsModel { results = new[]
+                { new Topo.Model.Progress.Result { section = "scout", status = "awarded", status_updated = updated } } };
+
+            Assert.AreEqual(new DateTime(2025, 6, 1), AttendanceBuilder.InvestedOn(onlyTerrains, "scout"));
+            Assert.AreEqual(new DateTime(2025, 6, 1), AttendanceBuilder.InvestedOn(both, "scout"));
+            Assert.AreEqual(updated.Date, AttendanceBuilder.InvestedOn(onlyUpdated, "scout"));
+        }
+
+        [TestMethod]
         public void AUnitWithNoYouthOrNoEventsGivesAnEmptyReport()
         {
             var noEvents = AttendanceLayout.Build(AttendanceBuilder.Analyse(Input()), false, false);
