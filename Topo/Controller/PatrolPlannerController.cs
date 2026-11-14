@@ -2,7 +2,6 @@ using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Newtonsoft.Json;
-using System.Text;
 using Topo.Model.Common;
 using Topo.Model.Members;
 using Topo.Model.PatrolPlanner;
@@ -13,7 +12,7 @@ namespace Topo.Controller
 {
     // Backs the Patrol Planner drag-and-drop board. The board is a local, in-memory "what if" plan: nothing
     // reaches Terrain until the leader chooses "Push to Terrain" and confirms the list of changes it shows.
-    // The exported patrol list / changes CSV are still there for applying a plan by hand.
+    // The exported patrol list is still there for applying a plan by hand.
     public class PatrolPlannerController : ComponentBase, IDisposable
     {
         [Inject]
@@ -517,29 +516,7 @@ namespace Topo.Controller
             return await _reportService.GetPatrolListReport(groupName, section, unitName, outputType, serialisedList, false);
         }
 
-        // Built entirely client-side (plain CSV text) rather than through the report Lambda, since it's
-        // just a flat list of changed rows and doesn't need Syncfusion's PDF/XLSX layout engine.
-        internal async Task DownloadChangesClick()
-        {
-            var changed = ChangedMembers.ToList();
-            var sb = new StringBuilder();
-            sb.AppendLine("First Name,Last Name,Duty,Patrol,Unit Council");
-            foreach (var member in changed)
-            {
-                sb.AppendLine(string.Join(",",
-                    CsvField(member.FirstName),
-                    CsvField(member.LastName),
-                    CsvField(member.PatrolDuty),
-                    CsvField(DescribePatrolChange(member)),
-                    CsvField(member.UnitCouncil ? "Yes" : "")));
-            }
-
-            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            var fileName = $"Patrol_Changes_{model.UnitName.Replace(' ', '_')}.csv";
-            await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, "text/csv", bytes);
-        }
-
-        // Used for the "Changes to make in Terrain" list/CSV only (not the board itself), where the
+        // Used for the "Changes to make in Terrain" list only (not the board itself), where the
         // text needs to read as an instruction. A member who had a patrol and now has none needs an
         // active removal in Terrain; one who was never assigned a patrol needs no action there at all.
         internal static string DescribePatrolChange(PatrolPlannerMember member)
@@ -551,15 +528,6 @@ namespace Topo.Controller
                     : "Remove from patrol";
             }
             return member.PatrolName;
-        }
-
-        private static string CsvField(string value)
-        {
-            if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
-            {
-                return $"\"{value.Replace("\"", "\"\"")}\"";
-            }
-            return value;
         }
     }
 }

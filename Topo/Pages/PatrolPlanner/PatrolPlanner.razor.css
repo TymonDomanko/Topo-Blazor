@@ -115,6 +115,12 @@
     flex-wrap: wrap;
 }
 
+.export-panels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
 .export-panel {
     background-color: #f8f9fa;
     border: 1px solid #dee2e6;
