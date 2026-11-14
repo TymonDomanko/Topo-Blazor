@@ -230,11 +230,12 @@ namespace Topo.Controller
             finally
             {
                 PushBusy = false;
+                // Show Terrain as it is now, even if something went wrong part way: what went through is no longer a change,
+                // and what didn't can be planned again. The Wallchart keeps its own copy of each unit's patrols, which is now stale.
+                _membersService.ClearMemberCache(model.UnitId);
+                _storageService.CachedWallchartItems.RemoveAll(c => c.Key == model.UnitId);
+                await UnitChange(model.UnitId);
             }
-
-            // Show Terrain as it is now: what went through is no longer a change, and what didn't can be planned again
-            _membersService.ClearMemberCache(model.UnitId);
-            await UnitChange(model.UnitId);
         }
 
         // Undoes member moves/role/council changes AND any patrols added or removed this session,

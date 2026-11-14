@@ -56,6 +56,11 @@ namespace Topo.Model.PatrolPlanner
         // What the leader reads in the confirmation, for example "Lyrebird (Blue) → Magpie (Orange) as APL"
         public string Summary { get; set; } = string.Empty;
         public List<PatrolPushStep> Steps { get; set; } = new List<PatrolPushStep>();
+        // How Terrain should look for this member afterwards, in the board's words. After writing, Terrain is read again and
+        // compared with this, so a write that was accepted but didn't stick is noticed.
+        public string WantPatrolName { get; set; } = string.Empty;
+        public string WantBoardDuty { get; set; } = string.Empty;
+        public bool WantUnitCouncil { get; set; }
     }
 
     // A change the plan won't make, and why
@@ -124,9 +129,7 @@ namespace Topo.Model.PatrolPlanner
         {
             var plan = new PatrolPushPlan { UnitId = unitId };
             var now = terrainMembers.GroupBy(m => m.id).ToDictionary(g => g.Key, g => g.First());
-            var patrolIds = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var patrol in terrainPatrols)
-                patrolIds.TryAdd(patrol.name, patrol.id);
+            var patrolIds = PatrolIds(terrainPatrols);
 
             // the unit's own group is the one in the path of the write
             plan.GroupId = terrainMembers.Select(m => m.unit?.group_id).FirstOrDefault(g => !string.IsNullOrEmpty(g)) ?? fallbackGroupId;
@@ -140,77 +143,34 @@ namespace Topo.Model.PatrolPlanner
                     continue;
                 }
 
-                var currentPatrolName = current.patrol?.name ?? "";
-                var currentPatrolId = current.patrol?.id ?? "";
-                var currentPatrolDuty = current.patrol?.duty ?? "";
-                var currentUnitDuty = current.unit?.duty ?? "";
-                var currentCouncil = current.unit?.unit_council ?? false;
-
                 // Terrain no longer shows what the board was loaded with
-                if (currentPatrolName != member.OriginalPatrolName
-                    || BoardDuty(currentUnitDuty, currentPatrolDuty) != member.OriginalPatrolDuty
-                    || currentCouncil != member.OriginalUnitCouncil)
+                if (PatrolNameOf(current) != member.OriginalPatrolName
+                    || BoardDutyOf(current) != member.OriginalPatrolDuty
+                    || CouncilOf(current) != member.OriginalUnitCouncil)
                 {
                     plan.Skipped.Add(new PatrolPushSkipped
                     {
                         MemberName = name,
-                        Reason = $"has been changed in Terrain since the planner was loaded ({Describe(currentPatrolName, BoardDuty(currentUnitDuty, currentPatrolDuty), currentCouncil)}); refresh and plan again"
+                        Reason = $"has been changed in Terrain since the planner was loaded ({DescribeState(current)}); refresh and plan again"
                     });
                     continue;
                 }
 
-                var wantUnitDuty = member.PatrolDuty == "UL" ? UnitLeaderDuty : currentUnitDuty == UnitLeaderDuty ? MemberDuty : currentUnitDuty;
-                var movingPatrol = member.PatrolName != currentPatrolName;
-                var wantPatrolDuty = member.PatrolDuty switch
-                {
-                    "PL" => PatrolLeaderDuty,
-                    "APL" => AssistantPatrolLeaderDuty,
-                    // a Unit Leader's patrol duty isn't shown on the board, so it is left as it is unless they change patrol
-                    "UL" => movingPatrol || string.IsNullOrEmpty(currentPatrolDuty) ? MemberDuty : currentPatrolDuty,
-                    _ => MemberDuty
-                };
-
-                var memberPlan = new PatrolPushMember { MemberId = member.Id, MemberName = name };
-                var phrases = new List<string>();
-
-                if (movingPatrol)
-                {
-                    if (!string.IsNullOrEmpty(currentPatrolName) && !string.IsNullOrEmpty(currentPatrolId))
-                    {
-                        memberPlan.Steps.Add(new PatrolPushStep { Kind = PatrolPushStepKind.RemoveFromPatrol, PatrolName = currentPatrolName, PatrolId = currentPatrolId });
-                    }
-                    if (!string.IsNullOrEmpty(member.PatrolName))
-                    {
-                        var known = patrolIds.TryGetValue(member.PatrolName, out var patrolId);
-                        if (!known && !plan.PatrolsToCreate.Contains(member.PatrolName))
-                            plan.PatrolsToCreate.Add(member.PatrolName);
-                        memberPlan.Steps.Add(new PatrolPushStep { Kind = PatrolPushStepKind.AddToPatrol, PatrolName = member.PatrolName, PatrolId = known ? patrolId! : "", Duty = wantPatrolDuty });
-                    }
-                    phrases.Add(string.IsNullOrEmpty(currentPatrolName) ? $"join {member.PatrolName}"
-                        : string.IsNullOrEmpty(member.PatrolName) ? $"leave {currentPatrolName}"
-                        : $"{currentPatrolName} → {member.PatrolName}");
-                    if (!string.IsNullOrEmpty(member.PatrolName) && wantPatrolDuty != MemberDuty)
-                        phrases.Add($"as {DutyText(wantPatrolDuty)}");
-                }
-                else if (!string.IsNullOrEmpty(member.PatrolName) && wantPatrolDuty != currentPatrolDuty)
-                {
-                    memberPlan.Steps.Add(new PatrolPushStep { Kind = PatrolPushStepKind.SetPatrolDuty, PatrolName = member.PatrolName, PatrolId = currentPatrolId, Duty = wantPatrolDuty });
-                    phrases.Add($"{member.PatrolName}: {DutyText(currentPatrolDuty)} → {DutyText(wantPatrolDuty)}");
-                }
-
-                if (wantUnitDuty != currentUnitDuty || member.UnitCouncil != currentCouncil)
-                {
-                    memberPlan.Steps.Add(new PatrolPushStep { Kind = PatrolPushStepKind.SetUnitDuty, Duty = wantUnitDuty, UnitCouncil = member.UnitCouncil });
-                    if (wantUnitDuty != currentUnitDuty)
-                        phrases.Add(wantUnitDuty == UnitLeaderDuty ? "becomes Unit Leader" : "no longer Unit Leader");
-                    if (member.UnitCouncil != currentCouncil)
-                        phrases.Add(member.UnitCouncil ? "joins Unit Council" : "leaves Unit Council");
-                }
-
-                if (memberPlan.Steps.Count == 0)
+                var needed = StepsFor(current, member.PatrolName, member.PatrolDuty, member.UnitCouncil, patrolIds);
+                if (needed.Steps.Count == 0)
                     continue;
-                memberPlan.Summary = string.Join(", ", phrases);
-                plan.Members.Add(memberPlan);
+                foreach (var created in needed.PatrolsToCreate.Where(p => !plan.PatrolsToCreate.Contains(p)))
+                    plan.PatrolsToCreate.Add(created);
+                plan.Members.Add(new PatrolPushMember
+                {
+                    MemberId = member.Id,
+                    MemberName = name,
+                    Summary = needed.Summary,
+                    Steps = needed.Steps,
+                    WantPatrolName = member.PatrolName,
+                    WantBoardDuty = member.PatrolDuty,
+                    WantUnitCouncil = member.UnitCouncil
+                });
             }
 
             // The board can hold patrols Terrain hasn't got. Only ones someone is moving into are created; an empty one isn't needed yet.
@@ -219,6 +179,83 @@ namespace Topo.Model.PatrolPlanner
             if (plan.PatrolsToCreate.Count > 0)
                 plan.Notes.Add($"Created in Terrain first: {string.Join(", ", plan.PatrolsToCreate)}.");
             return plan;
+        }
+
+        public class MemberSteps
+        {
+            public List<PatrolPushStep> Steps { get; set; } = new List<PatrolPushStep>();
+            public string Summary { get; set; } = string.Empty;
+            // Patrols the steps move someone into that Terrain doesn't have
+            public List<string> PatrolsToCreate { get; set; } = new List<string>();
+        }
+
+        // The least that has to be written to take one member from how Terrain shows them (current) to how the board wants them.
+        // No steps means Terrain already matches, which is also how a push is checked to have stuck.
+        public static MemberSteps StepsFor(Member current, string wantPatrolName, string wantBoardDuty, bool wantCouncil, IReadOnlyDictionary<string, string> patrolIds)
+        {
+            var result = new MemberSteps();
+            var currentPatrolName = PatrolNameOf(current);
+            var currentPatrolId = current.patrol?.id ?? "";
+            var currentPatrolDuty = current.patrol?.duty ?? "";
+            var currentUnitDuty = current.unit?.duty ?? "";
+            var currentCouncil = CouncilOf(current);
+
+            var wantUnitDuty = wantBoardDuty == "UL" ? UnitLeaderDuty : currentUnitDuty == UnitLeaderDuty ? MemberDuty : currentUnitDuty;
+            var movingPatrol = wantPatrolName != currentPatrolName;
+            var wantPatrolDuty = wantBoardDuty switch
+            {
+                "PL" => PatrolLeaderDuty,
+                "APL" => AssistantPatrolLeaderDuty,
+                // a Unit Leader's patrol duty isn't shown on the board, so it is left as it is unless they change patrol
+                "UL" => movingPatrol || string.IsNullOrEmpty(currentPatrolDuty) ? MemberDuty : currentPatrolDuty,
+                _ => MemberDuty
+            };
+
+            var phrases = new List<string>();
+            if (movingPatrol)
+            {
+                if (!string.IsNullOrEmpty(currentPatrolName) && !string.IsNullOrEmpty(currentPatrolId))
+                {
+                    result.Steps.Add(new PatrolPushStep { Kind = PatrolPushStepKind.RemoveFromPatrol, PatrolName = currentPatrolName, PatrolId = currentPatrolId });
+                }
+                if (!string.IsNullOrEmpty(wantPatrolName))
+                {
+                    var known = patrolIds.TryGetValue(wantPatrolName, out var patrolId);
+                    if (!known && !result.PatrolsToCreate.Contains(wantPatrolName))
+                        result.PatrolsToCreate.Add(wantPatrolName);
+                    result.Steps.Add(new PatrolPushStep { Kind = PatrolPushStepKind.AddToPatrol, PatrolName = wantPatrolName, PatrolId = known ? patrolId! : "", Duty = wantPatrolDuty });
+                }
+                phrases.Add(string.IsNullOrEmpty(currentPatrolName) ? $"join {wantPatrolName}"
+                    : string.IsNullOrEmpty(wantPatrolName) ? $"leave {currentPatrolName}"
+                    : $"{currentPatrolName} → {wantPatrolName}");
+                if (!string.IsNullOrEmpty(wantPatrolName) && wantPatrolDuty != MemberDuty)
+                    phrases.Add($"as {DutyText(wantPatrolDuty)}");
+            }
+            else if (!string.IsNullOrEmpty(wantPatrolName) && wantPatrolDuty != currentPatrolDuty)
+            {
+                result.Steps.Add(new PatrolPushStep { Kind = PatrolPushStepKind.SetPatrolDuty, PatrolName = wantPatrolName, PatrolId = currentPatrolId, Duty = wantPatrolDuty });
+                phrases.Add($"{wantPatrolName}: {DutyText(currentPatrolDuty)} → {DutyText(wantPatrolDuty)}");
+            }
+
+            if (wantUnitDuty != currentUnitDuty || wantCouncil != currentCouncil)
+            {
+                result.Steps.Add(new PatrolPushStep { Kind = PatrolPushStepKind.SetUnitDuty, Duty = wantUnitDuty, UnitCouncil = wantCouncil });
+                if (wantUnitDuty != currentUnitDuty)
+                    phrases.Add(wantUnitDuty == UnitLeaderDuty ? "becomes Unit Leader" : "no longer Unit Leader");
+                if (wantCouncil != currentCouncil)
+                    phrases.Add(wantCouncil ? "joins Unit Council" : "leaves Unit Council");
+            }
+
+            result.Summary = string.Join(", ", phrases);
+            return result;
+        }
+
+        public static Dictionary<string, string> PatrolIds(IEnumerable<UnitPatrolModel> terrainPatrols)
+        {
+            var ids = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var patrol in terrainPatrols)
+                ids.TryAdd(patrol.name, patrol.id);
+            return ids;
         }
 
         // The words the board uses for a Terrain unit duty and patrol duty: UL, PL, APL, or blank for an ordinary member
@@ -233,17 +270,24 @@ namespace Topo.Model.PatrolPlanner
             return "";
         }
 
+        private static string PatrolNameOf(Member m) => m.patrol?.name ?? "";
+        private static bool CouncilOf(Member m) => m.unit?.unit_council ?? false;
+        private static string BoardDutyOf(Member m) => BoardDuty(m.unit?.duty ?? "", m.patrol?.duty ?? "");
+
+        // How a member looks in Terrain, in the board's words, for messages
+        public static string DescribeState(Member m) => Describe(PatrolNameOf(m), BoardDutyOf(m), CouncilOf(m));
+
+        public static string Describe(string patrolName, string boardDuty, bool council)
+        {
+            var duty = string.IsNullOrEmpty(boardDuty) ? "Member" : boardDuty;
+            return $"{(string.IsNullOrEmpty(patrolName) ? "no patrol" : patrolName)}, {duty}{(council ? ", Unit Council" : "")}";
+        }
+
         private static string DutyText(string patrolDuty) => patrolDuty switch
         {
             PatrolLeaderDuty => "PL",
             AssistantPatrolLeaderDuty => "APL",
             _ => "Member"
         };
-
-        private static string Describe(string patrolName, string boardDuty, bool council)
-        {
-            var duty = string.IsNullOrEmpty(boardDuty) ? "Member" : boardDuty;
-            return $"{(string.IsNullOrEmpty(patrolName) ? "no patrol" : patrolName)}, {duty}{(council ? ", Unit Council" : "")}";
-        }
     }
 }
