@@ -13,12 +13,25 @@ namespace Topo.Model
             var list = items.ToList();
             var results = new TResult[list.Count];
             using var gate = new SemaphoreSlim(Math.Max(1, atOnce));
+            var failed = new int[1];
             await Task.WhenAll(list.Select(async (item, i) =>
             {
                 await gate.WaitAsync();
                 try
                 {
-                    results[i] = await read(item);
+                    // Once a read has failed the caller is going to get that failure, so don't send Terrain any more requests,
+                    // as reading one after another would have stopped at the first failure too.
+                    if (Volatile.Read(ref failed[0]) == 1)
+                        return;
+                    try
+                    {
+                        results[i] = await read(item);
+                    }
+                    catch
+                    {
+                        Volatile.Write(ref failed[0], 1);
+                        throw;
+                    }
                 }
                 finally
                 {
