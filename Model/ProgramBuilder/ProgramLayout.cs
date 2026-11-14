@@ -46,6 +46,15 @@ namespace Topo.Model.ProgramBuilder
         public int Count { get; set; }
     }
 
+    // How many activities there are in a challenge area, in the program and among the ideas not yet on a night
+    public class ProgramAreaSummary
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Area { get; set; } = string.Empty;
+        public int InProgram { get; set; }
+        public int Ideas { get; set; }
+    }
+
     public static class ProgramLayout
     {
         // The challenge areas as named in Terrain, in the order they are listed
@@ -57,7 +66,7 @@ namespace Topo.Model.ProgramBuilder
         {
             var entries = new List<ProgramRow>();
             entries.AddRange(ProgramPlanner.Nights(draft).Where(n => !n.Skipped));
-            entries.AddRange(draft.Extras.Where(e => e.Kind != ProgramRowKind.SectionNight));
+            entries.AddRange(draft.Extras.Where(e => e.Kind != ProgramRowKind.SectionNight && ProgramPlanner.IsDated(e)));
             var ordered = entries.OrderBy(e => e.Date).ThenBy(e => e.Kind == ProgramRowKind.SectionNight ? 0 : 1).ToList();
 
             var rows = new List<ProgramDocRow>();
@@ -122,6 +131,26 @@ namespace Topo.Model.ProgramBuilder
             if (draft.ShowDutyPatrol) columns.Add("duty");
             if (draft.ShowLeader) columns.Add("leader");
             return columns;
+        }
+
+        // The four challenge areas and "Not set", each with the activities in the program (the running nights and the camps and the like that have
+        // a date, an area left blank taking the program's usual one) and the ideas still to place, for the plan to be balanced by. "Not set" is
+        // left out when nothing is in it.
+        public static List<ProgramAreaSummary> AreaSummary(ProgramDraft draft)
+        {
+            var rows = ProgramPlanner.Nights(draft).Where(n => !n.Skipped).Concat(draft.Extras.Where(ProgramPlanner.IsDated))
+                .Where(r => r.Activity.Trim() != "")
+                .Select(r => Or(r.ChallengeArea, draft.DefaultChallengeArea).ToLowerInvariant()).ToList();
+            var ideas = draft.Ideas.Select(i => i.ChallengeArea.ToLowerInvariant()).ToList();
+            var known = Areas.Select(a => a.Key).ToHashSet();
+            var summary = Areas.Select(a => new ProgramAreaSummary
+            {
+                Key = a.Key, Area = a.Label, InProgram = rows.Count(k => k == a.Key), Ideas = ideas.Count(k => k == a.Key)
+            }).ToList();
+            var notSet = new ProgramAreaSummary { Key = "", Area = "Not set", InProgram = rows.Count(k => !known.Contains(k)), Ideas = ideas.Count(k => !known.Contains(k)) };
+            if (notSet.InProgram + notSet.Ideas > 0)
+                summary.Add(notSet);
+            return summary;
         }
 
         // The activities in each challenge area, those with none set last; an area with none is left out

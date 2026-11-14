@@ -37,6 +37,8 @@ namespace Topo.Model.ProgramBuilder
         // "HH:mm"; blank to use the program's usual times for this kind of row
         public string StartTime { get; set; } = string.Empty;
         public string EndTime { get; set; } = string.Empty;
+        // The parts of the Scout Method this activity uses, by Terrain's names: one, several or none (Terrain is told it only when there is at least one)
+        public List<string> ScoutMethod { get; set; } = new List<string>();
         // For a section night: the patrol that ends up on duty, worked out from the cycle and the choices above; never entered
         public string Duty { get; set; } = string.Empty;
     }
@@ -49,6 +51,9 @@ namespace Topo.Model.ProgramBuilder
         public string Game { get; set; } = string.Empty;
         public string Location { get; set; } = string.Empty;
         public string ChallengeArea { get; set; } = string.Empty;
+        // For one a youth member proposed in Terrain: who, and which proposal, so it is not offered again once it has been used or taken off
+        public string ProposedBy { get; set; } = string.Empty;
+        public string ProposalId { get; set; } = string.Empty;
     }
 
     // A stretch with no section nights, such as the school holidays
@@ -70,6 +75,8 @@ namespace Topo.Model.ProgramBuilder
         public string Name { get; set; } = string.Empty;
         public string Position { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
+        // For one filled in from the unit's membership: which member, so it is not filled in again once it has been taken off
+        public string MemberId { get; set; } = string.Empty;
     }
 
     // Everything entered for one program, as it is saved on the device
@@ -101,12 +108,17 @@ namespace Topo.Model.ProgramBuilder
         public Dictionary<string, ProgramRow> NightEdits { get; set; } = new Dictionary<string, ProgramRow>();
         // The ideas not yet on a night
         public List<ProgramIdea> Ideas { get; set; } = new List<ProgramIdea>();
+        // The youth's proposals already offered as ideas, whether still among them, on a night or taken off, so each is offered once
+        public List<string> TakenProposals { get; set; } = new List<string>();
+        // The leaders already made contacts from the unit's membership, whether or not they are still in the list, so each is added once
+        public List<string> TakenLeaders { get; set; } = new List<string>();
         // Everything that is not a section night
         public List<ProgramRow> Extras { get; set; } = new List<ProgramRow>();
         public List<ProgramLocation> Locations { get; set; } = new List<ProgramLocation>();
         public List<ProgramContact> Contacts { get; set; } = new List<ProgramContact>();
         // What the printed program shows: each of these columns and tables can be switched off. The month, date and activity are always shown.
-        public bool ShowGame { get; set; } = true;
+        // off to begin with: the game is not planned for every night, so it is neither asked for nor printed unless it is switched on
+        public bool ShowGame { get; set; }
         public bool ShowLocation { get; set; } = true;
         public bool ShowChallengeArea { get; set; }
         public bool ShowDutyPatrol { get; set; } = true;

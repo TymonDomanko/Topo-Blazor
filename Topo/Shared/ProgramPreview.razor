@@ -1,7 +1,7 @@
 @using Topo.Model.ProgramBuilder
 
-@* What the downloaded program will show: the calendar of section nights and activities, the challenge area counts, and the locations and
-   contact details, as switched on. *@
+@* What the downloaded program will show: the calendar of section nights and activities, and the locations and contact details, as
+   switched on. (The challenge area counts are in the plan above it, not here.) *@
 @if (Document.Rows.Count == 0)
 {
     <div class="text-muted">No section nights to show.</div>
@@ -46,19 +46,6 @@ else
         </table>
     </div>
 
-    @if (Document.ChallengeAreas.Count > 0)
-    {
-        <h5 class="text-center mt-4">Challenge Areas</h5>
-        <table class="program small-table">
-            <thead><tr><th>Challenge Area</th><th>Activities</th></tr></thead>
-            <tbody>
-                @foreach (var area in Document.ChallengeAreas)
-                {
-                    <tr><td>@area.Area</td><td class="text-center">@area.Count</td></tr>
-                }
-            </tbody>
-        </table>
-    }
     @if (Document.Locations.Count > 0)
     {
         <h5 class="text-center mt-4">Locations</h5>

@@ -22,7 +22,7 @@ namespace TopoReportFunctionTest
             var draft = new ProgramDraft
             {
                 Title = "Epping Scouts Term 1 Calendar 2026 - Leaders", UnitName = "Scout Unit", Start = new DateTime(2026, 1, 28), End = new DateTime(2026, 4, 29),
-                MeetingDay = DayOfWeek.Wednesday, DefaultLocation = "Epping", DefaultLeader = "Tymon",
+                MeetingDay = DayOfWeek.Wednesday, DefaultLocation = "Epping", DefaultLeader = "Tymon", ShowGame = true,
                 DutyPatrols = new List<string> { "Magpie (Orange)", "Platypus (Purple)", "Drop Bear (Green)", "Lyrebird (Blue)" }, FirstDutyPatrol = "Magpie (Orange)",
                 Breaks = new List<ProgramBreak> { new ProgramBreak { From = new DateTime(2026, 4, 2), To = new DateTime(2026, 4, 21) } },
                 Locations = new List<ProgramLocation>
@@ -291,6 +291,409 @@ namespace TopoReportFunctionTest
             Assert.AreEqual(0, ProgramLayout.Build(new ProgramDraft()).ChallengeAreas.Count);
         }
 
+        [TestMethod]
+        public void TheUnitsLeadersAreMadeContactsOnceEach()
+        {
+            var draft = new ProgramDraft();
+            draft.Contacts.Add(new ProgramContact { Name = "Bart Smith", Position = "Section Leader" });
+            var leaders = new List<TerrainLeader>
+            {
+                new TerrainLeader { Id = "L1", FirstName = "Tymon", LastName = "Domanko" },
+                new TerrainLeader { Id = "L2", FirstName = "Bart", LastName = "Smith" },
+                new TerrainLeader { Id = "L3", FirstName = "Noriko", LastName = "" }
+            };
+
+            // one already in the list is left as it is, with the position that was entered
+            Assert.AreEqual(2, ProgramFill.AddLeaderContacts(draft, leaders));
+            CollectionAssert.AreEqual(new[] { "Bart Smith", "Tymon Domanko", "Noriko" }, draft.Contacts.Select(c => c.Name).ToList());
+            Assert.AreEqual("Section Leader", draft.Contacts[0].Position);
+            Assert.AreEqual("L1", draft.Contacts[1].MemberId);
+
+            // one taken off does not come back
+            draft.Contacts.RemoveAll(c => c.Name == "Tymon Domanko");
+            Assert.AreEqual(0, ProgramFill.AddLeaderContacts(draft, leaders));
+            Assert.IsFalse(draft.Contacts.Any(c => c.Name == "Tymon Domanko"));
+        }
+
+        [TestMethod]
+        public void RenamingAContactRenamesTheLeaderOnWhatTheyAreInChargeOf()
+        {
+            var draft = new ProgramDraft { DefaultLeader = "Tymon" };
+            draft.NightEdits["2026-02-04"] = new ProgramRow { Activity = "Canoeing", Leader = "Tymon" };
+            draft.NightEdits["2026-02-11"] = new ProgramRow { Activity = "Mapping", Leader = "Bart" };
+            draft.NightEdits["2026-02-18"] = new ProgramRow { Activity = "Rogaining", Leader = "bart/Tymon" };
+            draft.Extras.Add(new ProgramRow { Kind = ProgramRowKind.Camp, Activity = "Camp", Leader = "Tymon" });
+
+            // the leader from the membership is known by first name as well as by the contact's name
+            var changed = ProgramLeaders.Rename(draft, new[] { "Tymon Domanko", "Tymon" }, "Tim Domanko");
+
+            Assert.AreEqual(3, changed);
+            Assert.AreEqual("Tim Domanko", draft.NightEdits["2026-02-04"].Leader);
+            Assert.AreEqual("Bart", draft.NightEdits["2026-02-11"].Leader);
+            Assert.AreEqual("bart/Tim Domanko", draft.NightEdits["2026-02-18"].Leader);
+            Assert.AreEqual("Tim Domanko", draft.Extras[0].Leader);
+            Assert.AreEqual("Tim Domanko", draft.DefaultLeader);
+            // nothing to change where there is no leader
+            Assert.AreEqual("", ProgramLeaders.Rename("", new[] { "Tymon" }, "Tim"));
+        }
+
+        private static TerrainContext PushContext() => new TerrainContext
+        {
+            UnitId = "unit-1", UnitName = "Scout Unit", UtcOffset = _ => TimeSpan.FromHours(11), TimeZoneId = "Australia/Sydney",
+            Leaders = new List<TerrainLeader> { new TerrainLeader { Id = "L1", FirstName = "Tymon", LastName = "D" }, new TerrainLeader { Id = "L2", FirstName = "Bart", LastName = "S" } }
+        };
+
+        private static ProgramDraft PushDraft()
+        {
+            var draft = new ProgramDraft { Start = new DateTime(2026, 2, 1), End = new DateTime(2026, 3, 31), MeetingDay = DayOfWeek.Wednesday, NightStart = "19:00", NightEnd = "21:00", DefaultLocation = "Epping" };
+            draft.NightEdits["2026-02-04"] = new ProgramRow { Activity = "Canoeing", Leader = "Tymon/Bart", ChallengeArea = "outdoors", Game = "Tag", ScoutMethod = new List<string> { "patrol_system", "learn_by_doing" } };
+            draft.NightEdits["2026-02-11"] = new ProgramRow { Activity = "Mapping", Leader = "Someone Else", ScoutMethod = new List<string> { "learn_by_doing" } };
+            draft.NightEdits["2026-03-11"] = new ProgramRow { Activity = "No method yet" };
+            draft.NightEdits["2026-02-18"] = new ProgramRow { Activity = "Already there" };
+            draft.NightEdits["2026-02-25"] = new ProgramRow { Activity = "Filled from Terrain", TerrainEventId = "t9" };
+            draft.NightEdits["2026-03-04"] = new ProgramRow { Activity = "Different", ScoutMethod = new List<string> { "learn_by_doing" } };
+            return draft;
+        }
+
+        [TestMethod]
+        public void PushingAddsOnlyWhatTerrainDoesNotHaveAndNothingInThePast()
+        {
+            var draft = PushDraft();
+            var inTerrain = new List<GetEventResultModel>
+            {
+                InTerrain("t1", "Already there", new DateTime(2026, 2, 18, 19, 0, 0)), InTerrain("t9", "Filled from Terrain", new DateTime(2026, 2, 25, 19, 0, 0)),
+                InTerrain("t2", "Something else", new DateTime(2026, 3, 4, 19, 0, 0))
+            };
+
+            var plan = ProgramPush.Build(draft, inTerrain, PushContext(), new DateTime(2026, 2, 10, 12, 0, 0));
+
+            // the 4th is in the past, the 18th and 25th are in Terrain already, and the 4th of March has another activity in Terrain, which leaves the 11th
+            CollectionAssert.AreEqual(new[] { "Mapping" }, plan.Items.Select(i => i.Event.Title).ToList());
+            Assert.AreEqual(2, plan.Skipped.Count);
+            // an activity with no part of the Scout Method chosen is left alone until one is
+            Assert.IsTrue(plan.Skipped.Any(x => x.What.Contains("No method yet") && x.Reason.Contains("Scout Method")));
+            Assert.IsTrue(plan.Skipped.Any(x => x.What.Contains("Canoeing") && x.Reason.Contains("in the past")));
+            // the 4th of March has another activity in Terrain that day: that one is changed to be the program's
+            Assert.AreEqual(1, plan.Updates.Count);
+            Assert.AreEqual("t2", plan.Updates[0].EventId);
+            StringAssert.Contains(plan.Updates[0].Differences, "Activity: Something else to Different");
+            Assert.AreEqual(ProgramPushKind.Update, plan.Updates[0].Kind);
+            CollectionAssert.AreEquivalent(new[] { "t1", "t9", "t2" }, plan.ExistingIds.ToList());
+            Assert.IsTrue(plan.HasWork);
+            // a leader who is not in the unit is said so, and no challenge area is sent as not applicable
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("Someone Else") && n.Contains("not a leader in the unit")));
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("Not applicable")));
+            Assert.AreEqual("not_applicable", plan.Items[0].Body["challenge_area"]);
+            Assert.IsFalse(ProgramPush.Build(draft, inTerrain, PushContext(), new DateTime(2026, 4, 1)).HasWork);
+        }
+
+        [TestMethod]
+        public void AnActivityIsSentAsAPlannedOneForTheUnitWithItsLeadersByMemberId()
+        {
+            var draft = PushDraft();
+            var planned = ProgramTerrain.Events(draft).Single(e => e.Title == "Canoeing");
+
+            var body = ProgramPush.Body(planned, PushContext());
+
+            Assert.AreEqual("planned", body["status"]);
+            Assert.AreEqual("Canoeing", body["title"]);
+            CollectionAssert.AreEqual(new[] { "patrol_system", "learn_by_doing" },
+                Newtonsoft.Json.Linq.JToken.FromObject(body["review"]!)["scout_method_elements"]!.Select(t => (string)t!).ToList());
+            Assert.AreEqual("Game: Tag", body["description"]);
+            Assert.AreEqual("Epping", body["location"]);
+            Assert.AreEqual("outdoors", body["challenge_area"]);
+            Assert.AreEqual("Australia/Sydney", body["iana_timezone"]);
+            CollectionAssert.AreEqual(new[] { "L1", "L2" }, (string[])body["organisers"]!);
+            // 19:00 to 21:00 at UTC+11 is 08:00 to 10:00 UTC
+            Assert.AreEqual("2026-02-04T08:00:00.000+00:00", body["start_datetime"]);
+            Assert.AreEqual("2026-02-04T10:00:00.000+00:00", body["end_datetime"]);
+            var json = Newtonsoft.Json.JsonConvert.SerializeObject(body);
+            StringAssert.Contains(json, "\"event_type\":{\"type\":\"unit\",\"id\":\"unit-1\"}");
+        }
+
+        // The request Terrain's own site sent to plan "Unit Council" for the unit on 3 Feb 2027, 19:00 to 21:00 Sydney time (answered with 204)
+        private const string TerrainsOwnRequest = "{\"title\":\"Unit Council\",\"description\":\"\",\"justification\":\"\",\"organisers\":[\"member-1\"],\"challenge_area\":\"creative\",\"start_datetime\":\"2027-02-03T08:00:00.000+00:00\",\"end_datetime\":\"2027-02-03T10:00:00.000+00:00\",\"event_type\":{\"type\":\"unit\",\"id\":\"unit-1\"},\"attendance\":{\"leader_member_ids\":[],\"assistant_member_ids\":[],\"attendee_member_ids\":[],\"participant_member_ids\":[]},\"schedule_items\":[],\"achievement_pathway_oas_data\":{\"award_rule\":\"individual\",\"verifier\":{\"name\":\"Tymon D\",\"contact\":\"\",\"type\":\"member\"},\"groups\":[]},\"achievement_pathway_logbook_data\":{\"distance_travelled\":0,\"distance_walkabout\":0,\"achievement_meta\":{\"stream\":\"\",\"branch\":\"\"},\"categories\":[],\"details\":{\"activity_time_length\":\"\",\"activity_grade\":\"\"},\"verifier\":{\"name\":\"Tymon D\",\"contact\":\"\",\"type\":\"member\"}},\"review\":{\"general_tags\":[],\"scout_method_elements\":[\"patrol_system\",\"youth_leading_adult_supporting\",\"personal_progression\",\"learn_by_doing\",\"community_involvement\"],\"scout_spices_elements\":[]},\"uploads\":[],\"equipment_notes\":\"\",\"additional_notes\":\"\",\"location\":\"Epping Scout Hall\",\"iana_timezone\":\"Australia/Sydney\",\"status\":\"planned\"}";
+
+        [TestMethod]
+        public void TheRequestIsTheSameAsTheOneTerrainsOwnSiteSends()
+        {
+            var context = PushContext();
+            context.UserName = "Tymon D";
+            context.Leaders[0].Id = "member-1";
+            var planned = new TerrainEvent
+            {
+                Title = "Unit Council", Location = "Epping Scout Hall", ChallengeArea = "creative", Leader = "Tymon",
+                ScoutMethod = new List<string> { "patrol_system", "youth_leading_adult_supporting", "personal_progression", "learn_by_doing", "community_involvement" },
+                Start = new DateTime(2027, 2, 3, 19, 0, 0), End = new DateTime(2027, 2, 3, 21, 0, 0), Row = new ProgramRow { Date = new DateTime(2027, 2, 3) }
+            };
+
+            var ours = Newtonsoft.Json.Linq.JToken.Parse(Newtonsoft.Json.JsonConvert.SerializeObject(ProgramPush.Body(planned, context)));
+            var theirs = Newtonsoft.Json.Linq.JToken.Parse(TerrainsOwnRequest);
+
+            // the same fields and values, in whatever order
+            Assert.IsTrue(Newtonsoft.Json.Linq.JToken.DeepEquals(theirs, ours), $"Terrain's own: {theirs}\nOurs: {ours}");
+        }
+
+        // The activity "Unit Council" as Terrain returned it when read, with the duty patrol written in its description
+        private const string TerrainsOwnEvent = "{\"id\":\"evt-1\",\"status\":\"planned\",\"title\":\"Unit Council\",\"description\":\"Duty patrol: Platypus (Purple)\",\"location\":\"Epping Scout Hall\",\"organiser\":{\"id\":\"member-1\",\"first_name\":\"Tymon\"},\"organisers\":[{\"first_name\":\"Tymon\",\"id\":\"member-1\",\"last_name\":\"Domanko\",\"member_number\":\"169651\",\"patrol_name\":\"Adult Leaders - Scouts\"}],\"challenge_area\":\"creative\",\"start_datetime\":\"2027-02-03T08:00:00.000+00:00\",\"end_datetime\":\"2027-02-03T10:00:00.000+00:00\",\"attendance\":{\"assistant_members\":[],\"attendee_members\":[],\"leader_members\":[],\"participant_members\":[]},\"invitees\":[{\"id\":\"unit-1\",\"invitee_id\":\"unit-1\",\"invitee_name\":\"Scout Unit\",\"invitee_type\":\"unit\"}],\"review\":{\"scout_method_elements\":[\"patrol_system\",\"youth_leading_adult_supporting\",\"personal_progression\",\"learn_by_doing\",\"community_involvement\"]},\"owner_type\":\"unit\",\"owner_id\":\"unit-1\",\"achievement_pathway_oas_data\":{\"award_rule\":\"individual\",\"groups\":[],\"verifier\":{\"contact\":\"\",\"name\":\"Tymon D\",\"type\":\"member\"}},\"achievement_pathway_logbook_data\":{\"achievement_meta\":{\"branch\":\"\",\"stream\":\"\"},\"categories\":[],\"details\":{\"activity_grade\":\"\",\"activity_time_length\":\"\"},\"distance_travelled\":0,\"distance_walkabout\":0,\"title\":\"\"}}";
+
+        private static TerrainEvent UnitCouncil() => new TerrainEvent
+        {
+            Title = "Unit Council", Location = "Epping Scout Hall", ChallengeArea = "creative", Leader = "Tymon", DutyPatrol = "Platypus (Purple)",
+            ScoutMethod = new List<string> { "patrol_system", "youth_leading_adult_supporting", "personal_progression", "learn_by_doing", "community_involvement" },
+            Start = new DateTime(2027, 2, 3, 19, 0, 0), End = new DateTime(2027, 2, 3, 21, 0, 0), Row = new ProgramRow { Date = new DateTime(2027, 2, 3) }
+        };
+
+        [TestMethod]
+        public void AnUpdateIsTheWholeActivityAsTerrainHasItWithWhatTheProgramSaysInPlace()
+        {
+            var context = PushContext();
+            context.UserName = "Tymon D";
+            context.Leaders[0].Id = "member-1";
+
+            // with nothing different, it is the request Terrain's own site sent when an activity was edited there (answered with 204)
+            var body = ProgramPush.UpdateBody(TerrainsOwnEvent, UnitCouncil(), context, out var reason);
+            Assert.AreEqual("", reason);
+            var expected = Newtonsoft.Json.Linq.JObject.Parse(TerrainsOwnRequest);
+            expected["description"] = "Duty patrol: Platypus (Purple)";
+            ((Newtonsoft.Json.Linq.JObject)expected["achievement_pathway_logbook_data"]!)["title"] = "";
+            Assert.IsTrue(Newtonsoft.Json.Linq.JToken.DeepEquals(expected, Newtonsoft.Json.Linq.JObject.Parse(body!)), $"Terrain's own: {expected}\nOurs: {body}");
+
+            // what the program changed is changed, and the rest of the description is kept
+            var changed = UnitCouncil();
+            changed.Location = "Elsewhere";
+            changed.DutyPatrol = "Magpie (Orange)";
+            changed.Start = new DateTime(2027, 2, 10, 19, 0, 0);
+            changed.End = new DateTime(2027, 2, 10, 21, 0, 0);
+            var raw = TerrainsOwnEvent.Replace("Duty patrol: Platypus (Purple)", "Bring a pen\\nDuty patrol: Platypus (Purple)");
+            using var sent = JsonDocument.Parse(ProgramPush.UpdateBody(raw, changed, context, out _)!);
+            Assert.AreEqual("Elsewhere", sent.RootElement.GetProperty("location").GetString());
+            Assert.AreEqual("Duty patrol: Magpie (Orange)\nBring a pen", sent.RootElement.GetProperty("description").GetString());
+            Assert.AreEqual("2027-02-10T08:00:00.000+00:00", sent.RootElement.GetProperty("start_datetime").GetString());
+
+            // one with files or a timetable is not changed from here
+            Assert.IsNull(ProgramPush.UpdateBody(TerrainsOwnEvent.Replace("\"status\"", "\"uploads\":[{\"id\":\"f\"}],\"status\""), UnitCouncil(), context, out reason));
+            StringAssert.Contains(reason, "files");
+        }
+
+        [TestMethod]
+        public void TheGameAndTheDutyPatrolAreKeptInTheDescriptionAndTheRestOfItIsLeftAlone()
+        {
+            Assert.AreEqual("Game: Tag\nDuty patrol: Magpie (Orange)", ProgramDescription.Compose("Tag", "Magpie (Orange)"));
+            Assert.AreEqual("", ProgramDescription.Compose("", ""));
+            var description = "Bring a pen\r\nduty patrol:  Lyrebird (Blue) \nGame: Tag";
+            Assert.AreEqual("Lyrebird (Blue)", ProgramDescription.Duty(description));
+            Assert.AreEqual("Tag", ProgramDescription.Game(description));
+            Assert.AreEqual("", ProgramDescription.Duty("Bring a pen"));
+            // new lines replace the old and the rest stays; a blank takes its line out
+            Assert.AreEqual("Game: Dodgeball\nDuty patrol: Platypus (Purple)\nBring a pen", ProgramDescription.Merge(description, "Dodgeball", "Platypus (Purple)"));
+            Assert.AreEqual("Bring a pen", ProgramDescription.Merge(description, "", ""));
+        }
+
+        [TestMethod]
+        public void FillingTakesTheDutyPatrolAndGameFromTheDescriptionWithoutBreakingTheCycle()
+        {
+            var draft = new ProgramDraft
+            {
+                Start = new DateTime(2026, 2, 1), End = new DateTime(2026, 2, 25), MeetingDay = DayOfWeek.Wednesday, NightStart = "19:00", NightEnd = "21:00",
+                DutyPatrols = new List<string> { "A (Red)", "B (Blue)", "C (Green)" }, FirstDutyPatrol = "A (Red)"
+            };
+            var events = new List<GetEventResultModel>
+            {
+                InTerrain("t1", "One", new DateTime(2026, 2, 4, 19, 0, 0)), InTerrain("t2", "Two", new DateTime(2026, 2, 11, 19, 0, 0)), InTerrain("t3", "Three", new DateTime(2026, 2, 18, 19, 0, 0))
+            };
+            events[0].description = "Game: Tag\nDuty patrol: A (Red)";
+            events[1].description = "Duty patrol: c (green)";
+            events[2].description = "Duty patrol: C (Green)";
+
+            ProgramFill.Apply(draft, events);
+
+            Assert.AreEqual("Tag", draft.NightEdits["2026-02-04"].Game);
+            // the first is the cycle's own, so it is not put on by hand; the others are not, and are
+            Assert.AreEqual("", draft.NightEdits["2026-02-04"].DutyPatrol);
+            Assert.AreEqual("C (Green)", draft.NightEdits["2026-02-11"].DutyPatrol);
+            Assert.AreEqual("C (Green)", draft.NightEdits["2026-02-18"].DutyPatrol);
+            CollectionAssert.AreEqual(new[] { "A (Red)", "C (Green)", "C (Green)", "B (Blue)" }, ProgramPlanner.Nights(draft).Select(n => n.Duty).ToList());
+
+            // a night the leader has put on duty is left as they chose
+            draft.NightEdits["2026-02-04"].DutyPatrol = "B (Blue)";
+            events[0].description = "Duty patrol: A (Red)";
+            ProgramFill.Apply(draft, events);
+            Assert.AreEqual("B (Blue)", draft.NightEdits["2026-02-04"].DutyPatrol);
+        }
+
+        [TestMethod]
+        public void ANightEnteredHereThatIsInTerrainAlreadyIsTiedToItsActivity()
+        {
+            var draft = new ProgramDraft { Start = new DateTime(2026, 2, 1), End = new DateTime(2026, 2, 25), MeetingDay = DayOfWeek.Wednesday, DutyPatrols = new List<string> { "A (Red)", "B (Blue)" }, FirstDutyPatrol = "A (Red)" };
+            draft.NightEdits["2026-02-04"] = new ProgramRow { Activity = "unit council" };
+            draft.NightEdits["2026-02-11"] = new ProgramRow { Activity = "Other" };
+            var events = new List<GetEventResultModel> { InTerrain("t1", "Unit Council", new DateTime(2026, 2, 4, 19, 0, 0)), InTerrain("t2", "Something", new DateTime(2026, 2, 11, 19, 0, 0)) };
+            events[0].description = "Duty patrol: B (Blue)";
+
+            ProgramFill.Apply(draft, events);
+
+            // the same name that day is tied, a different one is not, and what Terrain says of the duty patrol is taken
+            Assert.AreEqual("t1", draft.NightEdits["2026-02-04"].TerrainEventId);
+            Assert.AreEqual("B (Blue)", draft.NightEdits["2026-02-04"].DutyPatrol);
+            Assert.AreEqual("", draft.NightEdits["2026-02-11"].TerrainEventId);
+        }
+
+        [TestMethod]
+        public void ANewProgramStartsTheDutyCycleAfterTheLastPatrolTerrainHas()
+        {
+            var patrols = new List<string> { "A (Red)", "B (Blue)", "C (Green)" };
+            var events = new List<GetEventResultModel>
+            {
+                InTerrain("t1", "Old", new DateTime(2026, 1, 7, 19, 0, 0)), InTerrain("t2", "Last", new DateTime(2026, 1, 28, 19, 0, 0)),
+                InTerrain("t3", "No duty written", new DateTime(2026, 2, 4, 19, 0, 0)), InTerrain("t4", "After the start", new DateTime(2026, 3, 4, 19, 0, 0))
+            };
+            events[0].description = "Duty patrol: A (Red)";
+            events[1].description = "Duty patrol: C (Green)";
+            events[3].description = "Duty patrol: B (Blue)";
+
+            // the last before the start with one written is C, so A is next, round the cycle
+            Assert.AreEqual("A (Red)", ProgramDuty.NextAfter(events, new DateTime(2026, 2, 11), patrols));
+            Assert.AreEqual("B (Blue)", ProgramDuty.NextAfter(events, new DateTime(2026, 1, 20), patrols));
+            Assert.AreEqual("", ProgramDuty.NextAfter(events, new DateTime(2026, 1, 1), patrols));
+            Assert.AreEqual("", ProgramDuty.NextAfter(events, new DateTime(2026, 2, 11), new List<string> { "X (Other)" }));
+
+            // and one program follows another
+            var draft = new ProgramDraft { Start = new DateTime(2026, 2, 1), End = new DateTime(2026, 2, 18), MeetingDay = DayOfWeek.Wednesday, DutyPatrols = patrols, FirstDutyPatrol = "A (Red)" };
+            Assert.AreEqual("A (Red)", ProgramDuty.NextAfterProgram(draft));
+        }
+
+        [TestMethod]
+        public async Task ThePushStopsAtTheFirstActivityTerrainWillNotTake()
+        {
+            var items = new[] { "A", "B", "C" }.Select(t => new ProgramPushItem { Event = new TerrainEvent { Title = t } }).ToList();
+            var sent = new List<string>();
+
+            var result = await ProgramPush.Run(items, item =>
+            {
+                sent.Add(item.Event.Title);
+                return Task.FromResult(item.Event.Title == "B" ? new TerrainWriteResult { StatusCode = 400, Body = "bad title" } : new TerrainWriteResult { StatusCode = 204 });
+            });
+
+            CollectionAssert.AreEqual(new[] { "A", "B" }, sent);
+            CollectionAssert.AreEqual(new[] { ProgramPushOutcome.Sent, ProgramPushOutcome.Failed, ProgramPushOutcome.NotTried }, result.Items.Select(i => i.Outcome).ToList());
+            StringAssert.Contains(result.Items[1].Message, "400");
+            StringAssert.Contains(result.Items[1].Message, "bad title");
+            Assert.AreEqual(1, result.SentCount);
+            Assert.IsFalse(result.AllSent);
+
+            // a refusal for permission stops it too, and says so
+            var refused = await ProgramPush.Run(items, _ => Task.FromResult(new TerrainWriteResult { StatusCode = 403 }));
+            StringAssert.Contains(refused.Stopped, "would not let you");
+            Assert.AreEqual(0, refused.SentCount);
+        }
+
+        [TestMethod]
+        public void WhatWasSentIsFoundInTerrainAndItsIdKept()
+        {
+            var row1 = new ProgramRow { Date = new DateTime(2026, 2, 11) };
+            var row2 = new ProgramRow { Date = new DateTime(2026, 2, 18) };
+            var result = new ProgramPushResult
+            {
+                Items = new List<ProgramPushItem>
+                {
+                    new ProgramPushItem { Event = new TerrainEvent { Title = "Mapping", Row = row1 }, Outcome = ProgramPushOutcome.Sent },
+                    new ProgramPushItem { Event = new TerrainEvent { Title = "Rogaining", Row = row2 }, Outcome = ProgramPushOutcome.Sent }
+                }
+            };
+            var inTerrain = new List<GetEventResultModel>
+            {
+                // an old event of the same name that day is not the new one
+                InTerrain("old", "Mapping", new DateTime(2026, 2, 11, 19, 0, 0)),
+                InTerrain("new1", "mapping", new DateTime(2026, 2, 11, 19, 0, 0))
+            };
+
+            // the row on the plan is a copy of what the program keeps for the night, which gets the id too
+            var draft = new ProgramDraft();
+            draft.NightEdits["2026-02-11"] = new ProgramRow { Activity = "Mapping" };
+
+            ProgramPush.MatchCreated(result, inTerrain, new HashSet<string> { "old" }, draft);
+
+            Assert.AreEqual("new1", row1.TerrainEventId);
+            Assert.AreEqual("new1", draft.NightEdits["2026-02-11"].TerrainEventId);
+            Assert.AreEqual(ProgramPushOutcome.Created, result.Items[0].Outcome);
+            Assert.AreEqual("", row2.TerrainEventId);
+            Assert.AreEqual(ProgramPushOutcome.Sent, result.Items[1].Outcome);
+            StringAssert.Contains(result.Items[1].Message, "not seen");
+        }
+
+        [TestMethod]
+        public void PartsOfTheScoutMethodCanBeTickedOneOrManyAndComeFromTerrainOnFilling()
+        {
+            Assert.AreEqual("none set", ProgramScoutMethod.Summary(new string[0]));
+            Assert.AreEqual("Learn by Doing", ProgramScoutMethod.Summary(new[] { "learn_by_doing" }));
+            Assert.AreEqual("3 elements", ProgramScoutMethod.Summary(new[] { "a", "b", "c" }));
+
+            // ticking and unticking keeps them in Terrain's order
+            var set = ProgramScoutMethod.Toggle(new[] { "patrol_system" }, "promise_and_law");
+            CollectionAssert.AreEqual(new[] { "promise_and_law", "patrol_system" }, set);
+            CollectionAssert.AreEqual(new[] { "promise_and_law" }, ProgramScoutMethod.Toggle(set, "patrol_system"));
+
+            // filling from Terrain takes the parts the activity has there, and moving an activity takes them with it
+            var draft = new ProgramDraft { Start = new DateTime(2026, 2, 1), End = new DateTime(2026, 3, 31), MeetingDay = DayOfWeek.Wednesday, NightStart = "19:00", NightEnd = "21:00" };
+            var evt = InTerrain("t1", "Canoeing", new DateTime(2026, 2, 4, 19, 0, 0));
+            evt.review.scout_method_elements = new[] { "learn_by_doing", "nature_and_outdoors" };
+            ProgramFill.Apply(draft, new[] { evt });
+            CollectionAssert.AreEqual(new[] { "learn_by_doing", "nature_and_outdoors" }, draft.NightEdits["2026-02-04"].ScoutMethod);
+            Assert.IsTrue(ProgramIdeas.Move(draft, new DateTime(2026, 2, 4), new DateTime(2026, 2, 11)));
+            CollectionAssert.AreEqual(new[] { "learn_by_doing", "nature_and_outdoors" }, draft.NightEdits["2026-02-11"].ScoutMethod);
+            Assert.AreEqual(0, draft.NightEdits["2026-02-04"].ScoutMethod.Count);
+            // one filled in before they were kept gets them from Terrain on the next fill
+            draft.NightEdits["2026-02-11"].ScoutMethod = new List<string>();
+            ProgramFill.Apply(draft, new[] { evt });
+            CollectionAssert.AreEqual(new[] { "learn_by_doing", "nature_and_outdoors" }, draft.NightEdits["2026-02-11"].ScoutMethod);
+            // what is sent to Terrain is the activity's own
+            CollectionAssert.AreEqual(new[] { "learn_by_doing", "nature_and_outdoors" }, ProgramTerrain.Events(draft).Single().ScoutMethod);
+        }
+
+        [TestMethod]
+        public void TheGameIsNotShownUntilItIsSwitchedOn()
+        {
+            var draft = new ProgramDraft { Start = new DateTime(2026, 2, 4), End = new DateTime(2026, 2, 18), MeetingDay = DayOfWeek.Wednesday };
+            draft.NightEdits["2026-02-04"] = new ProgramRow { Activity = "Canoeing", Game = "Tag" };
+
+            Assert.IsFalse(draft.ShowGame);
+            CollectionAssert.DoesNotContain(ProgramLayout.Build(draft).Columns, "game");
+            draft.ShowGame = true;
+            CollectionAssert.Contains(ProgramLayout.Build(draft).Columns, "game");
+        }
+
+        [TestMethod]
+        public void TheChallengeAreasAreSummarisedForTheProgramAndTheIdeas()
+        {
+            var draft = Term1();
+            draft.DefaultChallengeArea = "";
+            draft.NightEdits["2026-02-04"] = new ProgramRow { Activity = "Canoeing", ChallengeArea = "outdoors" };
+            draft.NightEdits["2026-02-11"] = new ProgramRow { Activity = "Mapping", ChallengeArea = "outdoors" };
+            draft.NightEdits["2026-02-18"] = new ProgramRow { Activity = "Bake Sale", ChallengeArea = "community" };
+            draft.NightEdits["2026-02-25"] = new ProgramRow { Activity = "Hall Games" };
+            draft.NightEdits["2026-03-04"] = new ProgramRow { Activity = "Not running", ChallengeArea = "creative", Skipped = true };
+            // a camp with a date counts and one with none does not
+            draft.Extras.Add(new ProgramRow { Kind = ProgramRowKind.Camp, Activity = "Group Camp", ChallengeArea = "outdoors", Date = new DateTime(2026, 3, 13) });
+            draft.Extras.Add(new ProgramRow { Kind = ProgramRowKind.Hike, Activity = "Undated hike", ChallengeArea = "community" });
+            draft.Ideas.Add(new ProgramIdea { Title = "Origami", ChallengeArea = "creative" });
+            draft.Ideas.Add(new ProgramIdea { Title = "Quiz" });
+
+            var summary = ProgramLayout.AreaSummary(draft);
+
+            CollectionAssert.AreEqual(new[] { "Outdoors", "Community", "Personal Growth", "Creative", "Not set" }, summary.Select(a => a.Area).ToList());
+            // the leaders meeting, the camp and the hike that Term1 has, and Hall Games, have no area set
+            CollectionAssert.AreEqual(new[] { 3, 1, 0, 0, 4 }, summary.Select(a => a.InProgram).ToList());
+            CollectionAssert.AreEqual(new[] { 0, 0, 0, 1, 1 }, summary.Select(a => a.Ideas).ToList());
+
+            // the program's usual area stands for a blank one, and "Not set" goes when nothing is in it
+            draft.DefaultChallengeArea = "personal_growth";
+            draft.Ideas.RemoveAll(i => i.ChallengeArea == "");
+            var withDefault = ProgramLayout.AreaSummary(draft);
+            Assert.AreEqual(4, withDefault.Single(a => a.Area == "Personal Growth").InProgram);
+            Assert.IsFalse(withDefault.Any(a => a.Area == "Not set"));
+        }
+
         private static TerrainContext Context() => new TerrainContext
         {
             UnitId = "unit-1", UnitName = "Scout Unit", UtcOffset = _ => TimeSpan.FromHours(11),
@@ -323,7 +726,8 @@ namespace TopoReportFunctionTest
                 "achievement_pathway_oas_data", "achievement_pathway_logbook_data", "id", "status", "organiser", "owner_type", "owner_id"
             }, root.EnumerateObject().Select(p => p.Name).ToList());
             Assert.AreEqual("Canoeing", root.GetProperty("title").GetString());
-            Assert.AreEqual("Game: Dodgeball", root.GetProperty("description").GetString());
+            // the game and the duty patrol of the night are written in the description
+            StringAssert.StartsWith(root.GetProperty("description").GetString(), "Game: Dodgeball\nDuty patrol: ");
             Assert.AreEqual("Burns Bay", root.GetProperty("location").GetString());
             Assert.AreEqual("community", root.GetProperty("challenge_area").GetString());
             Assert.AreEqual("2026-02-04", root.GetProperty("startDate").GetString());
@@ -373,6 +777,9 @@ namespace TopoReportFunctionTest
                 InTerrain("t5", "Last Term", new DateTime(2025, 12, 3, 19, 0, 0)),
                 new GetEventResultModel { id = "t6", title = "Cancelled", status = "cancelled", start_datetime = new DateTime(2026, 3, 18, 19, 0, 0) }
             };
+            // what the program writes in the description of an activity it has put in Terrain: the duty patrol of the night
+            foreach (var e in inTerrain.Where(e => e.id is "t1" or "t3"))
+                e.description = ProgramTerrain.Events(draft).Single(p => p.Title == e.title).Description;
             var changes = ProgramTerrain.Changes(draft, inTerrain);
 
             // the changed Mapping, the camp, the leaders meeting and the hike to add, and the bike ride the program does not have
@@ -471,6 +878,70 @@ namespace TopoReportFunctionTest
             // filling again adds nothing, and the changes to make in Terrain leave out what came from it
             Assert.AreEqual((0, 0), ProgramFill.Apply(draft, inTerrain));
             Assert.IsFalse(ProgramTerrain.ToAdd(draft, null).Any(e => e.Row.TerrainEventId != ""));
+        }
+
+        [TestMethod]
+        public void APlaceIsAddedToTheListOfLocationsOnlyOnceSomethingInTheProgramIsThere()
+        {
+            var draft = new ProgramDraft { Start = new DateTime(2026, 1, 28), End = new DateTime(2026, 4, 29), MeetingDay = DayOfWeek.Wednesday, NightStart = "19:00", NightEnd = "21:00" };
+            draft.Locations.Add(new ProgramLocation { Name = "Epping", Address = "1 High St" });
+            draft.NightEdits["2026-02-11"] = new ProgramRow { Activity = "Already entered" };
+            // an idea with a place is not in the program, and neither is an activity with no date
+            draft.Ideas.Add(new ProgramIdea { Title = "Hike", Location = "Idea Place" });
+            draft.Extras.Add(new ProgramRow { Kind = ProgramRowKind.Camp, Activity = "Undated", Location = "Undated Place" });
+            var inTerrain = new List<GetEventResultModel>
+            {
+                InTerrain("t1", "Canoeing", new DateTime(2026, 2, 4, 19, 0, 0), "Burns Bay"),
+                // on a night that has something entered, so it is not filled in and its place is not added
+                InTerrain("t2", "Mapping", new DateTime(2026, 2, 11, 19, 0, 0), "Left Alone Place"),
+                InTerrain("t3", "Rogaining", new DateTime(2026, 2, 18, 19, 0, 0), "epping"),
+                InTerrain("t4", "Games", new DateTime(2026, 2, 25, 19, 0, 0), ""),
+                InTerrain("t5", "Outside the dates", new DateTime(2025, 12, 3, 19, 0, 0), "Elsewhere")
+            };
+
+            ProgramFill.Apply(draft, inTerrain);
+            Assert.AreEqual(1, ProgramFill.AddProgramLocations(draft));
+            CollectionAssert.AreEqual(new[] { "Epping", "Burns Bay" }, draft.Locations.Select(l => l.Name).ToList());
+            Assert.AreEqual("1 High St", draft.Locations[0].Address);
+            Assert.AreEqual("", draft.Locations[1].Address);
+
+            // an idea put on a night, or a camp given a date, brings its place in
+            draft.NightEdits["2026-03-04"] = new ProgramRow { Activity = "Hike", Location = "Idea Place" };
+            draft.Extras.Single(e => e.Activity == "Undated").Date = new DateTime(2026, 3, 13);
+            Assert.AreEqual(2, ProgramFill.AddProgramLocations(draft));
+            CollectionAssert.AreEqual(new[] { "Epping", "Burns Bay", "Idea Place", "Undated Place" }, draft.Locations.Select(l => l.Name).ToList());
+
+            // a night that is not running does not, and nothing is added twice
+            draft.NightEdits["2026-03-11"] = new ProgramRow { Activity = "Not running", Location = "Skipped Place", Skipped = true };
+            Assert.AreEqual(0, ProgramFill.AddProgramLocations(draft));
+        }
+
+        [TestMethod]
+        public void TheYouthsProposalsAreOfferedAsIdeasOnceEach()
+        {
+            var draft = Term1();
+            draft.NightEdits["2026-02-04"] = new ProgramRow { Activity = "Canoeing" };
+            draft.Ideas.Add(new ProgramIdea { Title = "Orienteering" });
+            var proposals = new List<ProposedActivityModel>
+            {
+                new ProposedActivityModel { Id = "p1", Title = " Origami ", ChallengeAreaKey = "creative", ProposedBy = "Sam Smith", Patrol = "Magpie (Orange)", Submitted = new DateTime(2026, 1, 10) },
+                new ProposedActivityModel { Id = "p2", Title = "canoeing", ChallengeAreaKey = "outdoors", ProposedBy = "Alex Lee", Submitted = new DateTime(2026, 1, 11) },
+                new ProposedActivityModel { Id = "p3", Title = "Orienteering", Submitted = new DateTime(2026, 1, 12) },
+                new ProposedActivityModel { Id = "p4", Title = "Quiz", ChallengeAreaKey = "not_applicable", ProposedBy = "Jo Park", Submitted = new DateTime(2026, 1, 9) }
+            };
+
+            // one already on a night or already an idea is not offered again
+            Assert.AreEqual(2, ProgramIdeas.AddProposals(draft, proposals));
+            CollectionAssert.AreEqual(new[] { "Orienteering", "Quiz", "Origami" }, draft.Ideas.Select(i => i.Title).ToList());
+            var origami = draft.Ideas.Single(i => i.Title == "Origami");
+            Assert.AreEqual("creative", origami.ChallengeArea);
+            Assert.AreEqual("Sam Smith, Magpie (Orange)", origami.ProposedBy);
+            Assert.AreEqual("", draft.Ideas.Single(i => i.Title == "Quiz").ChallengeArea);
+
+            // taking one off, or putting it on a night, does not bring it back the next time
+            draft.Ideas.Remove(origami);
+            Assert.AreEqual(0, ProgramIdeas.AddProposals(draft, proposals));
+            Assert.IsFalse(draft.Ideas.Any(i => i.Title == "Origami"));
         }
 
         [TestMethod]

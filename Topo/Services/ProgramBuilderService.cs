@@ -1,3 +1,4 @@
+using Topo.Model;
 using Topo.Model.Members;
 using Topo.Model.Program;
 using Topo.Model.ProgramBuilder;
@@ -13,6 +14,14 @@ namespace Topo.Services
         public Task<DayOfWeek?> FindSectionNight(string unitId);
         // The activities Terrain has on the unit's calendar between the dates, in full; null when there is no calendar named after the unit
         public Task<List<GetEventResultModel>?> GetTerrainEvents(string unitId, DateTime from, DateTime to, Action<string>? progress = null, CancellationToken cancellationToken = default);
+        // The activities the unit's youth have proposed in Terrain, to be offered as ideas; null when Terrain could not be read
+        public Task<List<ProposedActivityModel>?> GetProposals(string unitId);
+        // What adding the program to the unit's calendar in Terrain would do, from what Terrain has now; nothing is sent
+        // Cancels an activity in Terrain; what Terrain answered
+        public Task<TerrainWriteResult> DeleteEvent(string eventId);
+        public Task<ProgramPushPlan> PreparePush(ProgramDraft draft, TerrainContext context, Action<string>? progress = null, CancellationToken cancellationToken = default);
+        // Adds what the plan says, one at a time, then looks for each in Terrain and keeps its id on the program's row
+        public Task<ProgramPushResult> Push(ProgramPushPlan plan, ProgramDraft draft, TerrainContext context, Action<string>? progress = null, CancellationToken cancellationToken = default);
     }
 
     public class ProgramBuilderService : IProgramBuilderService
@@ -71,6 +80,71 @@ namespace Topo.Services
             var events = await _unitReportService.GetEventsForCalendars(from, to, new[] { calendar }, cancellationToken, progress);
             // what is for the whole unit or group, not a patrol or a member's project
             return events.Where(e => e.Scope != "patrol" && e.Scope != "member").Select(e => e.Event).ToList();
+        }
+
+        public Task<List<ProposedActivityModel>?> GetProposals(string unitId) => _terrainAPIService.GetProposedActivitiesAsync(unitId);
+
+        public Task<TerrainWriteResult> DeleteEvent(string eventId) => _terrainAPIService.DeleteEventAsync(eventId);
+
+        public async Task<ProgramPushPlan> PreparePush(ProgramDraft draft, TerrainContext context, Action<string>? progress = null, CancellationToken cancellationToken = default)
+        {
+            progress?.Invoke("Reading Terrain");
+            var events = await GetTerrainEvents(context.UnitId, draft.Start, draft.End, progress, cancellationToken);
+            if (events == null)
+                return new ProgramPushPlan { Error = "There is no calendar named after this unit in Terrain, so there is nothing to add the program to." };
+            var plan = ProgramPush.Build(draft, events, context, DateTime.Now);
+
+            // what is to be changed in Terrain is read in full, so that the change can be sent as the whole of the activity with only that different
+            progress?.Invoke("Reading the activities to change");
+            var candidates = plan.Updates.ToList();
+            plan.Updates.Clear();
+            var raws = await ReadsAtOnce.SelectAsync(candidates, item => _terrainAPIService.GetEventRawAsync(item.EventId));
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                var label = $"{candidates[i].Event.Row.Date:ddd d MMM} {candidates[i].Event.Title}";
+                var body = raws[i] == "" ? null : ProgramPush.UpdateBody(raws[i], candidates[i].Event, context, out var reason);
+                if (body == null)
+                {
+                    plan.Skipped.Add((label, "differs in Terrain, but " + (raws[i] == "" ? "could not be read from Terrain, so it was not changed" : ProgramPushReason(raws[i], candidates[i].Event, context))));
+                    continue;
+                }
+                candidates[i].BodyJson = body;
+                plan.Updates.Add(candidates[i]);
+            }
+            return plan;
+        }
+
+        // Why an activity could not be made into a change
+        private static string ProgramPushReason(string raw, TerrainEvent planned, TerrainContext context)
+        {
+            ProgramPush.UpdateBody(raw, planned, context, out var reason);
+            return reason;
+        }
+
+        public async Task<ProgramPushResult> Push(ProgramPushPlan plan, ProgramDraft draft, TerrainContext context, Action<string>? progress = null, CancellationToken cancellationToken = default)
+        {
+            // the new ones first, then the changes
+            var result = await ProgramPush.Run(plan.Items.Concat(plan.Updates), item => item.Kind == ProgramPushKind.Update
+                ? _terrainAPIService.UpdateEventAsync(item.EventId, item.BodyJson)
+                : _terrainAPIService.CreateUnitEventAsync(context.UnitId, item.Body), progress);
+            if (result.SentCount > 0)
+            {
+                progress?.Invoke("Checking Terrain");
+                try
+                {
+                    var events = await GetTerrainEvents(context.UnitId, draft.Start, draft.End, null, cancellationToken);
+                    if (events != null)
+                    {
+                        ProgramPush.MatchCreated(result, events, plan.ExistingIds, draft);
+                        ProgramPush.MatchUpdated(result, draft, events);
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // sent is sent; not being able to look for them just leaves them as sent
+                }
+            }
+            return result;
         }
 
         // The calendar named after the unit

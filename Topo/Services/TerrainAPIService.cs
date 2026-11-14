@@ -6,6 +6,7 @@ using Topo.Model.Members;
 using Topo.Model.Milestone;
 using Topo.Model.OAS;
 using Topo.Model.Program;
+using Topo.Model.ProgramBuilder;
 using Topo.Model.SIA;
 using Topo.Model.AdditionalAwards;
 using Topo.Model.Approvals;
@@ -30,6 +31,14 @@ namespace Topo.Services
         public Task<GetEventsResultModel?> GetEventsAsync(string userId, DateTime fromDate, DateTime toDate);
         public Task<GetEventResultModel?> GetEventAsync(string eventId);
         public Task<List<ProposedActivityModel>?> GetProposedActivitiesAsync(string unitId);
+        // Adds an activity to the unit's calendar; what Terrain answered, as it did not need to be understood
+        public Task<TerrainWriteResult> CreateUnitEventAsync(string unitId, object body);
+        // An activity as Terrain gives it, unread, to be sent back with changes; blank when it could not be read
+        public Task<string> GetEventRawAsync(string eventId);
+        // Changes an activity in Terrain to the whole of what the text says
+        public Task<TerrainWriteResult> UpdateEventAsync(string eventId, string eventJson);
+        // Cancels an activity: Terrain removes it from the calendars
+        public Task<TerrainWriteResult> DeleteEventAsync(string eventId);
         public Task<GetOASTreeResultsModel?> GetOASTreeAsync(string stream);
         public Task<GetOASTemplateResultModel?> GetOASTemplateAsync(string stream);
         public Task<GetUnitAchievementsResultsModel> GetUnitOASAchievements(string unit, string stream, string branch, int stage);
@@ -258,6 +267,45 @@ namespace Topo.Services
             string requestUri = $"{eventsAddress}units/{unitId}/proposals";
             var result = await SendRequest(HttpMethod.Get, requestUri);
             return ProposedActivities.Parse(result);
+        }
+
+        public Task<TerrainWriteResult> CreateUnitEventAsync(string unitId, object body)
+            => SendWrite(HttpMethod.Post, $"{eventsAddress}units/{unitId}/events", body);
+
+        public async Task<string> GetEventRawAsync(string eventId)
+        {
+            await RefreshTokenAsync();
+            return await SendRequest(HttpMethod.Get, $"{eventsAddress}events/{eventId}");
+        }
+
+        public Task<TerrainWriteResult> UpdateEventAsync(string eventId, string eventJson)
+            => SendWrite(HttpMethod.Patch, $"{eventsAddress}events/{eventId}", eventJson);
+
+        public Task<TerrainWriteResult> DeleteEventAsync(string eventId)
+            => SendWrite(HttpMethod.Delete, $"{eventsAddress}events/{eventId}");
+
+        // A write, which unlike the reads says what Terrain answered: a refused one must not look like a success
+        private async Task<TerrainWriteResult> SendWrite(HttpMethod httpMethod, string requestUri, object? body = null)
+        {
+            await RefreshTokenAsync();
+
+            var httpRequest = new HttpRequestMessage(httpMethod, requestUri);
+            httpRequest.Headers.Add("authorization", _storageService?.AuthenticationResult?.IdToken);
+            httpRequest.Headers.Add("accept", "application/json, text/plain, */*");
+            if (body != null)
+                httpRequest.Content = new StringContent(body is string text ? text : JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
+            try
+            {
+                var response = await _httpClient.SendAsync(httpRequest);
+                var responseContent = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation($"Version: {_storageService?.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; Write: {httpMethod} {requestUri}; StatusCode: {(int)response.StatusCode}");
+                return new TerrainWriteResult { StatusCode = (int)response.StatusCode, Body = responseContent };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogInformation($"Version: {_storageService?.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; Write: {httpMethod} {requestUri}; Exception: {ex}");
+                return new TerrainWriteResult { StatusCode = 0, Body = ex.Message };
+            }
         }
 
         public async Task<GetOASTreeResultsModel?> GetOASTreeAsync(string stream)

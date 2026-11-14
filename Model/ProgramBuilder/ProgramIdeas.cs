@@ -5,6 +5,37 @@ namespace Topo.Model.ProgramBuilder
     // belong to the night.
     public static class ProgramIdeas
     {
+        // Offers what the unit's youth have proposed in Terrain as ideas. Each proposal is offered once: one that has been used or taken off is
+        // not offered again, and one whose name is already an idea or an activity in the program is left out. How many were added.
+        public static int AddProposals(ProgramDraft draft, IEnumerable<Topo.Model.Program.ProposedActivityModel> proposals)
+        {
+            var taken = draft.TakenProposals.ToHashSet();
+            var titles = draft.Ideas.Select(i => i.Title).Concat(draft.NightEdits.Values.Concat(draft.Extras).Select(r => r.Activity))
+                .Select(t => t.Trim()).Where(t => t != "").ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var areas = new[] { "outdoors", "community", "personal_growth", "creative" };
+            var added = 0;
+            foreach (var proposal in proposals.OrderBy(p => p.Submitted))
+            {
+                var key = proposal.OpenKey;
+                if (taken.Contains(key))
+                    continue;
+                // seen now whether or not it is added, so a name that is on the program already does not turn up if that is later cleared
+                taken.Add(key);
+                draft.TakenProposals.Add(key);
+                if (!titles.Add(proposal.Title.Trim()))
+                    continue;
+                draft.Ideas.Add(new ProgramIdea
+                {
+                    Title = proposal.Title.Trim(),
+                    ChallengeArea = areas.Contains(proposal.ChallengeAreaKey) ? proposal.ChallengeAreaKey : "",
+                    ProposedBy = proposal.Patrol == "" ? proposal.ProposedBy : $"{proposal.ProposedBy}, {proposal.Patrol}",
+                    ProposalId = key
+                });
+                added++;
+            }
+            return added;
+        }
+
         // Put an idea on a night. Whatever was on the night goes back to the ideas. False when the idea or the night is not there.
         public static bool Assign(ProgramDraft draft, string ideaId, DateTime night)
         {
@@ -19,6 +50,7 @@ namespace Topo.Model.ProgramBuilder
             row.Location = idea.Location;
             row.ChallengeArea = idea.ChallengeArea;
             row.TerrainEventId = "";
+            row.ScoutMethod = new List<string>();
             draft.Ideas.Remove(idea);
             if (replaced != null)
                 draft.Ideas.Add(replaced);
@@ -36,9 +68,9 @@ namespace Topo.Model.ProgramBuilder
                 return false;
 
             var target = Edit(draft, to);
-            var (activity, game, location, area, eventId) = (source.Activity, source.Game, source.Location, source.ChallengeArea, source.TerrainEventId);
-            (source.Activity, source.Game, source.Location, source.ChallengeArea, source.TerrainEventId) = (target.Activity, target.Game, target.Location, target.ChallengeArea, target.TerrainEventId);
-            (target.Activity, target.Game, target.Location, target.ChallengeArea, target.TerrainEventId) = (activity, game, location, area, eventId);
+            var (activity, game, location, area, eventId, method) = (source.Activity, source.Game, source.Location, source.ChallengeArea, source.TerrainEventId, source.ScoutMethod);
+            (source.Activity, source.Game, source.Location, source.ChallengeArea, source.TerrainEventId, source.ScoutMethod) = (target.Activity, target.Game, target.Location, target.ChallengeArea, target.TerrainEventId, target.ScoutMethod);
+            (target.Activity, target.Game, target.Location, target.ChallengeArea, target.TerrainEventId, target.ScoutMethod) = (activity, game, location, area, eventId, method);
             return true;
         }
 
@@ -61,6 +93,7 @@ namespace Topo.Model.ProgramBuilder
                 return null;
             var idea = new ProgramIdea { Title = row.Activity, Game = row.Game, Location = row.Location, ChallengeArea = row.ChallengeArea };
             row.Activity = row.Game = row.Location = row.ChallengeArea = row.TerrainEventId = "";
+            row.ScoutMethod = new List<string>();
             return idea;
         }
 

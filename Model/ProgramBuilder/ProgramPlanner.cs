@@ -37,6 +37,9 @@ namespace Topo.Model.ProgramBuilder
             return nights;
         }
 
+        // A camp, hike or other activity is added with no date, and is left out of the program and of what is put in Terrain until it has one
+        public static bool IsDated(ProgramRow row) => row.Date.Year >= 2000;
+
         public static string NightKey(DateTime date) => date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
         // The program's section nights, oldest first, with what was filled in for each and the patrol on duty. A night that is not running
@@ -93,7 +96,7 @@ namespace Topo.Model.ProgramBuilder
         {
             Id = row.Id, Kind = row.Kind, Date = row.Date, EndDate = row.EndDate, Activity = row.Activity, Game = row.Game, Location = row.Location,
             Leader = row.Leader, DutyPatrol = row.DutyPatrol, NoDuty = row.NoDuty, Skipped = row.Skipped, ChallengeArea = row.ChallengeArea, TerrainEventId = row.TerrainEventId,
-            StartTime = row.StartTime, EndTime = row.EndTime
+            StartTime = row.StartTime, EndTime = row.EndTime, ScoutMethod = row.ScoutMethod.ToList()
         };
     }
 }

@@ -23,6 +23,10 @@ namespace Topo.Model.ProgramBuilder
         public List<TerrainLeader> Leaders { get; set; } = new List<TerrainLeader>();
         // The time zone the program's times are in, for working out the times Terrain stores (UTC); the local one by default
         public Func<DateTime, TimeSpan> UtcOffset { get; set; } = local => TimeZoneInfo.Local.GetUtcOffset(local);
+        // The name of that time zone (like Australia/Sydney) for Terrain to know the times by
+        public string TimeZoneId { get; set; } = TimeZoneInfo.Local.Id;
+        // The leader signed in, whom Terrain names as the verifier of an activity it adds
+        public string UserName { get; set; } = string.Empty;
     }
 
     // An activity as it would be entered in Terrain
@@ -31,9 +35,14 @@ namespace Topo.Model.ProgramBuilder
         public ProgramRow Row { get; set; } = new ProgramRow();
         public string Title { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
+        // The patrol on duty, for a section night; kept in the description
+        public string DutyPatrol { get; set; } = string.Empty;
+        public string Game { get; set; } = string.Empty;
         public string Location { get; set; } = string.Empty;
         public string ChallengeArea { get; set; } = string.Empty;
         public string Leader { get; set; } = string.Empty;
+        // The parts of the Scout Method it uses, by Terrain's names
+        public List<string> ScoutMethod { get; set; } = new List<string>();
         public DateTime Start { get; set; }
         public DateTime End { get; set; }
     }
@@ -50,6 +59,9 @@ namespace Topo.Model.ProgramBuilder
         public string Leader { get; set; } = string.Empty;
         // What is different from what Terrain has, or what to do
         public string Details { get; set; } = string.Empty;
+        // For a change: the event in Terrain that is to change, and the activity as the program has it
+        public string EventId { get; set; } = string.Empty;
+        public TerrainEvent? Planned { get; set; }
     }
 
     // Puts the program beside what is already in Terrain: lists what to add or change there, and writes an activity for Terrain's import for
@@ -58,7 +70,7 @@ namespace Topo.Model.ProgramBuilder
     {
         public static List<TerrainEvent> Events(ProgramDraft draft)
         {
-            var rows = ProgramPlanner.Nights(draft).Where(n => !n.Skipped).Concat(draft.Extras).Where(r => r.Activity.Trim() != "").OrderBy(r => r.Date);
+            var rows = ProgramPlanner.Nights(draft).Where(n => !n.Skipped).Concat(draft.Extras.Where(ProgramPlanner.IsDated)).Where(r => r.Activity.Trim() != "").OrderBy(r => r.Date);
             return rows.Select(row =>
             {
                 var camp = row.Kind == ProgramRowKind.Camp;
@@ -68,9 +80,10 @@ namespace Topo.Model.ProgramBuilder
                 var lastDay = (row.EndDate ?? row.Date).Date;
                 return new TerrainEvent
                 {
-                    Row = row, Title = row.Activity.Trim(), Description = row.Game.Trim() == "" ? "" : $"Game: {row.Game.Trim()}",
+                    Row = row, Title = row.Activity.Trim(), Game = row.Game.Trim(), DutyPatrol = night ? row.Duty : "",
+                    Description = ProgramDescription.Compose(row.Game, night ? row.Duty : ""),
                     Location = First(row.Location, draft.DefaultLocation), ChallengeArea = First(row.ChallengeArea, draft.DefaultChallengeArea),
-                    Leader = First(row.Leader, draft.DefaultLeader),
+                    Leader = First(row.Leader, draft.DefaultLeader), ScoutMethod = row.ScoutMethod.ToList(),
                     Start = row.Date.Date + Time(startTime), End = lastDay + Time(endTime)
                 };
             }).ToList();
@@ -106,8 +119,22 @@ namespace Topo.Model.ProgramBuilder
                     differences.Add($"Location: {(found.location.Trim() == "" ? "none" : found.location.Trim())} to {planned.Location}");
                 if (planned.Leader != "" && !LeaderMatches(found, planned.Leader))
                     differences.Add($"Leader in charge: {(OrganiserNames(found) == "" ? "none" : OrganiserNames(found))} to {planned.Leader}");
+                if (Local(found.start_datetime).TimeOfDay != planned.Start.TimeOfDay || Local(found.end_datetime).TimeOfDay != planned.End.TimeOfDay)
+                    differences.Add($"Time: {Local(found.start_datetime):HH:mm}-{Local(found.end_datetime):HH:mm} to {planned.Start:HH:mm}-{planned.End:HH:mm}");
+                if (planned.ChallengeArea != "" && !string.Equals(found.challenge_area, planned.ChallengeArea, StringComparison.OrdinalIgnoreCase))
+                    differences.Add($"Challenge area: {(found.challenge_area == "" ? "none" : ProgramLayout.AreaLabel(found.challenge_area))} to {ProgramLayout.AreaLabel(planned.ChallengeArea)}");
+                if (planned.ScoutMethod.Count > 0 && !ProgramScoutMethod.Same(found.review?.scout_method_elements ?? new string[0], planned.ScoutMethod))
+                    differences.Add($"Scout Method: {ProgramScoutMethod.Summary(found.review?.scout_method_elements ?? new string[0])} to {ProgramScoutMethod.Summary(planned.ScoutMethod)}");
+                if (planned.Game != "" && !string.Equals(ProgramDescription.Game(found.description), planned.Game, StringComparison.OrdinalIgnoreCase))
+                    differences.Add($"Game: {(ProgramDescription.Game(found.description) == "" ? "none" : ProgramDescription.Game(found.description))} to {planned.Game}");
+                if (planned.DutyPatrol != "" && !string.Equals(ProgramDescription.Duty(found.description), planned.DutyPatrol, StringComparison.OrdinalIgnoreCase))
+                    differences.Add($"Duty patrol: {(ProgramDescription.Duty(found.description) == "" ? "none" : ProgramDescription.Duty(found.description))} to {planned.DutyPatrol}");
                 if (differences.Count > 0)
-                    changes.Add(Change("Change", planned, string.Join("; ", differences)));
+                {
+                    var change = Change("Change", planned, string.Join("; ", differences));
+                    change.EventId = found.id;
+                    changes.Add(change);
+                }
             }
 
             foreach (var left in existing.Where(e => !matched.Contains(e.id)).OrderBy(e => e.start_datetime))
@@ -149,7 +176,7 @@ namespace Topo.Model.ProgramBuilder
                 ["startDate"] = e.Start.ToString("yyyy-MM-dd"), ["endDate"] = e.End.ToString("yyyy-MM-dd"),
                 ["startTime"] = e.Start.ToString("HH:mm"), ["endTime"] = e.End.ToString("HH:mm"),
                 ["start_datetime"] = Utc(e.Start), ["end_datetime"] = Utc(e.End),
-                ["review"] = new { scout_method_elements = new string[0] },
+                ["review"] = new { scout_method_elements = e.ScoutMethod.ToArray() },
                 ["organisers"] = organiser == null ? new object[0] : new[] { organiser },
                 ["uploads"] = new object[0], ["schedule_items"] = new object[0],
                 ["invitees"] = new[] { invitee }, ["invited_member_ids"] = new string[0],
@@ -202,7 +229,7 @@ namespace Topo.Model.ProgramBuilder
         private static ProgramChange Change(string action, TerrainEvent planned, string details) => new ProgramChange
         {
             Action = action, Date = planned.Row.Date.Date, EndDate = planned.Row.EndDate != null && planned.Row.EndDate.Value.Date > planned.Row.Date.Date ? planned.Row.EndDate.Value.Date : null,
-            Activity = planned.Title, Location = planned.Location, Leader = planned.Leader, Details = details
+            Activity = planned.Title, Location = planned.Location, Leader = planned.Leader, Details = details, Planned = planned
         };
 
         // The event Terrain has for a planned one: the one it was filled in from, else one starting that day, preferring the same title
