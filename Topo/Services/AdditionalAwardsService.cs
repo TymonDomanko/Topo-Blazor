@@ -1,12 +1,13 @@
 ﻿using Topo.Model;
 using Topo.Model.AdditionalAwards;
 using Topo.Model.Approvals;
+using Topo.Model.Members;
 
 namespace Topo.Services
 {
     public interface IAdditionalAwardService
     {
-        public Task<AdditionalAwardsReportDataModel> GenerateAdditionalAwardReportData(string selectedUnitId, List<KeyValuePair<string, string>> selectedMembers);
+        public Task<AdditionalAwardsReportDataModel> GenerateAdditionalAwardReportData(string selectedUnitId, List<MemberListModel> selectedMembers, Action<string>? progress = null);
     }
     public class AdditionalAwardService : IAdditionalAwardService
     {
@@ -24,7 +25,7 @@ namespace Topo.Services
             _reportService = reportService;
             //_approvalsService = approvalsService;
         }
-        public async Task<AdditionalAwardsReportDataModel> GenerateAdditionalAwardReportData(string selectedUnitId, List<KeyValuePair<string, string>> selectedMembers)
+        public async Task<AdditionalAwardsReportDataModel> GenerateAdditionalAwardReportData(string selectedUnitId, List<MemberListModel> selectedMembers, Action<string>? progress = null)
         {
             var awardSpecificationsList = _storageService.AdditionalAwardSpecifications;
             if (awardSpecificationsList == null || awardSpecificationsList.Count == 0)
@@ -47,8 +48,13 @@ namespace Topo.Services
             var additionalAwardsList = new List<AdditionalAwardListModel>();
             var lastMemberProcessed = "";
             var memberName = "";
-            foreach (var memberKVP in selectedMembers)
+            // the Reading line names each Scout the short way, as the reports do
+            var shortNames = SignInSheetLayout.GetDisplayNames(selectedMembers, false);
+            foreach (var member in selectedMembers)
             {
+                var memberKVP = new KeyValuePair<string, string>(member.id, $"{member.first_name} {member.last_name}");
+                var firstEntry = additionalAwardsList.Count;
+                progress?.Invoke($"{(shortNames.TryGetValue(member.id, out var shortName) ? shortName : memberKVP.Value)} ({selectedMembers.IndexOf(member) + 1} of {selectedMembers.Count})");
                 await _terrainAPIService.RevokeAssumedProfiles();
                 await _terrainAPIService.AssumeProfile(memberKVP.Key);
                 var getMemberLogbookMetrics = await _terrainAPIService.GetMemberLogbookMetrics(memberKVP.Key);
@@ -81,7 +87,7 @@ namespace Topo.Services
                     {
                         if (award.presented_date.HasValue)
                         {
-                            awardPresentedDate = award.presented_date.Value.ToLocalTime();
+                            awardPresentedDate = ReportDate.ForReport(award.presented_date.Value);
                         }
                     }
                     additionalAwardsList.Add(new AdditionalAwardListModel
@@ -135,12 +141,18 @@ namespace Topo.Services
                     AwardUnits = nextWalkaboutAward?.additionalAwardValue ?? 10
                 });
 
+                // each of this Scout's rows says who they are and their patrol, so they can be named and grouped later
+                foreach (var entry in additionalAwardsList.Skip(firstEntry))
+                {
+                    entry.MemberId = member.id;
+                    entry.MemberPatrol = member.patrol_name ?? "";
+                }
             }
 
             await _terrainAPIService.RevokeAssumedProfiles();
 
             var sortedAdditionalAwardsList = additionalAwardsList.OrderBy(a => a.MemberName).ThenBy(a => a.AwardSortIndex).ToList();
-            var distinctAwards = sortedAdditionalAwardsList.OrderBy(x => x.AwardSortIndex).Select(x => x.AwardId).Distinct().ToList();
+            var distinctAwards = AwardsTable.DistinctAwards(sortedAdditionalAwardsList);
 
             var reportData = new AdditionalAwardsReportDataModel();
             reportData.AwardSpecificationsList = awardSpecificationsList;
