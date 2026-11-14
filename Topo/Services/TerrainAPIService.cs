@@ -3,6 +3,7 @@ using System.Text;
 using Topo.Model.Logbook;
 using Topo.Model.Login;
 using Topo.Model.Members;
+using Topo.Model.PatrolPlanner;
 using Topo.Model.Milestone;
 using Topo.Model.OAS;
 using Topo.Model.Program;
@@ -59,6 +60,11 @@ namespace Topo.Services
         public Task<Topo.Model.AdditionalAwards.GetUnitAchievementsResultModel> GetAdditionalAwardResultsForMember(string memberId);
         public Task<GetMemberAchievementsResultModel> GetAllAchievementsForMember(string memberId);
         public Task<List<GroupUnit>> GetGroupUnitsAsync(string groupId);
+        public Task<UnitPatrolModel[]?> GetUnitPatrolsAsync(string unitId);
+        public Task<(TerrainWriteResult result, string patrolId)> CreatePatrolAsync(string groupId, string unitId, string patrolName);
+        public Task<TerrainWriteResult> PutPatrolMemberAsync(string groupId, string patrolId, string memberId, string duty);
+        public Task<TerrainWriteResult> DeletePatrolMemberAsync(string groupId, string patrolId, string memberId);
+        public Task<TerrainWriteResult> PutUnitMemberAsync(string groupId, string unitId, string memberId, string duty, bool unitCouncil);
         public Task<string> GetUnitAchievementsJsonAsync(string unitId, string type);
         public Task<string> GetTemplateJsonAsync(string templatePath);
     }
@@ -595,6 +601,59 @@ namespace Topo.Services
         }
 
         // The units of a group, named. Only works for groups the user belongs to (other groups give 403).
+        // The unit's patrols (id and name), needed to say which patrol a member goes into. Null if Terrain couldn't be read.
+        public async Task<UnitPatrolModel[]?> GetUnitPatrolsAsync(string unitId)
+        {
+            await RefreshTokenAsync();
+
+            var requestUri = $"{membersAddress}units/{unitId}/patrols";
+            var result = await SendRequest(HttpMethod.Get, requestUri);
+            return DeserializeObject<GetUnitPatrolsResultModel>(result)?.results;
+        }
+
+        // Terrain answers a new patrol with 200 and { id, unit_id, name }
+        public async Task<(TerrainWriteResult result, string patrolId)> CreatePatrolAsync(string groupId, string unitId, string patrolName)
+        {
+            var result = await SendWrite(HttpMethod.Post, $"{membersAddress}groups/{groupId}/patrols", new { name = patrolName, unit_id = unitId });
+            var created = result.Success ? DeserializeObject<UnitPatrolModel>(result.Body) : null;
+            return (result, created?.id ?? "");
+        }
+
+        // Adds the member to the patrol, or changes their duty in it (204). It does not take them out of any other patrol.
+        public Task<TerrainWriteResult> PutPatrolMemberAsync(string groupId, string patrolId, string memberId, string duty)
+            => SendWrite(HttpMethod.Put, $"{membersAddress}groups/{groupId}/patrols/{patrolId}/members/{memberId}", new { duty });
+
+        public Task<TerrainWriteResult> DeletePatrolMemberAsync(string groupId, string patrolId, string memberId)
+            => SendWrite(HttpMethod.Delete, $"{membersAddress}groups/{groupId}/patrols/{patrolId}/members/{memberId}");
+
+        // Sets the member's unit duty and whether they are on the unit council. Terrain wants both every time.
+        public Task<TerrainWriteResult> PutUnitMemberAsync(string groupId, string unitId, string memberId, string duty, bool unitCouncil)
+            => SendWrite(HttpMethod.Put, $"{membersAddress}groups/{groupId}/units/{unitId}/members/{memberId}", new { duty, unit_council = unitCouncil });
+
+        // Unlike SendRequest, which hides a failed call by returning an empty string, a write has to say whether it worked.
+        private async Task<TerrainWriteResult> SendWrite(HttpMethod httpMethod, string requestUri, object? body = null)
+        {
+            await RefreshTokenAsync();
+
+            var httpRequest = new HttpRequestMessage(httpMethod, requestUri);
+            httpRequest.Headers.Add("authorization", _storageService?.AuthenticationResult?.IdToken);
+            httpRequest.Headers.Add("accept", "application/json, text/plain, */*");
+            if (body != null)
+                httpRequest.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
+            try
+            {
+                var response = await _httpClient.SendAsync(httpRequest);
+                var responseContent = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation($"Version: {_storageService?.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; Write: {httpMethod} {requestUri}; StatusCode: {(int)response.StatusCode}");
+                return new TerrainWriteResult { StatusCode = (int)response.StatusCode, Body = responseContent };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogInformation($"Version: {_storageService?.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; Write: {httpMethod} {requestUri}; Exception: {ex}");
+                return new TerrainWriteResult { StatusCode = 0, Body = ex.Message };
+            }
+        }
+
         public async Task<List<GroupUnit>> GetGroupUnitsAsync(string groupId)
         {
             await RefreshTokenAsync();
