@@ -12,7 +12,6 @@ namespace Topo.Controller
 {
     // Backs the Patrol Planner drag-and-drop board. The board is a local, in-memory "what if" plan: nothing
     // reaches Terrain until the leader chooses "Push to Terrain" and confirms the list of changes it shows.
-    // The exported patrol list is still there for applying a plan by hand.
     public class PatrolPlannerController : ComponentBase, IDisposable
     {
         [Inject]
