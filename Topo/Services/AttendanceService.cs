@@ -1,6 +1,7 @@
 using Topo.Model.Attendance;
 using Topo.Model.Members;
 using Topo.Model.Progress;
+using Topo.Model.UnitReport;
 
 namespace Topo.Services
 {
@@ -15,6 +16,11 @@ namespace Topo.Services
         // When each youth was invested into the section (the date is blank for someone who has not been), kept for the session since it
         // does not change when the period does
         private readonly Dictionary<string, DateTime?> _investedOn = new Dictionary<string, DateTime?>();
+        // How far back to look for when someone not seen in the period was last seen, in windows of three months, and the events read for each
+        // window (for the session, since they do not change when the period does)
+        private const int LookBackWindows = 4;
+        private const int LookBackWindowDays = 90;
+        private readonly Dictionary<string, List<UnitEventInput>> _earlier = new Dictionary<string, List<UnitEventInput>>();
 
         private readonly StorageService _storageService;
         private readonly IMembersService _membersService;
@@ -60,11 +66,30 @@ namespace Topo.Services
                         invested[member.id] = date.Value;
             }
 
-            return AttendanceBuilder.Analyse(new AttendanceInput
+            var input = new AttendanceInput
             {
                 UnitName = profile?.unit?.name ?? "", Section = section, From = from, To = to, AsOf = DateTime.Now,
                 Members = members, Events = events, InvestedOn = invested
-            });
+            };
+            var data = AttendanceBuilder.Analyse(input);
+
+            // anyone not seen in the period: look further back, a window at a time, until all have been found or the windows run out
+            var end = from.Date.AddDays(-1);
+            for (var window = 0; window < LookBackWindows && data.NotSeenInPeriod().Any(m => data.NotSeen(m).LastSeen == null); window++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var start = end.AddDays(-(LookBackWindowDays - 1));
+                var cacheKey = $"{string.Join(",", calendarIds.OrderBy(c => c))}|{start:yyyyMMdd}";
+                if (!_earlier.TryGetValue(cacheKey, out var earlier))
+                {
+                    earlier = await _unitReportService.GetEventsForCalendars(start, end, calendarIds, cancellationToken, step => progress?.Invoke($"further back, {step}"));
+                    _earlier[cacheKey] = earlier;
+                }
+                input.EarlierEvents.AddRange(earlier);
+                data = AttendanceBuilder.Analyse(input);
+                end = start.AddDays(-1);
+            }
+            return data;
         }
     }
 }
