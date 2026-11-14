@@ -30,11 +30,11 @@
     <div class="mt-3 mb-3 row">
         <label class="col-sm-2 col-form-label">Search From Date</label>
         <div class="col-sm-3">
-            <InputDate @bind-Value="@model.ApprovalSearchFromDate" class="form-control" />
+            <InputDate @bind-Value="@model.ApprovalSearchFromDate" @bind-Value:after="ApplyFilters" class="form-control" />
         </div>
         <label class="col-sm-2 col-form-label">Search To Date</label>
         <div class="col-sm-3">
-            <InputDate @bind-Value="@model.ApprovalSearchToDate" class="form-control" />
+            <InputDate @bind-Value="@model.ApprovalSearchToDate" @bind-Value:after="ApplyFilters" class="form-control" />
         </div>
         <div class="col-sm-2">
         </div>
@@ -47,33 +47,30 @@
         </label>
         <div class="col-sm-1">
             <InputCheckbox id="toBePresented" class="form-check-input"
-                           @bind-Value="model.ToBePresented" />
+                           @bind-Value="model.ToBePresented" @bind-Value:after="ApplyFilters" />
         </div>
         <label class="col-sm-2 form-check-label" for="isPresented">
             Has been presented
         </label>
         <div class="col-sm-1">
             <InputCheckbox id="isPresented" class="form-check-input"
-                           @bind-Value="model.IsPresented" />
+                           @bind-Value="model.IsPresented" @bind-Value:after="ApplyFilters" />
         </div>
         <label class="col-sm-2 form-check-label" for="showRejected">
             Show Rejected
         </label>
         <div class="col-sm-1">
             <InputCheckbox id="showRejected" class="form-check-input"
-                           @bind-Value="model.ShowRejected" />
+                           @bind-Value="model.ShowRejected" @bind-Value:after="ApplyFilters" />
         </div>
     </div>
 
-    <div class="mt-3 mb-3 row">
-        <div class="col-sm-2">
-        </div>
-        <div class="col-sm-3">
-            <button type="submit" name="button" class="btn btn-primary" @onclick="RefreshApprovalsClick">Refresh list</button>
-        </div>
-        <div class="col-sm-7">
-        </div>
-    </div>
+    <PageStatus Loading="Loading" Progress="@Progress" Error="@ErrorMessage" />
+
+    @if (!string.IsNullOrEmpty(model.UnitId) && !Loading)
+    {
+        <ReportButtons Name="Approvals Report" OnPdf="ApprovalsReportPdfClick" OnXlsx="ApprovalsReportXlsxClick" Disabled="@(!model.Approvals.Any())" />
+    }
 
     <SfGrid @ref="GridInstance" DataSource="@model.Approvals" AllowGrouping="true" AllowFiltering="true">
         <GridGroupSettings Columns="@(new string[] {"achievement_name"})"></GridGroupSettings>
@@ -89,16 +86,11 @@
             <GridColumn Field="awarded_date" HeaderText="Awarded" Format="dd/MM/yyyy" EditType="EditType.DatePickerEdit" Type="ColumnType.Date" AllowEditing="false" AllowFiltering="false" AllowGrouping="false"></GridColumn>
             <GridColumn Field="presented_date" HeaderText="Presented" Format="dd/MM/yyyy" EditType="EditType.DatePickerEdit" Type="ColumnType.Date" AllowEditing="false" AllowFiltering="false" AllowGrouping="false"></GridColumn>
         </GridColumns>
+        <GridTemplates>
+            <EmptyRecordTemplate Context="empty">
+                <span class="text-muted">No approvals to show.</span>
+            </EmptyRecordTemplate>
+        </GridTemplates>
     </SfGrid>
-
-    @if (model.Approvals != null && model.Approvals.Any())
-    {
-        <div class="mt-3 mb-3 row">
-            <div class="col-sm">
-                <button type="submit" name="button" @onclick="ApprovalsReportPdfClick" class="btn btn-primary">Approvals Report (pdf)</button>
-                <button type="submit" name="button" @onclick="ApprovalsReportXlsxClick" class="btn btn-success">Approvals Report (xlsx)</button>
-            </div>
-        </div>
-    }
 
 </EditForm>

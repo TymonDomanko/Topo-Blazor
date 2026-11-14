@@ -35,13 +35,9 @@
             }
         </select>
     </div>
-    <div class="col-sm-7 col-form-label text-muted">Loading a member's whole history can take a minute.</div>
 </div>
 
-@if (!string.IsNullOrEmpty(model.ErrorMessage))
-{
-    <div class="text-danger mb-3">@model.ErrorMessage</div>
-}
+<PageStatus Loading="Loading" Progress="@Progress" Error="@model.ErrorMessage" />
 
 @if (model.History != null)
 {
@@ -49,10 +45,8 @@
 
     <div class="mb-3">
         <h3>@history.MemberName</h3>
-        <div class="mt-2">
-            <button type="button" class="btn btn-primary" @onclick="@(() => DownloadClick(OutputType.PDF))">Scouting History (pdf)</button>
-            <button type="button" class="btn btn-success" @onclick="@(() => DownloadClick(OutputType.Excel))">Scouting History (xlsx)</button>
-        </div>
+        <ReportButtons Name="Scouting History" Disabled="@(history.Sections.Count == 0)"
+                       OnPdf="@(() => DownloadClick(OutputType.PDF))" OnXlsx="@(() => DownloadClick(OutputType.Excel))" />
     </div>
 
     <ScoutingHistoryView History="history" />

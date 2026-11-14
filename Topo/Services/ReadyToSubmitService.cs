@@ -12,7 +12,7 @@ namespace Topo.Services
 
     public interface IReadyToSubmitService
     {
-        public Task<ReadyToSubmitData> LoadAsync(string unitId, List<MemberListModel> youth, string section, Action<string>? progress = null);
+        public Task<ReadyToSubmitData> LoadAsync(string unitId, List<MemberListModel> youth, string section, Action<string>? progress = null, CancellationToken cancellationToken = default);
     }
 
     public class ReadyToSubmitService : IReadyToSubmitService
@@ -22,6 +22,9 @@ namespace Topo.Services
             ReadyToSubmitBuilder.Type_Milestone, ReadyToSubmitBuilder.Type_Oas, ReadyToSubmitBuilder.Type_Sia,
             "adventurous_journey", "course_reflection", "personal_reflection"
         };
+
+        // How many templates are asked for at the same time
+        private const int TemplatesAtOnce = 6;
 
         private readonly ITerrainAPIService _terrainAPIService;
         // What a template asks does not change from member to member, so it is read once
@@ -33,7 +36,7 @@ namespace Topo.Services
             _terrainAPIService = terrainAPIService;
         }
 
-        public async Task<ReadyToSubmitData> LoadAsync(string unitId, List<MemberListModel> youth, string section, Action<string>? progress = null)
+        public async Task<ReadyToSubmitData> LoadAsync(string unitId, List<MemberListModel> youth, string section, Action<string>? progress = null, CancellationToken cancellationToken = default)
         {
             var data = new ReadyToSubmitData();
             var ordered = ReadyToSubmitBuilder.InPatrolOrder(youth);
@@ -45,6 +48,7 @@ namespace Topo.Services
             {
                 progress?.Invoke("the unit's records");
                 var responses = await Task.WhenAll(Types.Select(type => _terrainAPIService.GetUnitAchievementsJsonAsync(unitId, type)));
+                cancellationToken.ThrowIfCancellationRequested();
                 byMember = responses.SelectMany(ReadyParsers.ParseAchievements).ToLookup(r => r.MemberId);
             }
             foreach (var member in ordered)
@@ -64,32 +68,39 @@ namespace Topo.Services
             var records = data.Members.SelectMany(m => m.Records).ToList();
             var formPaths = records.Where(r => ReadyToSubmitBuilder.NeedsFormTemplate(r, section)).Select(ReadyToSubmitBuilder.FormTemplatePath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             var oasPaths = records.Where(r => ReadyToSubmitBuilder.NeedsOasTemplate(r, section)).Select(r => r.Template).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            var done = 0;
-            foreach (var path in formPaths)
+            // There can be dozens of templates and each is a separate request, so those not already known are read a few at a
+            // time instead of one after another. A template that couldn't be read is tried again next time.
+            var missing = formPaths.Where(p => !_formTemplates.ContainsKey(p)).Select(p => (path: p, isForm: true))
+                .Concat(oasPaths.Where(p => !_oasTemplates.ContainsKey(p)).Select(p => (path: p, isForm: false)))
+                .ToList();
+            for (var i = 0; i < missing.Count; i += TemplatesAtOnce)
             {
-                progress?.Invoke($"Checking what the forms ask ({++done} of {formPaths.Count + oasPaths.Count})");
-                if (!_formTemplates.ContainsKey(path))
+                cancellationToken.ThrowIfCancellationRequested();
+                progress?.Invoke($"Checking what the forms and stages ask ({Math.Min(i + TemplatesAtOnce, missing.Count)} of {missing.Count})");
+                var read = await Task.WhenAll(missing.Skip(i).Take(TemplatesAtOnce)
+                    .Select(async t => (t.path, t.isForm, json: await _terrainAPIService.GetTemplateJsonAsync(t.path))));
+                foreach (var (path, isForm, json) in read)
                 {
-                    var questions = ReadyParsers.ParseFormQuestions(await _terrainAPIService.GetTemplateJsonAsync(path));
-                    // a template that couldn't be read is tried again next time
-                    if (questions.Count > 0)
-                        _formTemplates[path] = questions;
+                    if (isForm)
+                    {
+                        var questions = ReadyParsers.ParseFormQuestions(json);
+                        if (questions.Count > 0)
+                            _formTemplates[path] = questions;
+                    }
+                    else
+                    {
+                        var inputs = ReadyParsers.ParseOasInputs(json);
+                        if (inputs.Count > 0)
+                            _oasTemplates[path] = inputs;
+                    }
                 }
+            }
+            foreach (var path in formPaths)
                 if (_formTemplates.TryGetValue(path, out var known))
                     data.Templates.Forms[path] = known;
-            }
             foreach (var path in oasPaths)
-            {
-                progress?.Invoke($"Checking what the stages ask ({++done} of {formPaths.Count + oasPaths.Count})");
-                if (!_oasTemplates.ContainsKey(path))
-                {
-                    var inputs = ReadyParsers.ParseOasInputs(await _terrainAPIService.GetTemplateJsonAsync(path));
-                    if (inputs.Count > 0)
-                        _oasTemplates[path] = inputs;
-                }
                 if (_oasTemplates.TryGetValue(path, out var known))
                     data.Templates.OasInputs[path] = known;
-            }
             return data;
         }
     }

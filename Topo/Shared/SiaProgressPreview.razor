@@ -5,7 +5,7 @@
    as they wrote it. Several projects are folded up, because a unit's worth is a long read. *@
 @if (Report.Projects.Count == 0 && !Report.IncludeSummary)
 {
-    <div class="text-muted">No Special Interest Area projects to show.</div>
+    <div class="text-muted">No SIA Badges ongoing or completed.</div>
 }
 
 @if (Report.IncludeSummary)
@@ -27,7 +27,7 @@
             }
             @if (Report.Summary.Count == 0)
             {
-                <tr><td colspan="4" class="text-muted">No members to show</td></tr>
+                <tr><td colspan="4" class="text-muted">No members to show.</td></tr>
             }
         </tbody>
     </table>
@@ -79,7 +79,7 @@
         <div class="block">Files attached</div>
         @if (project.Files.Count == 0)
         {
-            @Line("Files", "None")
+            @Line("Files", "No files to show.")
         }
         else
         {

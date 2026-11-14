@@ -49,26 +49,26 @@
     <div class="mt-3 mb-3 row">
         <label class="col-sm-2 col-form-label"> Search From Date</label>
         <div class="col-sm-3">
-            <InputDate @bind-Value="@model.CalendarSearchFromDate" class="form-control" />
+            <InputDate @bind-Value="@model.CalendarSearchFromDate" @bind-Value:after="DatesChanged" class="form-control" />
         </div>
         <label class="col-sm-2 col-form-label"> Search To Date</label>
         <div class="col-sm-3">
-            <InputDate @bind-Value="@model.CalendarSearchToDate" class="form-control" />
+            <InputDate @bind-Value="@model.CalendarSearchToDate" @bind-Value:after="DatesChanged" class="form-control" />
         </div>
         <div class="col-sm-2">
         </div>
         <label class="col-sm col-form-label validation-message">@model.DateErrorMessage</label>
     </div>
 
-    <div class="mt-3 mb-3 row">
-        <div class="col-sm-2">
-        </div>
-        <div class="col-sm-3">
-            <button type="submit" name="button" class="btn btn-primary" @onclick="ShowUnitCalendarClick">Show Unit Calendar</button>
-        </div>
-        <div class="col-sm-7">
-        </div>
-    </div>
+    <PageStatus Loading="Loading" Progress="@Progress" />
+
+    @if (model.Events != null)
+    {
+        <ReportButtons Name="Attendance Report" OnPdf="AttendanceReportPdfClick" OnXlsx="AttendanceReportXlsxClick" Disabled="@(!model.Events.Any())">
+            <ReportButton Name="Term Program" Format="pdf" Disabled="@(!model.Events.Any())" OnClick="TermProgramReportPdfClick" />
+            <ReportButton Name="Term Program" Format="xlsx" Disabled="@(!model.Events.Any())" OnClick="TermProgramReportXlsxClick" />
+        </ReportButtons>
+    }
 
     @if (model.Events != null && model.Events.Any())
     {
@@ -134,14 +134,11 @@
             </div>
         }
 
-        <div class="mt-3 mb-3 row">
-            <div class="col-sm">
-                <button type="submit" name="button" @onclick="AttendanceReportPdfClick" class="btn btn-primary">Attendance Report (pdf)</button> &nbsp;
-                <button type="submit" name="button" @onclick="AttendanceReportXlsxClick" class="btn btn-success">Attendance Report (xlsx)</button> &nbsp;
-                <button type="submit" name="button" @onclick="TermProgramReportXlsxClick" class="btn btn-success">Term Program (xlsx)</button>
-            </div>
-        </div>
 
+    }
+    else if (!Loading && model.Events != null)
+    {
+        <div class="mt-3 mb-3 text-muted">No events to show.</div>
     }
 
 </EditForm>
