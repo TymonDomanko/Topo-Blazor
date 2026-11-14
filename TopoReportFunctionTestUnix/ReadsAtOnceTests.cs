@@ -70,6 +70,23 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public async Task OnceOneReadFailsNoFurtherReadsAreStarted()
+        {
+            var started = 0;
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(async () =>
+                await ReadsAtOnce.SelectAsync(Enumerable.Range(0, 50), async i =>
+                {
+                    Interlocked.Increment(ref started);
+                    await Task.Delay(10);
+                    if (i == 0) throw new InvalidOperationException("boom");
+                    return i;
+                }, atOnce: 2));
+
+            // the two already running finish, and at most a couple more slip in before the failure is seen; the other ~45 never start
+            Assert.IsTrue(started <= 6, $"{started} reads were started");
+        }
+
+        [TestMethod]
         public async Task ALimitOfOneReadsOneAfterAnother()
         {
             int running = 0, peak = 0;
