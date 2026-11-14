@@ -50,24 +50,25 @@
         </div>
     </div>
 
-    <div class="export-panel mb-3">
-        <div class="export-panel-label">Export the updated plan (includes everything you've changed above)</div>
-        <div class="export-panel-buttons">
-            <button type="button" class="btn btn-primary" @onclick="PatrolListPdfClick">Updated Patrol List (PDF)</button>
-            <button type="button" class="btn btn-success" @onclick="PatrolListXlsxClick">Updated Patrol List (XLSX)</button>
-            <button type="button" class="btn btn-warning" @onclick="DownloadChangesClick" disabled="@(!HasChanges)">Changes to Apply in Terrain (CSV)</button>
-        </div>
-    </div>
-
-    @if (!_storageService.IsYouthMember)
-    {
-        <div class="export-panel mb-3">
-            <div class="export-panel-label">Send the plan to Terrain (you confirm the list of changes first; only what changed is sent)</div>
+    <div class="export-panels mb-3">
+        <div class="export-panel">
+            <div class="export-panel-label">Export the updated plan</div>
             <div class="export-panel-buttons">
-                <button type="button" class="btn btn-danger" @onclick="PushToTerrainClick" disabled="@(!CanPush)">Push to Terrain</button>
+                <button type="button" class="btn btn-primary" @onclick="PatrolListPdfClick">Updated Patrol List (PDF)</button>
+                <button type="button" class="btn btn-success" @onclick="PatrolListXlsxClick">Updated Patrol List (XLSX)</button>
             </div>
         </div>
-    }
+
+        @if (!_storageService.IsYouthMember)
+        {
+            <div class="export-panel">
+                <div class="export-panel-label">Send the plan to Terrain</div>
+                <div class="export-panel-buttons">
+                    <button type="button" class="btn btn-danger" @onclick="PushToTerrainClick" disabled="@(!CanPush)">Push to Terrain</button>
+                </div>
+            </div>
+        }
+    </div>
 
     <div class="mb-3 d-flex align-items-center gap-2">
         <input type="text" class="form-control form-control-sm add-patrol-input" placeholder="New patrol name"
