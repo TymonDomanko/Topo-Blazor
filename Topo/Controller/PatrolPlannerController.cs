@@ -236,19 +236,6 @@ namespace Topo.Controller
             }
         }
 
-        // Undoes member moves/role/council changes AND any patrols added or removed this session,
-        // by restoring model.PatrolNames from the snapshot UnitChange took when it first loaded.
-        internal void ResetChanges()
-        {
-            foreach (var member in model.Members)
-            {
-                member.PatrolName = member.OriginalPatrolName;
-                member.PatrolDuty = member.OriginalPatrolDuty;
-                member.UnitCouncil = member.OriginalUnitCouncil;
-            }
-            model.PatrolNames = new List<string>(_originalPatrolNames);
-        }
-
         internal void AddPatrolClick()
         {
             var name = model.NewPatrolName?.Trim() ?? "";

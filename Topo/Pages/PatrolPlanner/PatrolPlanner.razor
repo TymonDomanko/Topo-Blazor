@@ -44,12 +44,6 @@
         <p class="text-muted small">@model.AttendanceNote</p>
     }
 
-    <div class="mb-3 row">
-        <div class="col-sm-auto">
-            <button type="button" class="btn btn-secondary" @onclick="ResetChanges" disabled="@(!HasChanges)">Reset to Terrain data</button>
-        </div>
-    </div>
-
     <div class="export-panels mb-3">
         <div class="export-panel">
             <div class="export-panel-label">Export the updated plan</div>
