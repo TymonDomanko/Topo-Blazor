@@ -232,7 +232,14 @@
                         }
                         else
                         {
-                            <p>There is nothing to send: Terrain already matches the board for everything that can be sent.</p>
+                            @if (PushPlan.Skipped.Any())
+                            {
+                                <p>Nothing was sent: none of the changes could be made safely (see below).</p>
+                            }
+                            else
+                            {
+                                <p>There is nothing to send: Terrain already matches the board.</p>
+                            }
                         }
                         @foreach (var skipped in PushPlan.Skipped)
                         {
