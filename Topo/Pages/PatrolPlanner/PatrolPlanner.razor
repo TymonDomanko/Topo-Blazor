@@ -1,6 +1,7 @@
 @* Drag-and-drop patrol reshuffle board. See PatrolPlannerController for the "why" behind most of
    the non-obvious behaviour here (UL banner, colour priority, local-only plan, etc). *@
 @page "/members/patrolplanner"
+@using Topo.Model.PatrolPlanner
 @inherits Controller.PatrolPlannerController
 
 <PageTitle>Topo / Patrol Planner</PageTitle>
@@ -29,27 +30,38 @@
     </div>
 </div>
 
+<PageStatus Loading="Loading" Progress="@Progress" />
+
 @if (model.Members.Any())
 {
     <p class="text-muted">
         Drag a member's card into another patrol to plan a reshuffle. Click the left badge to cycle gender (M/F/NB, saved on this device only).
         Click the right badge to cycle role (Member/APL/PL/UL) &mdash; promoting to APL or higher also adds them to Unit Council.
-        Nothing is sent to Terrain automatically &mdash; use the buttons below once you're happy with the plan.
+        Nothing is sent to Terrain until you choose Push to Terrain and confirm the list it shows.
     </p>
+    @if (!string.IsNullOrEmpty(model.AttendanceNote))
+    {
+        <p class="text-muted small">@model.AttendanceNote</p>
+    }
 
-    <div class="mb-3 row">
-        <div class="col-sm-auto">
-            <button type="button" class="btn btn-secondary" @onclick="ResetChanges" disabled="@(!HasChanges)">Reset to Terrain data</button>
+    <div class="export-panels mb-3">
+        <div class="export-panel">
+            <div class="export-panel-label">Export the updated plan</div>
+            <div class="export-panel-buttons">
+                <button type="button" class="btn btn-primary" @onclick="PatrolListPdfClick">Updated Patrol List (PDF)</button>
+                <button type="button" class="btn btn-success" @onclick="PatrolListXlsxClick">Updated Patrol List (XLSX)</button>
+            </div>
         </div>
-    </div>
 
-    <div class="export-panel mb-3">
-        <div class="export-panel-label">Export the updated plan (includes everything you've changed above)</div>
-        <div class="export-panel-buttons">
-            <button type="button" class="btn btn-primary" @onclick="PatrolListPdfClick">Updated Patrol List (PDF)</button>
-            <button type="button" class="btn btn-success" @onclick="PatrolListXlsxClick">Updated Patrol List (XLSX)</button>
-            <button type="button" class="btn btn-warning" @onclick="DownloadChangesClick" disabled="@(!HasChanges)">Changes to Apply in Terrain (CSV)</button>
-        </div>
+        @if (!_storageService.IsYouthMember)
+        {
+            <div class="export-panel">
+                <div class="export-panel-label">Send the plan to Terrain</div>
+                <div class="export-panel-buttons">
+                    <button type="button" class="btn btn-danger" @onclick="PushToTerrainClick" disabled="@(!CanPush)">Push to Terrain</button>
+                </div>
+            </div>
+        }
     </div>
 
     <div class="mb-3 d-flex align-items-center gap-2">
@@ -108,6 +120,8 @@
                     @tally.male M &nbsp; @tally.female F &nbsp; @tally.nonBinary NB
                     @(tally.unspecified > 0 ? $"  {tally.unspecified}–" : "")
                     @(string.IsNullOrEmpty(tally.averageAge) ? "" : $"· avg {tally.averageAge}")
+                    @{ var attendance = GetColumnAttendance(patrolName); }
+                    @(attendance == "" ? "" : $" · attendance {attendance}")
                 </div>
                 <div class="patrol-cards">
                     @foreach (var member in GetColumnMembers(patrolName))
@@ -146,6 +160,110 @@
             </tbody>
         </table>
     }
+}
+
+@if (PushDialogOpen)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="push-title">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="push-title">Push changes to Terrain</h5>
+                </div>
+                <div class="modal-body">
+                    @if (PushResult != null)
+                    {
+                        <p>
+                            <strong>@PushResult.DoneCount of @PushResult.Members.Count members updated in Terrain.</strong>
+                            @if (!PushResult.AllDone)
+                            {
+                                <span> The board now shows Terrain as it is; anything that didn't go through can be planned again.</span>
+                            }
+                        </p>
+                        <ul>
+                            @foreach (var member in PushResult.Members)
+                            {
+                                <li class="@(member.Outcome == PatrolPushOutcome.Done ? "" : "text-danger")">
+                                    @member.MemberName: @(member.Outcome == PatrolPushOutcome.Done ? (string.IsNullOrEmpty(member.Message) ? "done, and checked in Terrain" : $"done ({member.Message})") : member.Message)
+                                </li>
+                            }
+                        </ul>
+                        @if (PushResult.CreatedPatrols.Any())
+                        {
+                            <p class="text-muted mb-1">Created in Terrain: @string.Join(", ", PushResult.CreatedPatrols).</p>
+                        }
+                        @if (PushPlan != null)
+                        {
+                            @foreach (var skipped in PushPlan.Skipped)
+                            {
+                                <p class="text-muted mb-1">Left alone: @skipped.MemberName @skipped.Reason.</p>
+                            }
+                        }
+                    }
+                    else if (PushPlan == null)
+                    {
+                        <p>@PushProgress&hellip;</p>
+                    }
+                    else if (!string.IsNullOrEmpty(PushPlan.Error))
+                    {
+                        <p class="text-danger">@PushPlan.Error</p>
+                    }
+                    else
+                    {
+                        @if (PushPlan.HasWork)
+                        {
+                            <p>
+                                This changes the real unit in Terrain: <strong>@PushPlan.WriteCount change@(PushPlan.WriteCount == 1 ? "" : "s")</strong>
+                                for <strong>@PushPlan.Members.Count member@(PushPlan.Members.Count == 1 ? "" : "s")</strong>.
+                                Only what you changed is sent.
+                            </p>
+                            <ul>
+                                @foreach (var member in PushPlan.Members)
+                                {
+                                    <li><strong>@member.MemberName</strong>: @member.Summary</li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            @if (PushPlan.Skipped.Any())
+                            {
+                                <p>Nothing was sent: none of the changes could be made safely (see below).</p>
+                            }
+                            else
+                            {
+                                <p>There is nothing to send: Terrain already matches the board.</p>
+                            }
+                        }
+                        @foreach (var skipped in PushPlan.Skipped)
+                        {
+                            <p class="text-warning-emphasis mb-1"><strong>Not changed:</strong> @skipped.MemberName @skipped.Reason.</p>
+                        }
+                        @foreach (var note in PushPlan.Notes)
+                        {
+                            <p class="text-muted mb-1">@note</p>
+                        }
+                    }
+                    @if (PushBusy && PushPlan != null && PushResult == null)
+                    {
+                        <p class="mt-2">Sending: @PushProgress&hellip;</p>
+                    }
+                </div>
+                <div class="modal-footer">
+                    @if (PushResult != null || (PushPlan != null && !PushPlan.HasWork))
+                    {
+                        <button type="button" class="btn btn-secondary" @onclick="CancelPushClick">Close</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-secondary" @onclick="CancelPushClick" disabled="@PushBusy">Cancel</button>
+                        <button type="button" class="btn btn-danger" @onclick="ConfirmPushClick" disabled="@(PushPlan == null || !PushPlan.HasWork || PushBusy)">Push to Terrain</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
 }
 
 @code {

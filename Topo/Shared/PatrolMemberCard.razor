@@ -1,4 +1,6 @@
 @* One draggable member card used both in the Unit Leader banner and in each patrol column.
+   Its parts are always in the same order and fixed-width columns (gender, name, age, attendance, role), so they line up
+   from card to card down a patrol.
    The background colour is the member's ORIGINAL patrol's colour (passed in by the caller),
    not the column it currently sits in, so a moved card still visibly stands out. *@
 @using Topo.Model.PatrolPlanner
@@ -6,8 +8,17 @@
 <div class="member-card @(Member.IsChanged ? "changed" : "")" style="background-color:@OriginPatrolColor" draggable="@(Member.PatrolDuty != "UL" ? "true" : "false")" @ondragstart="() => OnDragStart.InvokeAsync(Member.Id)">
     <span class="gender-badge @GenderClass(Member.Gender)" title="Click to change gender" @onclick="() => OnGenderCycle.InvokeAsync(Member)">@GenderLabel(Member.Gender)</span>
     <span class="member-name">@Member.FirstName @Member.LastName</span>
-    <span class="duty-badge @DutyClass(Member.PatrolDuty)" title="Click to change role" @onclick="CycleDuty">@Member.PatrolDuty</span>
     <span class="member-age">@Member.Age</span>
+    @* An empty span when there is no attendance figure, so the role badge stays in its column *@
+    @if (Member.AttendanceShare != null)
+    {
+        <span class="attendance-badge" title="Came to @Member.NightsAttended of the last @Member.NightsCounted Scout nights">@Math.Round(Member.AttendanceShare.Value * 100)%</span>
+    }
+    else
+    {
+        <span></span>
+    }
+    <span class="duty-badge @DutyClass(Member.PatrolDuty)" title="Click to change role" @onclick="CycleDuty">@Member.PatrolDuty</span>
 </div>
 
 @code {

@@ -168,6 +168,22 @@ namespace TopoReportFunctionTest
             Assert.IsTrue(report.Tables.Single().Rows.SelectMany(r => r.Cells).All(c => c.Colour == ""));
         }
 
+        [TestMethod]
+        public void TheLastTenNightsCountOnlyScoutNightsUpToNow()
+        {
+            var events = Enumerable.Range(0, 12).Select(i => Event("n" + i, new DateTime(2026, 6, 3, 19, 0, 0).AddDays(7 * i), who: i % 2 == 0 ? new[] { "N1", "N2" } : new[] { "N1" })).ToList();
+            events.Add(Event("camp", new DateTime(2026, 9, 12, 9, 0, 0), nights: 1, who: new[] { "N3" }));
+            var input = Input(events.ToArray());
+            input.From = new DateTime(2026, 6, 1);
+            var recent = AttendanceBuilder.Recent(AttendanceBuilder.Analyse(input), 10);
+
+            Assert.AreEqual(10, recent.Nights);
+            Assert.AreEqual(10, recent.AttendedByMemberId["1"]);
+            // the 10 latest of the 12 nights are numbers 2 to 11, of which the even ones had Ben
+            Assert.AreEqual(5, recent.AttendedByMemberId["2"]);
+            Assert.AreEqual(0, recent.AttendedByMemberId["3"]);
+        }
+
         private static AttendanceReport SampleReport(bool split)
         {
             var input = Input(
@@ -262,6 +278,21 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public void TheLastTenNightsCountOnlyThoseSinceTheYouthJoined()
+        {
+            var events = Enumerable.Range(0, 5).Select(i => Event("n" + i, new DateTime(2026, 8, 5, 19, 0, 0).AddDays(7 * i), who: i >= 2 ? new[] { "N1", "N2" } : new[] { "N1" })).ToArray();
+            var input = Input(events);
+            input.From = new DateTime(2026, 8, 1);
+            input.InvestedOn["2"] = new DateTime(2026, 8, 19);
+            var recent = AttendanceBuilder.Recent(AttendanceBuilder.Analyse(input), 10);
+
+            Assert.AreEqual(5, recent.Nights);
+            Assert.AreEqual(5, recent.PossibleByMemberId["1"]);
+            Assert.AreEqual(3, recent.PossibleByMemberId["2"]);
+            Assert.AreEqual(3, recent.AttendedByMemberId["2"]);
+        }
+
+        [TestMethod]
         public void TheInvestitureIsTheEarliestAwardedIntroductionToTheSection()
         {
             var intros = new Topo.Model.Progress.GetIntroductionResultsModel
@@ -307,6 +338,8 @@ namespace TopoReportFunctionTest
             var report = AttendanceLayout.Build(AttendanceBuilder.Analyse(adultsOnly), true, false);
             Assert.AreEqual(0, report.Tables.Count);
             Assert.AreEqual(1, report.EventsCounted);
+
+            Assert.AreEqual(0, AttendanceBuilder.Recent(AttendanceBuilder.Analyse(Input()), 10).Nights);
         }
     }
 }

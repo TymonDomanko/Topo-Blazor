@@ -2,7 +2,7 @@ using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Newtonsoft.Json;
-using System.Text;
+using Topo.Model.Common;
 using Topo.Model.Members;
 using Topo.Model.PatrolPlanner;
 using Topo.Model.ReportGeneration;
@@ -10,19 +10,27 @@ using Topo.Services;
 
 namespace Topo.Controller
 {
-    // Backs the Patrol Planner drag-and-drop board. Everything here is a local, in-memory "what if"
-    // plan: there is no Terrain API to write patrol membership back, so nothing is saved to Terrain
-    // automatically. The leader applies the plan by hand, using the exported patrol list/changes CSV.
-    public class PatrolPlannerController : ComponentBase
+    // Backs the Patrol Planner drag-and-drop board. The board is a local, in-memory "what if" plan: nothing
+    // reaches Terrain until the leader chooses "Push to Terrain" and confirms the list of changes it shows.
+    public class PatrolPlannerController : ComponentBase, IDisposable
     {
         [Inject]
         public IMembersService _membersService { get; set; }
+
+        [Inject]
+        public IAttendanceService _attendanceService { get; set; }
+
+        [Inject]
+        public SpinnerService _spinnerService { get; set; }
 
         [Inject]
         public StorageService _storageService { get; set; }
 
         [Inject]
         public IReportService _reportService { get; set; }
+
+        [Inject]
+        public IPatrolPushService _patrolPushService { get; set; }
 
         [Inject]
         public ILocalStorageService _localStorageService { get; set; }
@@ -34,6 +42,16 @@ namespace Topo.Controller
         public NavigationManager NavigationManager { get; set; }
 
         public PatrolPlannerPageViewModel model = new PatrolPlannerPageViewModel();
+
+        // How many Scout nights the attendance figures look back over
+        private const int RecentNightsCount = 10;
+
+        public bool Loading;
+        public string Progress = "";
+        // The attendance is read after the board is up, and again when the unit changes; the one before is stopped
+        private readonly AutoRun _auto = new AutoRun();
+
+        public void Dispose() => _auto.Dispose();
 
         private string? _draggedMemberId;
         private List<string> _originalPatrolNames = new();
@@ -68,6 +86,9 @@ namespace Topo.Controller
                 model.Members = new List<PatrolPlannerMember>();
                 model.PatrolNames = new List<string>();
                 _originalPatrolNames = new List<string>();
+                model.AttendanceNote = "";
+                _auto.Stop();
+                Loading = false;
                 return;
             }
 
@@ -99,6 +120,54 @@ namespace Topo.Controller
                 .OrderBy(n => n)
                 .ToList();
             _originalPatrolNames = new List<string>(model.PatrolNames);
+            model.AttendanceNote = "";
+            // in the background, so the board can be used while it is read
+            _ = _auto.RunAsync(LoadAttendance);
+        }
+
+        // How many of the last Scout nights each youth came to, from the calendar named after the unit
+        private async Task LoadAttendance(CancellationToken cancellationToken)
+        {
+            // the Reading line says what is happening, so the spinner is not put over the board
+            _spinnerService.BeQuiet();
+            Loading = true;
+            try
+            {
+                var recent = await _attendanceService.GetRecentNights(model.UnitId, RecentNightsCount,
+                    step => { if (!cancellationToken.IsCancellationRequested) { Progress = step; InvokeAsync(StateHasChanged); } }, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (recent == null)
+                {
+                    model.AttendanceNote = "Attendance isn't shown because there is no calendar named after this unit.";
+                    return;
+                }
+                if (recent.Nights == 0)
+                {
+                    model.AttendanceNote = "Attendance isn't shown because no Scout nights with attendance were found in the last six months.";
+                    return;
+                }
+
+                foreach (var member in model.Members)
+                {
+                    member.NightsCounted = recent.PossibleByMemberId.TryGetValue(member.Id, out var possible) ? possible : recent.Nights;
+                    member.NightsAttended = recent.AttendedByMemberId.TryGetValue(member.Id, out var attended) ? attended : 0;
+                }
+                model.AttendanceNote = $"Attendance is the share of the last {recent.Nights} Scout nights each youth came to, counting only those since they joined the section.";
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                model.AttendanceNote = "Couldn't read the attendance from Terrain.";
+            }
+            finally
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    Loading = false;
+                    Progress = "";
+                }
+                // nothing is waiting on this, so the page has to be told it has finished
+                await InvokeAsync(StateHasChanged);
+            }
         }
 
         internal async Task RefreshClick()
@@ -107,17 +176,64 @@ namespace Topo.Controller
             await UnitChange(model.UnitId);
         }
 
-        // Undoes member moves/role/council changes AND any patrols added or removed this session,
-        // by restoring model.PatrolNames from the snapshot UnitChange took when it first loaded.
-        internal void ResetChanges()
+        // Pushing to Terrain: first read Terrain again and show what would be written (nothing is written yet), then
+        // write it only when the leader confirms. A youth member's login can't change patrols, so they aren't offered it.
+        public bool PushDialogOpen { get; private set; }
+        public bool PushBusy { get; private set; }
+        public string PushProgress { get; private set; } = "";
+        public PatrolPushPlan? PushPlan { get; private set; }
+        public PatrolPushResult? PushResult { get; private set; }
+
+        internal bool CanPush => !_storageService.IsYouthMember && HasChanges && !PushBusy;
+
+        internal async Task PushToTerrainClick()
         {
-            foreach (var member in model.Members)
+            PushBusy = true;
+            PushResult = null;
+            PushProgress = "Checking Terrain";
+            PushDialogOpen = true;
+            PushPlan = null;
+            try
             {
-                member.PatrolName = member.OriginalPatrolName;
-                member.PatrolDuty = member.OriginalPatrolDuty;
-                member.UnitCouncil = member.OriginalUnitCouncil;
+                var removedPatrols = _originalPatrolNames.Except(model.PatrolNames);
+                PushPlan = await _patrolPushService.PrepareAsync(model.UnitId, model.Members, removedPatrols);
             }
-            model.PatrolNames = new List<string>(_originalPatrolNames);
+            finally
+            {
+                PushBusy = false;
+            }
+        }
+
+        internal void CancelPushClick()
+        {
+            PushDialogOpen = false;
+            PushPlan = null;
+            PushResult = null;
+        }
+
+        internal async Task ConfirmPushClick()
+        {
+            if (PushPlan == null || !PushPlan.HasWork || PushBusy)
+                return;
+
+            PushBusy = true;
+            try
+            {
+                PushResult = await _patrolPushService.PushAsync(PushPlan, step =>
+                {
+                    PushProgress = step;
+                    InvokeAsync(StateHasChanged);
+                });
+            }
+            finally
+            {
+                PushBusy = false;
+                // Show Terrain as it is now, even if something went wrong part way: what went through is no longer a change,
+                // and what didn't can be planned again. The Wallchart keeps its own copy of each unit's patrols, which is now stale.
+                _membersService.ClearMemberCache(model.UnitId);
+                _storageService.CachedWallchartItems.RemoveAll(c => c.Key == model.UnitId);
+                await UnitChange(model.UnitId);
+            }
         }
 
         internal void AddPatrolClick()
@@ -276,6 +392,13 @@ namespace Topo.Controller
                 averageAge);
         }
 
+        // The average attendance of the members now in a column, so it follows them as they are moved; blank when none of them has any
+        internal string GetColumnAttendance(string patrolName)
+        {
+            var shares = GetColumnMembers(patrolName).Select(m => m.AttendanceShare).Where(s => s != null).Select(s => s!.Value).ToList();
+            return shares.Count == 0 ? "" : $"{Math.Round(shares.Average() * 100)}%";
+        }
+
         // Flags a column's count badge when it's more than one member away from the average across
         // real patrols (Unassigned is excluded from the average - it isn't meant to be "balanced").
         internal string GetCountClass(string patrolName)
@@ -379,29 +502,7 @@ namespace Topo.Controller
             return await _reportService.GetPatrolListReport(groupName, section, unitName, outputType, serialisedList, false);
         }
 
-        // Built entirely client-side (plain CSV text) rather than through the report Lambda, since it's
-        // just a flat list of changed rows and doesn't need Syncfusion's PDF/XLSX layout engine.
-        internal async Task DownloadChangesClick()
-        {
-            var changed = ChangedMembers.ToList();
-            var sb = new StringBuilder();
-            sb.AppendLine("First Name,Last Name,Duty,Patrol,Unit Council");
-            foreach (var member in changed)
-            {
-                sb.AppendLine(string.Join(",",
-                    CsvField(member.FirstName),
-                    CsvField(member.LastName),
-                    CsvField(member.PatrolDuty),
-                    CsvField(DescribePatrolChange(member)),
-                    CsvField(member.UnitCouncil ? "Yes" : "")));
-            }
-
-            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            var fileName = $"Patrol_Changes_{model.UnitName.Replace(' ', '_')}.csv";
-            await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, "text/csv", bytes);
-        }
-
-        // Used for the "Changes to make in Terrain" list/CSV only (not the board itself), where the
+        // Used for the "Changes to make in Terrain" list only (not the board itself), where the
         // text needs to read as an instruction. A member who had a patrol and now has none needs an
         // active removal in Terrain; one who was never assigned a patrol needs no action there at all.
         internal static string DescribePatrolChange(PatrolPlannerMember member)
@@ -413,15 +514,6 @@ namespace Topo.Controller
                     : "Remove from patrol";
             }
             return member.PatrolName;
-        }
-
-        private static string CsvField(string value)
-        {
-            if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
-            {
-                return $"\"{value.Replace("\"", "\"\"")}\"";
-            }
-            return value;
         }
     }
 }
