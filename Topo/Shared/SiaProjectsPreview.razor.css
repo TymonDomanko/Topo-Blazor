@@ -1,0 +1,37 @@
+.projects {
+    font-size: 0.9rem;
+}
+
+/* each Scout's name stands over their projects */
+.scout td {
+    padding-top: 0.6rem;
+    border-bottom: 0;
+    font-weight: bold;
+}
+
+.area {
+    width: 12rem;
+    padding-left: 1.5rem;
+}
+
+.status {
+    width: 10rem;
+}
+
+.date {
+    width: 7rem;
+    text-align: right;
+}
+
+.scout label {
+    cursor: pointer;
+}
+
+/* Scouts who are not in the report once some are ticked */
+.dim td {
+    opacity: 0.4;
+}
+
+.scout input {
+    margin-right: 0.35rem;
+}
