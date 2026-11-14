@@ -1,8 +1,9 @@
 .member-card {
-    display: flex;
-    flex-wrap: wrap;
+    /* gender | name | age | attendance | role. The fixed widths are what make each part line up from card to card. */
+    display: grid;
+    grid-template-columns: 1.6rem minmax(0, 1fr) 3rem 2.6rem 2rem;
     align-items: center;
-    gap: 0.25rem 0.4rem;
+    column-gap: 0.4rem;
     min-width: 0;
     background-color: #fff;
     border-radius: 6px;
@@ -25,10 +26,9 @@
     font-size: 0.65rem;
     height: 1.3rem;
     line-height: 1.3rem;
-    min-width: 1.6rem;
-    padding: 0 0.3rem;
+    min-width: 0;
+    padding: 0;
     border-radius: 999px;
-    flex: 0 0 auto;
     text-align: center;
     user-select: none;
     color: #fff;
@@ -51,21 +51,15 @@
 }
 
 .member-name {
-    flex: 1 1 auto;
-    min-width: 4rem;
+    min-width: 0;
     overflow-wrap: break-word;
 }
 
 .member-age {
-    flex: 0 0 auto;
     font-size: 0.8rem;
     color: #666;
     white-space: nowrap;
-    margin-left: auto;
-}
-
-.duty-badge {
-    min-width: 2rem;
+    text-align: right;
 }
 
 .duty-blank {
@@ -88,9 +82,9 @@
 
 /* How much of the last Scout nights the member came to */
 .attendance-badge {
-    flex: 0 0 auto;
     font-size: 0.7rem;
-    padding: 0 0.35rem;
+    text-align: center;
+    padding: 0 0.2rem;
     border-radius: 4px;
     background-color: rgba(255, 255, 255, 0.75);
     color: #333;
