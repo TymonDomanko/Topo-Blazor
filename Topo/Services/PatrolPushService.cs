@@ -1,3 +1,4 @@
+using Topo.Model.Members;
 using Topo.Model.PatrolPlanner;
 
 namespace Topo.Services
@@ -100,7 +101,89 @@ namespace Topo.Services
                 if (memberResult.Outcome != PatrolPushOutcome.Failed)
                     memberResult.Outcome = PatrolPushOutcome.Done;
             }
+
+            await CheckAndRetryAsync(plan, result, refused, progress);
             return result;
+        }
+
+        // A write Terrain accepted hasn't necessarily stuck, so Terrain is read again and each member compared with how the
+        // board wanted them. What didn't stick is written once more (worked out afresh from what Terrain shows now, so nothing
+        // is written twice), then checked again; anything still wrong is reported as failed rather than left looking done.
+        private async Task CheckAndRetryAsync(PatrolPushPlan plan, PatrolPushResult result, bool refused, Action<string>? progress)
+        {
+            var attempted = plan.Members.Select((member, i) => (member, outcome: result.Members[i]))
+                .Where(x => x.outcome.Outcome != PatrolPushOutcome.NotAttempted).ToList();
+            if (attempted.Count == 0)
+                return;
+
+            var retried = new HashSet<string>();
+            for (var attempt = 1; attempt <= 2; attempt++)
+            {
+                progress?.Invoke(attempt == 1 ? "Checking that Terrain has the changes" : "Checking again");
+                var members = await _terrainAPIService.GetMembersAsync(plan.UnitId);
+                var patrols = await _terrainAPIService.GetUnitPatrolsAsync(plan.UnitId);
+                if (members?.results == null || patrols == null)
+                {
+                    foreach (var (_, outcome) in attempted.Where(x => x.outcome.Outcome == PatrolPushOutcome.Done))
+                        outcome.Message = "sent, but Terrain could not be read to check it";
+                    return;
+                }
+
+                var now = members.results.GroupBy(m => m.id).ToDictionary(g => g.Key, g => g.First());
+                var patrolIds = PatrolPushPlanner.PatrolIds(patrols);
+                var unmet = new List<(PatrolPushMember member, PatrolPushMemberResult outcome, PatrolPushPlanner.MemberSteps steps, Member? current)>();
+                foreach (var (member, outcome) in attempted)
+                {
+                    now.TryGetValue(member.MemberId, out var current);
+                    var steps = current == null ? null : PatrolPushPlanner.StepsFor(current, member.WantPatrolName, member.WantBoardDuty, member.WantUnitCouncil, patrolIds);
+                    if (steps != null && steps.Steps.Count == 0)
+                    {
+                        outcome.Outcome = PatrolPushOutcome.Done;
+                        outcome.Message = retried.Contains(member.MemberId) ? "went through on the second try" : "";
+                    }
+                    else
+                    {
+                        unmet.Add((member, outcome, steps ?? new PatrolPushPlanner.MemberSteps(), current));
+                    }
+                }
+
+                if (unmet.Count == 0)
+                    return;
+
+                if (attempt == 2 || refused)
+                {
+                    foreach (var (member, outcome, _, current) in unmet)
+                    {
+                        outcome.Outcome = PatrolPushOutcome.Failed;
+                        var reason = outcome.Message;
+                        outcome.Message = current == null
+                            ? "isn't in this unit in Terrain, so the change could not be checked"
+                            : !string.IsNullOrEmpty(reason)
+                                ? $"{reason}; Terrain shows {PatrolPushPlanner.DescribeState(current)}"
+                                : $"Terrain still shows {PatrolPushPlanner.DescribeState(current)}, not {PatrolPushPlanner.Describe(member.WantPatrolName, member.WantBoardDuty, member.WantUnitCouncil)}";
+                    }
+                    return;
+                }
+
+                // Try again, only for what Terrain doesn't show yet. A patrol that still doesn't exist isn't made a second time here.
+                progress?.Invoke("Trying again");
+                foreach (var (member, outcome, steps, current) in unmet)
+                {
+                    if (current == null || steps.Steps.Count == 0 || steps.PatrolsToCreate.Count > 0)
+                        continue;
+                    retried.Add(member.MemberId);
+                    foreach (var step in steps.Steps)
+                    {
+                        var written = await WriteStepAsync(plan, member, step, new Dictionary<string, string>());
+                        refused |= written.NotAllowed;
+                        if (!written.Success)
+                        {
+                            outcome.Message = $"{Describe(step)} failed on the second try: {written.Message}";
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         private Task<TerrainWriteResult> WriteStepAsync(PatrolPushPlan plan, PatrolPushMember member, PatrolPushStep step, Dictionary<string, string> createdPatrolIds)

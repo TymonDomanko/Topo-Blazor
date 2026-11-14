@@ -190,7 +190,7 @@
                             @foreach (var member in PushResult.Members)
                             {
                                 <li class="@(member.Outcome == PatrolPushOutcome.Done ? "" : "text-danger")">
-                                    @member.MemberName: @(member.Outcome == PatrolPushOutcome.Done ? "done" : member.Message)
+                                    @member.MemberName: @(member.Outcome == PatrolPushOutcome.Done ? (string.IsNullOrEmpty(member.Message) ? "done, and checked in Terrain" : $"done ({member.Message})") : member.Message)
                                 </li>
                             }
                         </ul>

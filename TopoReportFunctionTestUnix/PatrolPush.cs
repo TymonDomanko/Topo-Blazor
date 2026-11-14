@@ -242,6 +242,40 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public void TheMemberPlanRemembersHowTerrainShouldLookSoItCanBeCheckedAfterwards()
+        {
+            var plan = Plan(new[] { OnBoard("a", "Lyrebird (Blue)", "", false, "Magpie (Orange)", "APL", true) },
+                new[] { InTerrain("a", "p-lyre", "Lyrebird (Blue)") });
+
+            var member = plan.Members.Single();
+            Assert.AreEqual("Magpie (Orange)", member.WantPatrolName);
+            Assert.AreEqual("APL", member.WantBoardDuty);
+            Assert.IsTrue(member.WantUnitCouncil);
+        }
+
+        [TestMethod]
+        public void NoStepsAreNeededOnceTerrainShowsWhatWasWanted()
+        {
+            var ids = PatrolPushPlanner.PatrolIds(Patrols);
+            var stuck = InTerrain("a", "p-mag", "Magpie (Orange)", "assistant_patrol_leader", council: true);
+            var notStuck = InTerrain("a", "p-lyre", "Lyrebird (Blue)");
+
+            Assert.AreEqual(0, PatrolPushPlanner.StepsFor(stuck, "Magpie (Orange)", "APL", true, ids).Steps.Count);
+            Assert.AreEqual(3, PatrolPushPlanner.StepsFor(notStuck, "Magpie (Orange)", "APL", true, ids).Steps.Count);
+        }
+
+        [TestMethod]
+        public void WhatRemainsAfterAHalfFinishedMoveIsOnlyTheMissingPart()
+        {
+            // Terrain took them out of Lyrebird but they never joined Magpie
+            var ids = PatrolPushPlanner.PatrolIds(Patrols);
+            var steps = PatrolPushPlanner.StepsFor(InTerrain("a"), "Magpie (Orange)", "", false, ids).Steps;
+
+            Assert.AreEqual(1, steps.Count);
+            Assert.AreEqual(PatrolPushStepKind.AddToPatrol, steps[0].Kind);
+        }
+
+        [TestMethod]
         public void TerrainsWordsMapToTheBoardsWords()
         {
             Assert.AreEqual("UL", PatrolPushPlanner.BoardDuty("unit_leader", "patrol_leader"));
