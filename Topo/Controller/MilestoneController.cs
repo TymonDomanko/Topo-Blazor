@@ -48,7 +48,7 @@ namespace Topo.Controller
             model.UnitName = _storageService.UnitName;
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
-            model.SuppressLastName = _storageService.SuppressLastName;
+            model.UseFullNames = _storageService.UseFullNames;
             if (!string.IsNullOrEmpty(model.UnitId))
                 await Load();
         }
@@ -74,7 +74,7 @@ namespace Topo.Controller
             Loading = true;
             try
             {
-                _storageService.SuppressLastName = model.SuppressLastName;
+                _storageService.UseFullNames = model.UseFullNames;
                 _summaries = await _milestoneService.GetMilestoneSummaries(model.UnitId, step => { Progress = step; InvokeAsync(StateHasChanged); });
                 Recalculate();
             }
@@ -91,9 +91,9 @@ namespace Topo.Controller
 
         internal void BreakByPatrolChanged() => Recalculate();
 
-        internal async Task SuppressLastNameChanged()
+        internal async Task UseFullNamesChanged()
         {
-            _storageService.SuppressLastName = model.SuppressLastName;
+            _storageService.UseFullNames = model.UseFullNames;
             if (_summaries != null)
                 await _milestoneService.RenameMembers(model.UnitId, _summaries);
             Recalculate();

@@ -51,7 +51,7 @@ namespace Topo.Controller
 
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
-            model.SuppressLastName = _storageService.SuppressLastName;
+            model.UseFullNames = _storageService.UseFullNames;
             if (!string.IsNullOrEmpty(model.UnitId))
                 await Load();
         }
@@ -77,7 +77,7 @@ namespace Topo.Controller
             Loading = true;
             try
             {
-                _storageService.SuppressLastName = model.SuppressLastName;
+                _storageService.UseFullNames = model.UseFullNames;
                 _items = await _wallchartService.GetWallchartItems(model.UnitId, step => { Progress = step; InvokeAsync(StateHasChanged); });
                 Recalculate();
             }
@@ -95,9 +95,9 @@ namespace Topo.Controller
         internal void BreakByPatrolChanged() => Recalculate();
 
         // The items are kept for the unit, so asking again only changes the names to match the setting
-        internal async Task SuppressLastNameChanged()
+        internal async Task UseFullNamesChanged()
         {
-            _storageService.SuppressLastName = model.SuppressLastName;
+            _storageService.UseFullNames = model.UseFullNames;
             if (_items != null)
                 _items = await _wallchartService.GetWallchartItems(model.UnitId);
             Recalculate();

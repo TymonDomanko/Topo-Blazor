@@ -140,7 +140,7 @@ namespace Topo.Services
             }
         }
 
-        public bool SuppressLastName { get; set; }
+        public bool UseFullNames { get; set; }
 
         private bool _navMenuIconOnly;
         public bool NavMenuIconOnly
