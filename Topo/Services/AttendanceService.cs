@@ -14,7 +14,10 @@ namespace Topo.Services
 
     public class AttendanceService : IAttendanceService
     {
-        // How far back to look for the last Scout nights: ten weekly nights with room for term breaks
+        // How far back to look for the last Scout nights: ten weekly nights with room for term breaks. Most of the time the last
+        // ten fall inside the first, shorter look (one 90 day window of events, about half the reading); only a unit that has had
+        // fewer than that many nights in it, say over the holidays, goes on to the longer one.
+        private const int RecentDaysFirst = 89;
         private const int RecentDays = 180;
 
         // When each youth was invested into the section (the date is blank for someone who has not been), kept for the session since it
@@ -82,8 +85,12 @@ namespace Topo.Services
             if (calendar == null)
                 return null;
 
-            var data = await GetAttendance(unitId, DateTime.Today.AddDays(-RecentDays), DateTime.Today, new[] { calendar }, progress, cancellationToken);
-            return AttendanceBuilder.Recent(data, nights);
+            // The last ten nights are the ten most recent, so when the shorter look has found that many the longer one would give
+            // exactly the same answer and is not read.
+            var recent = AttendanceBuilder.Recent(await GetAttendance(unitId, DateTime.Today.AddDays(-RecentDaysFirst), DateTime.Today, new[] { calendar }, progress, cancellationToken), nights);
+            if (recent.Nights >= nights)
+                return recent;
+            return AttendanceBuilder.Recent(await GetAttendance(unitId, DateTime.Today.AddDays(-RecentDays), DateTime.Today, new[] { calendar }, progress, cancellationToken), nights);
         }
     }
 }
