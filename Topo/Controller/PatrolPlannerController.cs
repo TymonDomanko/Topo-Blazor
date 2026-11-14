@@ -11,9 +11,9 @@ using Topo.Services;
 
 namespace Topo.Controller
 {
-    // Backs the Patrol Planner drag-and-drop board. Everything here is a local, in-memory "what if"
-    // plan: there is no Terrain API to write patrol membership back, so nothing is saved to Terrain
-    // automatically. The leader applies the plan by hand, using the exported patrol list/changes CSV.
+    // Backs the Patrol Planner drag-and-drop board. The board is a local, in-memory "what if" plan: nothing
+    // reaches Terrain until the leader chooses "Push to Terrain" and confirms the list of changes it shows.
+    // The exported patrol list / changes CSV are still there for applying a plan by hand.
     public class PatrolPlannerController : ComponentBase, IDisposable
     {
         [Inject]
@@ -30,6 +30,9 @@ namespace Topo.Controller
 
         [Inject]
         public IReportService _reportService { get; set; }
+
+        [Inject]
+        public IPatrolPushService _patrolPushService { get; set; }
 
         [Inject]
         public ILocalStorageService _localStorageService { get; set; }
@@ -171,6 +174,65 @@ namespace Topo.Controller
 
         internal async Task RefreshClick()
         {
+            _membersService.ClearMemberCache(model.UnitId);
+            await UnitChange(model.UnitId);
+        }
+
+        // Pushing to Terrain: first read Terrain again and show what would be written (nothing is written yet), then
+        // write it only when the leader confirms. A youth member's login can't change patrols, so they aren't offered it.
+        public bool PushDialogOpen { get; private set; }
+        public bool PushBusy { get; private set; }
+        public string PushProgress { get; private set; } = "";
+        public PatrolPushPlan? PushPlan { get; private set; }
+        public PatrolPushResult? PushResult { get; private set; }
+
+        internal bool CanPush => !_storageService.IsYouthMember && HasChanges && !PushBusy;
+
+        internal async Task PushToTerrainClick()
+        {
+            PushBusy = true;
+            PushResult = null;
+            PushProgress = "Checking Terrain";
+            PushDialogOpen = true;
+            PushPlan = null;
+            try
+            {
+                var removedPatrols = _originalPatrolNames.Except(model.PatrolNames);
+                PushPlan = await _patrolPushService.PrepareAsync(model.UnitId, model.Members, removedPatrols);
+            }
+            finally
+            {
+                PushBusy = false;
+            }
+        }
+
+        internal void CancelPushClick()
+        {
+            PushDialogOpen = false;
+            PushPlan = null;
+            PushResult = null;
+        }
+
+        internal async Task ConfirmPushClick()
+        {
+            if (PushPlan == null || !PushPlan.HasWork || PushBusy)
+                return;
+
+            PushBusy = true;
+            try
+            {
+                PushResult = await _patrolPushService.PushAsync(PushPlan, step =>
+                {
+                    PushProgress = step;
+                    InvokeAsync(StateHasChanged);
+                });
+            }
+            finally
+            {
+                PushBusy = false;
+            }
+
+            // Show Terrain as it is now: what went through is no longer a change, and what didn't can be planned again
             _membersService.ClearMemberCache(model.UnitId);
             await UnitChange(model.UnitId);
         }
