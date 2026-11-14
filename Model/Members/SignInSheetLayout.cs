@@ -99,7 +99,7 @@ namespace Topo.Model.Members
         }
 
         // Patrol leader (a Cub "Sixer" counts as one) before assistant patrol leader (a "Seconder"), then everyone else.
-        private static int DutyRank(string? duty)
+        public static int DutyRank(string? duty)
         {
             var name = (duty ?? "").Trim();
             if (name.Equals("PL", StringComparison.OrdinalIgnoreCase) || name.Equals("Sixer", StringComparison.OrdinalIgnoreCase)

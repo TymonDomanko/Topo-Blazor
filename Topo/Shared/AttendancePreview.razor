@@ -1,0 +1,91 @@
+@using System.Globalization
+@using Topo.Model.Attendance
+
+@* What the downloaded attendance report will show: a row for each youth with how many events of each kind they came to and the share
+   of the possible ones, shaded from red to green down each column. The names stay in view while the columns scroll. *@
+@if (Report.EventsCounted == 0)
+{
+    <div class="text-muted">No events to show.</div>
+}
+else if (Report.Tables.Count == 0)
+{
+    <div class="text-muted">No youth members in this unit.</div>
+}
+else
+{
+    <div class="text-muted small mb-2">
+        @Report.EventsCounted @(Report.EventsCounted == 1 ? "event" : "events") from @Report.From.ToString("d MMM yyyy", CultureInfo.InvariantCulture) to @Report.To.ToString("d MMM yyyy", CultureInfo.InvariantCulture)@(Report.MeetingDay == "" ? "" : $", Scout nights on a {Report.MeetingDay}").
+        Shares count only the events since each youth joined the section.
+        @if (Report.EventsLeftOut > 0)
+        {
+            <span>@Report.EventsLeftOut @(Report.EventsLeftOut == 1 ? "event" : "events") with no attendance recorded @(Report.EventsLeftOut == 1 ? "is" : "are") left out.</span>
+        }
+    </div>
+
+    @foreach (var table in Report.Tables)
+    {
+        @if (table.Patrol != "")
+        {
+            <h4 class="mt-3">@table.Patrol</h4>
+        }
+        <div class="scroller">
+            <table class="attendance">
+                <thead>
+                    <tr class="groups">
+                        <th class="name" rowspan="2">Name</th>
+                        <th rowspan="2">Role</th>
+                        @foreach (var group in Groups())
+                        {
+                            <th colspan="@group.Span" class="text-center">@group.Heading</th>
+                        }
+                    </tr>
+                    <tr>
+                        @foreach (var column in Report.Columns)
+                        {
+                            <th class="text-center">@column.Heading</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in table.Rows)
+                    {
+                        <tr>
+                            <td class="name">@row.Name</td>
+                            <td>@row.Role</td>
+                            @foreach (var cell in row.Cells)
+                            {
+                                <td class="text-center" style="@(cell.Colour == "" ? null : "background-color: " + cell.Colour)">@cell.Text</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td class="name">Average</td>
+                        <td></td>
+                        @foreach (var cell in table.Average)
+                        {
+                            <td class="text-center">@cell.Text</td>
+                        }
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public AttendanceReport Report { get; set; } = new AttendanceReport();
+
+    // The columns of one measure sit under one heading
+    private IEnumerable<(string Heading, int Span)> Groups() =>
+        Report.Columns.Aggregate(new List<(string Heading, int Span)>(), (groups, column) =>
+        {
+            if (groups.Count > 0 && groups[^1].Heading == column.Group)
+                groups[^1] = (column.Group, groups[^1].Span + 1);
+            else
+                groups.Add((column.Group, 1));
+            return groups;
+        });
+}
