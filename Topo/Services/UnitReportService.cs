@@ -82,6 +82,8 @@ namespace Topo.Services
         // as soon as the events are listed, while their details are being read, as the details do not depend on which calendars are on.
         public async Task<List<UnitEventInput>> GetEventsForCalendars(DateTime from, DateTime to, string[] calendarIds, CancellationToken cancellationToken = default, Action<string>? progress = null)
         {
+            // one read at a time switches the calendars, whatever page asked for it
+            using var calendarLock = await _programService.LockCalendarsAsync(cancellationToken);
             await _programService.SetCalendar(calendarIds);
             List<(Topo.Model.Program.Event Summary, string Scope)> summaries;
             try

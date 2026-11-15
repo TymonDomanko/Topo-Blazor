@@ -30,8 +30,6 @@ namespace Topo.Services
         // How far back to look to find the section night
         private const int FindDays = 150;
 
-        // Reading a calendar switches the calendars on and off in Terrain and puts them back, which only one read can do at a time
-        private readonly SemaphoreSlim _calendarLock = new SemaphoreSlim(1, 1);
         private readonly StorageService _storageService;
         private readonly IMembersService _membersService;
         private readonly ITerrainAPIService _terrainAPIService;
@@ -58,47 +56,32 @@ namespace Topo.Services
 
         public async Task<ProgramUsual?> FindUsual(string unitId)
         {
-            await _calendarLock.WaitAsync();
+            using var calendarLock = await _programService.LockCalendarsAsync();
+            var calendar = await CalendarFor(unitId);
+            if (calendar == null)
+                return null;
+
+            await _programService.SetCalendar(new[] { calendar });
             try
             {
-                var calendar = await CalendarFor(unitId);
-                if (calendar == null)
-                    return null;
-
-                await _programService.SetCalendar(new[] { calendar });
-                try
-                {
-                    var events = await _terrainAPIService.GetEventsAsync(UserId(), DateTime.Today.AddDays(-FindDays), DateTime.Today);
-                    return ProgramUsual.Find(events?.results ?? new Event[0]);
-                }
-                finally
-                {
-                    await _programService.ResetCalendar();
-                }
+                var events = await _terrainAPIService.GetEventsAsync(UserId(), DateTime.Today.AddDays(-FindDays), DateTime.Today);
+                return ProgramUsual.Find(events?.results ?? new Event[0]);
             }
             finally
             {
-                _calendarLock.Release();
+                await _programService.ResetCalendar();
             }
         }
 
         public async Task<List<GetEventResultModel>?> GetTerrainEvents(string unitId, DateTime from, DateTime to, Action<string>? progress = null, CancellationToken cancellationToken = default)
         {
-            await _calendarLock.WaitAsync(cancellationToken);
-            try
-            {
-                var calendar = await CalendarFor(unitId);
-                if (calendar == null)
-                    return null;
+            var calendar = await CalendarFor(unitId);
+            if (calendar == null)
+                return null;
 
-                var events = await _unitReportService.GetEventsForCalendars(from, to, new[] { calendar }, cancellationToken, progress);
-                // what is for the whole unit or group, not a patrol or a member's project
-                return events.Where(e => e.Scope != "patrol" && e.Scope != "member").Select(e => e.Event).ToList();
-            }
-            finally
-            {
-                _calendarLock.Release();
-            }
+            var events = await _unitReportService.GetEventsForCalendars(from, to, new[] { calendar }, cancellationToken, progress);
+            // what is for the whole unit or group, not a patrol or a member's project
+            return events.Where(e => e.Scope != "patrol" && e.Scope != "member").Select(e => e.Event).ToList();
         }
 
         public Task<List<ProposedActivityModel>?> GetProposals(string unitId) => _terrainAPIService.GetProposedActivitiesAsync(unitId);
