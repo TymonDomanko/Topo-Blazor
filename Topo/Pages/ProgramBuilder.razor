@@ -69,7 +69,7 @@
                     </select>
                 </label>
                 <div class="pb-field pb-wide pb-field-button">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="FindSectionNight" disabled="@Busy">Find from the calendar</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="FindUsual" disabled="@Busy" title="Find the section night and the usual times from the unit's calendar">Find night and times from the calendar</button>
                 </div>
                 <label class="pb-field">Start date
                     <input type="date" class="form-control form-control-sm" value="@draft.Start.ToString("yyyy-MM-dd")" @onchange="SetStart" />
@@ -437,44 +437,6 @@
                 </div>
             </div>
         </div>
-
-        @if (TerrainRead)
-        {
-            var changes = Changes;
-            <div class="export-panel mb-3">
-                <div class="export-panel-label">Changes to make in Terrain</div>
-                <div class="export-panel-buttons">
-                    <button type="button" class="btn btn-warning" @onclick="ChangesCsvClick" disabled="@(changes.Count == 0)">Changes to Apply in Terrain (CSV)</button>
-                    <button type="button" class="btn btn-success" @onclick="ImportZipClick" disabled="@(ToAdd.Count == 0)">Activities for Terrain's import (@ToAdd.Count, zip of JSON)</button>
-                </div>
-                <div class="text-muted small mt-1">The import has an activity to a file, for those not in Terrain already; the ones filled in from Terrain are left out.</div>
-                @if (changes.Count == 0)
-                {
-                    <div class="mt-2 text-muted">No changes to show: Terrain matches the program.</div>
-                }
-                else
-                {
-                    <table class="table table-sm table-striped mt-2 mb-0">
-                        <thead>
-                            <tr><th>Action</th><th>Date</th><th>Activity</th><th>Location</th><th>Leader in charge</th><th>Details</th></tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var change in changes)
-                            {
-                                <tr>
-                                    <td>@change.Action</td>
-                                    <td class="text-nowrap">@change.Date.ToString("ddd d MMM")@(change.EndDate == null ? "" : " - " + change.EndDate.Value.ToString("ddd d MMM"))</td>
-                                    <td>@change.Activity</td>
-                                    <td>@change.Location</td>
-                                    <td>@change.Leader</td>
-                                    <td>@change.Details</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                }
-            </div>
-        }
 
         <div class="pb-chips mb-3" role="group" aria-label="What the program shows">
             <span class="pb-chips-label">Show</span>

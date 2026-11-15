@@ -10,6 +10,9 @@ namespace Topo.Services
     public interface IProgramService
     {
         public Task<Dictionary<string, string>> GetCalendars();
+        // Every calendar the user has, whether or not it is switched on in Terrain, by id and name. Like GetCalendars it keeps what is on now, which
+        // ResetCalendar puts back.
+        public Task<Dictionary<string, string>> GetAllCalendars();
         public Task SetCalendar(string calendarId);
         public Task SetCalendar(string[] calendarIds);
         public Task ResetCalendar();
@@ -29,6 +32,9 @@ namespace Topo.Services
         private readonly IMembersService _memberService;
 
         private GetCalendarsResultModel _getCalendarsResultModel;
+        // True from when the calendars are switched until they are put back. What is kept to put back is only taken when they are not switched, so a
+        // second read that starts before the first has put them back does not keep the switched ones as what to put back.
+        private bool _switched;
 
         public ProgramService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService)
         {
@@ -47,9 +53,17 @@ namespace Topo.Services
             return userId ?? "";
         }
 
+        // What the user has switched on now, kept to put back; while the calendars are switched it is what was kept before they were
+        private async Task ReadCalendars()
+        {
+            var read = await _terrainAPIService.GetCalendarsAsync(GetUser());
+            if (!_switched)
+                _getCalendarsResultModel = read!;
+        }
+
         public async Task<Dictionary<string, string>> GetCalendars()
         {
-            _getCalendarsResultModel = await _terrainAPIService.GetCalendarsAsync(GetUser());
+            await ReadCalendars();
             if (_getCalendarsResultModel != null && _getCalendarsResultModel.own_calendars != null)
             {
                 var own_calendars = _getCalendarsResultModel.own_calendars.Where(c => c.selected)
@@ -60,6 +74,18 @@ namespace Topo.Services
                 return calendars;
             }
             return new Dictionary<string, string>();
+        }
+
+        public async Task<Dictionary<string, string>> GetAllCalendars()
+        {
+            await ReadCalendars();
+            var calendars = new Dictionary<string, string>();
+            if (_getCalendarsResultModel != null)
+            {
+                foreach (var calendar in _getCalendarsResultModel.own_calendars.Select(c => (c.id, c.title)).Concat(_getCalendarsResultModel.other_calendars.Select(c => (c.id, c.title))))
+                    calendars[calendar.id] = calendar.title;
+            }
+            return calendars;
         }
 
         public async Task SetCalendar(string calendarId)
@@ -78,6 +104,7 @@ namespace Topo.Services
                 calendar.selected = false;
             }
 
+            _switched = true;
             await _terrainAPIService.PutCalendarsAsync(GetUser(), calendars);
         }
 
@@ -97,12 +124,14 @@ namespace Topo.Services
                 calendar.selected = calendarIds.Contains(calendar.id);
             }
 
+            _switched = true;
             await _terrainAPIService.PutCalendarsAsync(GetUser(), calendars);
         }
 
         public async Task ResetCalendar()
         {
             await _terrainAPIService.PutCalendarsAsync(GetUser(), _getCalendarsResultModel);
+            _switched = false;
         }
 
         public async Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate, CancellationToken cancellationToken = default, Action<string>? progress = null)

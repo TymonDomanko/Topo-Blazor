@@ -39,6 +39,36 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public void TheUsualTimesAreTheOnesTheCalendarMostOftenHas()
+        {
+            var events = new[]
+            {
+                // section nights: 19:00 to 21:00 twice, 19:15 once, a night that ran late once
+                Ev("Canoeing", new DateTime(2026, 2, 4, 19, 0, 0)), Ev("Mapping", new DateTime(2026, 2, 11, 19, 0, 0)), Ev("Rogaining", new DateTime(2026, 2, 18, 19, 15, 0)),
+                // a camp from 18:00 on the Friday to 10:00 on the Sunday (Ev's events end two hours after the last night, so set the end)
+                Ev("Austinmer Camp", new DateTime(2026, 2, 27, 18, 0, 0), nights: 2), Ev("Shakedown Hike", new DateTime(2026, 2, 21, 9, 0, 0)),
+                Ev("Unit Council", new DateTime(2026, 2, 5, 20, 0, 0)), Ev("Scout Leaders Meeting", new DateTime(2026, 2, 12, 19, 0, 0)), Ev("Scout Leaders Meeting", new DateTime(2026, 2, 19, 19, 0, 0)), Ev("Project", new DateTime(2026, 2, 6, 6, 0, 0), scope: "member"),
+                Ev("Cancelled", new DateTime(2026, 2, 26, 16, 0, 0), status: "cancelled")
+            };
+            events[3].end_datetime = new DateTime(2026, 3, 1, 10, 0, 0);
+            events[4].end_datetime = new DateTime(2026, 2, 21, 17, 0, 0);
+
+            var usual = ProgramUsual.Find(events);
+            Assert.AreEqual(DayOfWeek.Wednesday, usual.Day);
+            Assert.AreEqual("19:00", usual.NightStart);
+            Assert.AreEqual("21:00", usual.NightEnd);
+            Assert.AreEqual("18:00", usual.CampStart);
+            Assert.AreEqual("10:00", usual.CampEnd);
+            Assert.AreEqual("09:00", usual.OtherStart);
+            Assert.AreEqual("17:00", usual.OtherEnd);
+
+            // with too few section nights to agree, or nothing at all, the times are left blank
+            usual = ProgramUsual.Find(events.Skip(1));
+            Assert.AreEqual("", usual.NightStart);
+            Assert.AreEqual("", ProgramUsual.Find(new Event[0]).CampStart);
+        }
+
+        [TestMethod]
         public void TheSectionNightIsTheDayMostSingleDayEventsFallOn()
         {
             var events = new[]

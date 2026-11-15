@@ -57,9 +57,6 @@ namespace Topo.Controller
 
         public ProgramDocument Document => ProgramLayout.Build(draft);
         public List<ProgramRow> Nights => ProgramPlanner.Nights(draft);
-        public bool TerrainRead => _terrainEvents != null;
-        public List<ProgramChange> Changes => _terrainEvents == null ? new List<ProgramChange>() : ProgramTerrain.Changes(draft, _terrainEvents);
-        public List<TerrainEvent> ToAdd => ProgramTerrain.ToAdd(draft, _terrainEvents);
         public string UnitName => Units.TryGetValue(UnitId, out var name) ? name : "";
         // The leaders who can be put in charge: those in the unit's membership by first name, except one whose contact has been renamed, who goes by
         // that name; and the contacts who are not from the membership
@@ -161,7 +158,7 @@ namespace Topo.Controller
             draft = NewDraft();
             ProgramFill.AddLeaderContacts(draft, Leaders);
             await Save();
-            await FindSectionNight();
+            await FindUsual();
             // a new program starts the duty cycle where Terrain says the last one left off
             await ContinueDuty(automatic: true);
             AutoFill();
@@ -263,19 +260,49 @@ namespace Topo.Controller
             }
         }
 
-        internal async Task FindSectionNight()
+        // Finds the section night and the usual times from the last few months of the calendar. What it can't tell is left as it was.
+        internal async Task FindUsual()
         {
             Busy = true;
             Progress = "the unit's calendar";
             try
             {
-                var day = await _programBuilderService.FindSectionNight(UnitId);
-                if (day == null)
-                    Message = "Couldn't tell which night the section meets, from the calendar named after the unit, so choose it.";
+                var usual = await _programBuilderService.FindUsual(UnitId);
+                if (usual == null)
+                {
+                    Message = "There is no calendar named after this unit to find the section night and times from.";
+                    return;
+                }
+
+                var found = new List<string>();
+                if (usual.Day != null)
+                {
+                    draft.MeetingDay = usual.Day.Value;
+                    found.Add($"the section meets on a {usual.Day.Value}");
+                }
+                if (usual.NightStart != "" && usual.NightEnd != "")
+                {
+                    draft.NightStart = usual.NightStart;
+                    draft.NightEnd = usual.NightEnd;
+                    found.Add($"nights run {usual.NightStart} to {usual.NightEnd}");
+                }
+                if (usual.CampStart != "" && usual.CampEnd != "")
+                {
+                    draft.CampStart = usual.CampStart;
+                    draft.CampEnd = usual.CampEnd;
+                    found.Add($"camps {usual.CampStart} to {usual.CampEnd}");
+                }
+                if (usual.OtherStart != "" && usual.OtherEnd != "")
+                {
+                    draft.OtherStart = usual.OtherStart;
+                    draft.OtherEnd = usual.OtherEnd;
+                    found.Add($"other activities {usual.OtherStart} to {usual.OtherEnd}");
+                }
+                if (found.Count == 0)
+                    Message = "Couldn't tell which night the section meets or its times, from the calendar, so choose them.";
                 else
                 {
-                    draft.MeetingDay = day.Value;
-                    Message = $"The section meets on a {day.Value}.";
+                    Message = $"From the calendar: {string.Join(", ", found)}.";
                     await Save();
                 }
             }
@@ -762,13 +789,6 @@ namespace Topo.Controller
             await JS.InvokeVoidAsync("BlazorDownloadFile", $"Program_{FileStem}" + (isPdf ? ".pdf" : ".xlsx"), isPdf ? "application/pdf" : "application/vnd.ms-excel", report);
         }
 
-        // Plain text built in the browser, as the Patrol Planner's changes are, since it is a flat list
-        internal async Task ChangesCsvClick()
-        {
-            var bytes = Encoding.UTF8.GetBytes(ProgramTerrain.Csv(Changes));
-            await JS.InvokeVoidAsync("BlazorDownloadFile", $"Program_Changes_{FileStem}.csv", "text/csv", bytes);
-        }
-
         private TerrainContext Context() => new TerrainContext { UnitId = UnitId, UnitName = UnitName, Leaders = Leaders, UserName = _storageService.MemberName ?? "" };
 
         // ---- adding the program to the unit's calendar in Terrain: first read Terrain again and show what would be added (nothing is sent yet), then
@@ -848,13 +868,6 @@ namespace Topo.Controller
                 await Save();
                 _ = ReadTerrain(fill: false);
             }
-        }
-
-        // An activity to a file, as Terrain's import takes them, for those not in Terrain
-        internal async Task ImportZipClick()
-        {
-            var bytes = ProgramTerrain.Zip(ToAdd, Context());
-            await JS.InvokeVoidAsync("BlazorDownloadFile", $"Terrain_Activities_{FileStem}.zip", "application/zip", bytes);
         }
     }
 }

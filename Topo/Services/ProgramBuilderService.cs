@@ -10,8 +10,9 @@ namespace Topo.Services
     {
         // The unit's patrols and the leaders who can be put in charge
         public Task<(List<string> Patrols, List<TerrainLeader> Leaders)> GetPeople(string unitId);
-        // The day of the week the section meets, from the last few months of the unit's calendar; null when there is no calendar for the unit or too few events
-        public Task<DayOfWeek?> FindSectionNight(string unitId);
+        // The day of the week the section meets and the times it usually starts and ends, from the last few months of the unit's calendar; null when
+        // there is no calendar for the unit
+        public Task<ProgramUsual?> FindUsual(string unitId);
         // The activities Terrain has on the unit's calendar between the dates, in full; null when there is no calendar named after the unit
         public Task<List<GetEventResultModel>?> GetTerrainEvents(string unitId, DateTime from, DateTime to, Action<string>? progress = null, CancellationToken cancellationToken = default);
         // The activities the unit's youth have proposed in Terrain, to be offered as ideas; null when Terrain could not be read
@@ -29,6 +30,8 @@ namespace Topo.Services
         // How far back to look to find the section night
         private const int FindDays = 150;
 
+        // Reading a calendar switches the calendars on and off in Terrain and puts them back, which only one read can do at a time
+        private readonly SemaphoreSlim _calendarLock = new SemaphoreSlim(1, 1);
         private readonly StorageService _storageService;
         private readonly IMembersService _membersService;
         private readonly ITerrainAPIService _terrainAPIService;
@@ -53,33 +56,49 @@ namespace Topo.Services
             return (ProgramPlanner.PatrolsOf(members), leaders);
         }
 
-        public async Task<DayOfWeek?> FindSectionNight(string unitId)
+        public async Task<ProgramUsual?> FindUsual(string unitId)
         {
-            var calendar = await CalendarFor(unitId);
-            if (calendar == null)
-                return null;
-
-            await _programService.SetCalendar(new[] { calendar });
+            await _calendarLock.WaitAsync();
             try
             {
-                var events = await _terrainAPIService.GetEventsAsync(UserId(), DateTime.Today.AddDays(-FindDays), DateTime.Today);
-                return ProgramPlanner.FindSectionNight(events?.results ?? new Event[0]);
+                var calendar = await CalendarFor(unitId);
+                if (calendar == null)
+                    return null;
+
+                await _programService.SetCalendar(new[] { calendar });
+                try
+                {
+                    var events = await _terrainAPIService.GetEventsAsync(UserId(), DateTime.Today.AddDays(-FindDays), DateTime.Today);
+                    return ProgramUsual.Find(events?.results ?? new Event[0]);
+                }
+                finally
+                {
+                    await _programService.ResetCalendar();
+                }
             }
             finally
             {
-                await _programService.ResetCalendar();
+                _calendarLock.Release();
             }
         }
 
         public async Task<List<GetEventResultModel>?> GetTerrainEvents(string unitId, DateTime from, DateTime to, Action<string>? progress = null, CancellationToken cancellationToken = default)
         {
-            var calendar = await CalendarFor(unitId);
-            if (calendar == null)
-                return null;
+            await _calendarLock.WaitAsync(cancellationToken);
+            try
+            {
+                var calendar = await CalendarFor(unitId);
+                if (calendar == null)
+                    return null;
 
-            var events = await _unitReportService.GetEventsForCalendars(from, to, new[] { calendar }, cancellationToken, progress);
-            // what is for the whole unit or group, not a patrol or a member's project
-            return events.Where(e => e.Scope != "patrol" && e.Scope != "member").Select(e => e.Event).ToList();
+                var events = await _unitReportService.GetEventsForCalendars(from, to, new[] { calendar }, cancellationToken, progress);
+                // what is for the whole unit or group, not a patrol or a member's project
+                return events.Where(e => e.Scope != "patrol" && e.Scope != "member").Select(e => e.Event).ToList();
+            }
+            finally
+            {
+                _calendarLock.Release();
+            }
         }
 
         public Task<List<ProposedActivityModel>?> GetProposals(string unitId) => _terrainAPIService.GetProposedActivitiesAsync(unitId);
@@ -147,12 +166,13 @@ namespace Topo.Services
             return result;
         }
 
-        // The calendar named after the unit
+        // The unit's calendar, found among all the user has, whether or not they are switched on in Terrain. Reading it switches it on and the others off,
+        // and puts them back as they were afterwards.
         private async Task<string?> CalendarFor(string unitId)
         {
-            var calendars = await _programService.GetCalendars();
+            var calendars = await _programService.GetAllCalendars();
             var unitName = _storageService.GetProfilesResult?.profiles?.FirstOrDefault(p => p.unit?.id == unitId)?.unit?.name;
-            return CalendarMatcher.FindForUnit(calendars, unitName);
+            return CalendarMatcher.FindForUnit(calendars, unitId, unitName);
         }
 
         private string UserId() => _storageService.GetProfilesResult?.profiles?.FirstOrDefault()?.member?.id ?? "";
