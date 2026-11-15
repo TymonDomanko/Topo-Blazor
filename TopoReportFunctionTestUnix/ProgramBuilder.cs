@@ -539,28 +539,63 @@ namespace TopoReportFunctionTest
             Assert.AreEqual("", draft.NightEdits["2026-02-11"].TerrainEventId);
         }
 
+        private static List<GetEventResultModel> DutyEvents(DateTime first, params string[] duty)
+        {
+            var events = new List<GetEventResultModel>();
+            for (var i = 0; i < duty.Length; i++)
+            {
+                var e = InTerrain("t" + i, "Night " + i, first.AddDays(7 * i).AddHours(19));
+                e.description = duty[i] == "" ? "" : "Duty patrol: " + duty[i];
+                events.Add(e);
+            }
+            return events;
+        }
+
         [TestMethod]
-        public void ANewProgramStartsTheDutyCycleAfterTheLastPatrolTerrainHas()
+        public void ANewProgramTakesTheDutyOrderAndWhoIsNextFromTheActivitiesTerrainHas()
         {
             var patrols = new List<string> { "A (Red)", "B (Blue)", "C (Green)" };
-            var events = new List<GetEventResultModel>
-            {
-                InTerrain("t1", "Old", new DateTime(2026, 1, 7, 19, 0, 0)), InTerrain("t2", "Last", new DateTime(2026, 1, 28, 19, 0, 0)),
-                InTerrain("t3", "No duty written", new DateTime(2026, 2, 4, 19, 0, 0)), InTerrain("t4", "After the start", new DateTime(2026, 3, 4, 19, 0, 0))
-            };
-            events[0].description = "Duty patrol: A (Red)";
-            events[1].description = "Duty patrol: C (Green)";
-            events[3].description = "Duty patrol: B (Blue)";
 
-            // the last before the start with one written is C, so A is next, round the cycle
-            Assert.AreEqual("A (Red)", ProgramDuty.NextAfter(events, new DateTime(2026, 2, 11), patrols));
-            Assert.AreEqual("B (Blue)", ProgramDuty.NextAfter(events, new DateTime(2026, 1, 20), patrols));
-            Assert.AreEqual("", ProgramDuty.NextAfter(events, new DateTime(2026, 1, 1), patrols));
-            Assert.AreEqual("", ProgramDuty.NextAfter(events, new DateTime(2026, 2, 11), new List<string> { "X (Other)" }));
+            // they went C, A, B, so the order is that and C is next
+            var cycle = ProgramDuty.CycleFrom(DutyEvents(new DateTime(2026, 1, 7), "A (Red)", "B (Blue)", "C (Green)", "A (Red)", "B (Blue)"), new DateTime(2026, 3, 1), patrols)!;
+            CollectionAssert.AreEqual(new[] { "C (Green)", "A (Red)", "B (Blue)" }, cycle.Order);
+            Assert.AreEqual("C (Green)", cycle.First);
 
-            // and one program follows another
+            // an activity with no duty written, one after the start, and a cancelled one are not counted
+            var events = DutyEvents(new DateTime(2026, 1, 7), "B (Blue)", "C (Green)", "", "A (Red)");
+            events[3].status = "cancelled";
+            cycle = ProgramDuty.CycleFrom(events, new DateTime(2026, 1, 28), patrols)!;
+            Assert.AreEqual("A (Red)", cycle.First);
+            CollectionAssert.AreEqual(new[] { "B (Blue)", "C (Green)", "A (Red)" }, cycle.Order);
+
+            // with part of the cycle seen, the patrols not seen follow it
+            cycle = ProgramDuty.CycleFrom(DutyEvents(new DateTime(2026, 1, 7), "B (Blue)"), new DateTime(2026, 3, 1), patrols)!;
+            CollectionAssert.AreEqual(new[] { "B (Blue)", "A (Red)", "C (Green)" }, cycle.Order);
+            Assert.AreEqual("A (Red)", cycle.First);
+
+            // nothing written before the date, or none of the patrols
+            Assert.IsNull(ProgramDuty.CycleFrom(DutyEvents(new DateTime(2026, 1, 7), "A (Red)"), new DateTime(2026, 1, 1), patrols));
+            Assert.IsNull(ProgramDuty.CycleFrom(DutyEvents(new DateTime(2026, 1, 7), "A (Red)"), new DateTime(2026, 3, 1), new List<string> { "X (Other)" }));
+        }
+
+        [TestMethod]
+        public void ADutyPatrolThatIsNotOneOfTheCycleIsIgnoredWhereverItIsFound()
+        {
+            var patrols = new List<string> { "A (Red)", "B (Blue)", "C (Green)" };
+
+            // the last night's patrol is not in the cycle, so it is left out
+            var cycle = ProgramDuty.CycleFrom(DutyEvents(new DateTime(2026, 1, 7), "A (Red)", "B (Blue)", "Gone (Old)"), new DateTime(2026, 3, 1), patrols)!;
+            CollectionAssert.AreEqual(new[] { "A (Red)", "B (Blue)", "C (Green)" }, cycle.Order);
+            Assert.AreEqual("C (Green)", cycle.First);
+
+            // and a program's last night is the last of its patrols that is still in the cycle
             var draft = new ProgramDraft { Start = new DateTime(2026, 2, 1), End = new DateTime(2026, 2, 18), MeetingDay = DayOfWeek.Wednesday, DutyPatrols = patrols, FirstDutyPatrol = "A (Red)" };
-            Assert.AreEqual("A (Red)", ProgramDuty.NextAfterProgram(draft));
+            var nights = ProgramPlanner.Nights(draft);
+            var before = nights[nights.Count - 2].Duty;
+            draft.NightEdits[ProgramPlanner.NightKey(nights[nights.Count - 1].Date)] = new ProgramRow { DutyPatrol = "Gone (Old)" };
+            Assert.AreEqual(before, ProgramDuty.LastOnDuty(draft));
+            Assert.AreEqual("", ProgramDuty.After("Gone (Old)", patrols));
+            Assert.AreEqual("A (Red)", ProgramDuty.After("C (Green)", patrols));
         }
 
         [TestMethod]

@@ -223,7 +223,7 @@ namespace Topo.Controller
             // the duty cycle carries on from where this program ended
             var next = ProgramDuty.NextAfterProgram(draft);
             draft = NewDraft(draft);
-            if (next != "" && draft.DutyPatrols.Contains(next))
+            if (next != "")
                 draft.FirstDutyPatrol = next;
             _terrainEvents = null;
             Message = "Cleared.";
@@ -231,23 +231,30 @@ namespace Topo.Controller
             await Save();
         }
 
-        // Starts the duty cycle at the patrol after the one on duty at the last night before the program that Terrain has a duty patrol written for
+        // Takes the order the patrols have been on duty in, and who is next, from the duty patrols written in the activities Terrain has before the
+        // program: the last four months, and when there is none there, the year before that
         internal async Task ContinueDutyClick() => await ContinueDuty(automatic: false);
 
         private async Task ContinueDuty(bool automatic)
         {
             try
             {
-                var events = await _programBuilderService.GetTerrainEvents(UnitId, draft.Start.AddDays(-120), draft.Start.AddDays(-1));
-                var next = ProgramDuty.NextAfter(events ?? new List<GetEventResultModel>(), draft.Start, draft.DutyPatrols);
-                if (next == "")
+                var events = await _programBuilderService.GetTerrainEvents(UnitId, draft.Start.AddDays(-120), draft.Start.AddDays(-1)) ?? new List<GetEventResultModel>();
+                var cycle = ProgramDuty.CycleFrom(events, draft.Start, draft.DutyPatrols);
+                if (cycle == null)
+                {
+                    var older = await _programBuilderService.GetTerrainEvents(UnitId, draft.Start.AddDays(-485), draft.Start.AddDays(-121));
+                    cycle = ProgramDuty.CycleFrom(events.Concat(older ?? new List<GetEventResultModel>()), draft.Start, draft.DutyPatrols);
+                }
+                if (cycle == null)
                 {
                     if (!automatic)
                         Message = "No duty patrol is written in the activities Terrain has before the program, so the cycle starts as it was.";
                     return;
                 }
-                draft.FirstDutyPatrol = next;
-                Message = $"The duty cycle carries on from Terrain: {next} is first on duty.";
+                draft.DutyPatrols = cycle.Order;
+                draft.FirstDutyPatrol = cycle.First;
+                Message = $"The duty cycle carries on from Terrain: {string.Join(", ", cycle.Order)}, with {cycle.First} first on duty.";
                 await Save();
             }
             catch (Exception) when (automatic)
