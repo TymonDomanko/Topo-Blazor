@@ -80,12 +80,15 @@
             <div class="col-sm-1">
                 <strong>Organiser</strong>
             </div>
-            <div class="col-sm-1">
+            <div class="@(model.ShowAssist ? "col-sm-1" : "col-sm-2")">
                 <strong>Lead</strong>
             </div>
-            <div class="col-sm-1">
-                <strong>Assist</strong>
-            </div>
+            @if (model.ShowAssist)
+            {
+                <div class="col-sm-1">
+                    <strong>Assist</strong>
+                </div>
+            }
             <div class="col-sm-1">
                 <strong>Challenge</strong>
             </div>
@@ -111,12 +114,15 @@
                 <div class="col-sm-1">
                     @item.Organiser
                 </div>
-                <div class="col-sm-1">
+                <div class="@(model.ShowAssist ? "col-sm-1" : "col-sm-2")">
                     @item.Lead
                 </div>
-                <div class="col-sm-1">
-                    @item.Assist
-                </div>
+                @if (model.ShowAssist)
+                {
+                    <div class="col-sm-1">
+                        @item.Assist
+                    </div>
+                }
                 <div class="col-sm-1">
                     @item.ChallengeArea
                 </div>
