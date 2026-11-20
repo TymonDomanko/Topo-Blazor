@@ -99,15 +99,15 @@ namespace TopoReportFunctionTest
             var report = AttendanceLayout.Build(data, false, false);
 
             Assert.AreEqual("Wednesday", report.MeetingDay);
-            CollectionAssert.AreEqual(new[] { "Scout nights (4)", "Scout nights (4)", "All events (4)", "All events (4)", "Challenge areas" }, report.Columns.Select(c => c.Group).ToList());
+            CollectionAssert.AreEqual(new[] { "Last seen", "Last seen", "Scout nights (4)", "Scout nights (4)", "All events (4)", "All events (4)", "Challenge areas" }, report.Columns.Select(c => c.Group).ToList());
             var rows = report.Tables.Single().Rows;
             // the unit leader first, then by patrol, the patrol leader before the rest; the adult is not listed
             CollectionAssert.AreEqual(new[] { "Una", "Ana", "Ben", "Cat" }, rows.Select(r => r.Name).ToList());
             var ana = rows.Single(r => r.Name == "Ana");
-            Assert.AreEqual("4", ana.Cells[0].Text);
-            Assert.AreEqual("100%", ana.Cells[1].Text);
-            Assert.AreEqual("50%", rows.Single(r => r.Name == "Cat").Cells[1].Text);
-            Assert.AreEqual("25%", rows.Single(r => r.Name == "Una").Cells[1].Text);
+            Assert.AreEqual("4", ana.Cells[2].Text);
+            Assert.AreEqual("100%", ana.Cells[3].Text);
+            Assert.AreEqual("50%", rows.Single(r => r.Name == "Cat").Cells[3].Text);
+            Assert.AreEqual("25%", rows.Single(r => r.Name == "Una").Cells[3].Text);
             Assert.AreEqual("PL", rows.Single(r => r.Name == "Cat").Role);
         }
 
@@ -118,7 +118,7 @@ namespace TopoReportFunctionTest
             input.Members.Single(m => m.id == "3").unit_council = true;
             var report = AttendanceLayout.Build(AttendanceBuilder.Analyse(input), false, true);
 
-            CollectionAssert.AreEqual(new[] { "Scout nights (2)", "Unit councils (1)", "All events (3)", "Challenge areas" },
+            CollectionAssert.AreEqual(new[] { "Last seen", "Scout nights (2)", "Unit councils (1)", "All events (3)", "Challenge areas" },
                 report.Columns.Select(c => c.Group).Distinct().ToList());
             var council = report.Columns.FindIndex(c => c.Group == "Unit councils (1)" && !c.IsPercent);
             var rows = report.Tables.Single().Rows;
@@ -217,7 +217,7 @@ namespace TopoReportFunctionTest
             Assert.IsTrue(texts.Any(t => t != null && t.StartsWith("Scout nights (")));
             // Ana came to every Scout night, the most in the column, so her cell is green
             var anaRow = Enumerable.Range(1, sheet.UsedRange.LastRow).Single(r => sheet.Range[r, 1].Text == "Ana");
-            Assert.AreEqual(Color.FromArgb(0x63, 0xBE, 0x7B).ToArgb(), sheet.Range[anaRow, 4].CellStyle.Color.ToArgb());
+            Assert.AreEqual(Color.FromArgb(0x63, 0xBE, 0x7B).ToArgb(), sheet.Range[anaRow, 6].CellStyle.Color.ToArgb());
         }
 
         [TestMethod]
@@ -277,6 +277,139 @@ namespace TopoReportFunctionTest
 
             Assert.AreEqual(new DateTime(2025, 5, 20), AttendanceBuilder.InvestedOn(intros, "scout"));
             Assert.IsNull(AttendanceBuilder.InvestedOn(intros, "venturer"));
+        }
+
+        // Ana came to every night, Ben to the first two, Cat to the first only, and Una to none
+        private static AttendanceInput FiveNights() => Input(
+            Event("a", Wed(0), who: new[] { "N1", "N2", "N3" }), Event("b", Wed(1), who: new[] { "N1", "N2" }), Event("c", Wed(2), who: new[] { "N1" }),
+            Event("d", Wed(3), who: new[] { "N1" }), Event("e", Wed(4), who: new[] { "N1" }));
+
+        [TestMethod]
+        public void ScoutNightsSinceAYouthWasLastSeenAreCounted()
+        {
+            var input = FiveNights();
+            var data = AttendanceBuilder.Analyse(input);
+            (int? NightsSince, DateTime? LastSeen) Of(string id) => data.NotSeen(input.Members.Single(m => m.id == id));
+
+            Assert.AreEqual(0, Of("1").NightsSince);
+            Assert.AreEqual(((int?)3, (DateTime?)Wed(1).Date), Of("2"));
+            Assert.AreEqual(((int?)4, (DateTime?)Wed(0).Date), Of("3"));
+            // never came, and never invested, so there is no telling when they joined or how many nights they could have missed
+            Assert.AreEqual(((int?)null, (DateTime?)null), Of("4"));
+            Assert.AreEqual("", AttendanceData.NotSeenLevel(2));
+            Assert.AreEqual("amber", AttendanceData.NotSeenLevel(3));
+            Assert.AreEqual("red", AttendanceData.NotSeenLevel(4));
+        }
+
+        [TestMethod]
+        public void ComingToAnythingCountsAsSeenNotJustAScoutNight()
+        {
+            // Cat missed the last three Scout nights but came to a camp after the second
+            var input = FiveNights();
+            input.Events.Add(Event("camp", new DateTime(2026, 9, 12, 9, 0, 0), nights: 1, who: new[] { "N3" }));
+            var data = AttendanceBuilder.Analyse(input);
+            var (nightsSince, lastSeen) = data.NotSeen(input.Members.Single(m => m.id == "3"));
+
+            Assert.AreEqual(new DateTime(2026, 9, 12), lastSeen);
+            // the Scout nights of 16, 23 and 30 September came after it
+            Assert.AreEqual((int?)3, nightsSince);
+        }
+
+        [TestMethod]
+        public void AYouthNotSeenInThePeriodIsFoundInEarlierEvents()
+        {
+            var input = FiveNights();
+            // Una came to the middle of three August nights, none of the September ones
+            input.EarlierEvents.Add(Event("e1", new DateTime(2026, 8, 5, 19, 0, 0), who: new[] { "N1" }));
+            input.EarlierEvents.Add(Event("e2", new DateTime(2026, 8, 12, 19, 0, 0), who: new[] { "N1", "N4" }));
+            input.EarlierEvents.Add(Event("e3", new DateTime(2026, 8, 19, 19, 0, 0), who: new[] { "N1" }));
+            var data = AttendanceBuilder.Analyse(input);
+            var una = input.Members.Single(m => m.id == "4");
+
+            CollectionAssert.AreEqual(new[] { "4" }, data.NotSeenInPeriod().Select(m => m.id).ToList());
+            Assert.AreEqual(3, data.Earlier.Count);
+            Assert.IsTrue(data.Earlier.All(e => e.Kind == AttendanceKind.ScoutNight));
+            // the 19 August night and the five in September have come since
+            Assert.AreEqual(((int?)6, (DateTime?)new DateTime(2026, 8, 12)), data.NotSeen(una));
+            // the period's own counts are unchanged by the earlier events
+            Assert.AreEqual(5, data.Events.Count);
+        }
+
+        [TestMethod]
+        public void EarlierEventsInThePeriodOrCancelledOrUnrecordedAreIgnored()
+        {
+            var input = FiveNights();
+            input.EarlierEvents.Add(Event("in period", Wed(0), who: new[] { "N4" }));
+            input.EarlierEvents.Add(Event("cancelled", new DateTime(2026, 8, 5, 19, 0, 0), status: "cancelled", who: new[] { "N4" }));
+            input.EarlierEvents.Add(Event("nobody", new DateTime(2026, 8, 12, 19, 0, 0)));
+            var data = AttendanceBuilder.Analyse(input);
+
+            Assert.AreEqual(0, data.Earlier.Count);
+            Assert.AreEqual(((int?)null, (DateTime?)null), data.NotSeen(input.Members.Single(m => m.id == "4")));
+            Assert.AreEqual(0, AttendanceBuilder.Analyse(FiveNights()).Earlier.Count);
+        }
+
+        [TestMethod]
+        public void OnlyNightsSinceTheYouthJoinedCount()
+        {
+            var input = FiveNights();
+            // Una was invested on the fourth night, so only that and the last night could have been missed
+            input.InvestedOn["4"] = Wed(3).Date;
+            var data = AttendanceBuilder.Analyse(input);
+
+            Assert.AreEqual((int?)2, data.NotSeen(input.Members.Single(m => m.id == "4")).NightsSince);
+        }
+
+        [TestMethod]
+        public void TheReportFlagsWhoHasNotBeenSeenAndColoursTheirCells()
+        {
+            var report = AttendanceLayout.Build(AttendanceBuilder.Analyse(FiveNights()), false, false);
+
+            // Una never came and was never invested, so there is no telling how long she has missed: shown as not seen, but not flagged
+            CollectionAssert.AreEqual(new[] { "Cat", "Ben" }, report.NotSeen.Select(f => f.Name).ToList());
+            CollectionAssert.AreEqual(new[] { "red", "amber" }, report.NotSeen.Select(f => f.Level).ToList());
+            Assert.AreEqual("9 Sep 2026", report.NotSeen.Single(f => f.Name == "Ben").LastSeen);
+
+            Assert.AreEqual("Date", report.Columns[0].Heading);
+            Assert.AreEqual("Nights since", report.Columns[1].Heading);
+            var rows = report.Tables.Single().Rows;
+            Assert.AreEqual("#FFC000", rows.Single(r => r.Name == "Ben").Cells[1].Colour);
+            Assert.AreEqual("#F8696B", rows.Single(r => r.Name == "Cat").Cells[1].Colour);
+            Assert.AreEqual("", rows.Single(r => r.Name == "Ana").Cells[1].Colour);
+            Assert.AreEqual("Not seen", rows.Single(r => r.Name == "Una").Cells[0].Text);
+            Assert.AreEqual("", rows.Single(r => r.Name == "Una").Cells[1].Text);
+            Assert.AreEqual("", rows.Single(r => r.Name == "Una").Cells[1].Colour);
+            Assert.AreEqual("", report.Tables.Single().Average[1].Text);
+            Assert.AreEqual(report.Columns.Count, report.Tables.Single().Average.Count);
+        }
+
+        [TestMethod]
+        public void NobodyFlaggedMeansNoListAndNoScoutNightsMeansNoColumns()
+        {
+            var input = Input(Event("a", Wed(0), who: new[] { "N1", "N2", "N3", "N4" }), Event("b", Wed(1), who: new[] { "N1", "N2", "N3", "N4" }));
+            var report = AttendanceLayout.Build(AttendanceBuilder.Analyse(input), false, false);
+            Assert.AreEqual(0, report.NotSeen.Count);
+            Assert.IsTrue(report.Columns.Any(c => c.Heading == "Nights since"));
+
+            // two events on different days, one of them a camp: no Scout nights to miss
+            var noNights = Input(Event("camp", new DateTime(2026, 9, 12, 9, 0, 0), nights: 2, who: new[] { "N1" }));
+            var report2 = AttendanceLayout.Build(AttendanceBuilder.Analyse(noNights), false, false);
+            Assert.AreEqual(0, report2.NotSeen.Count);
+            Assert.IsFalse(report2.Columns.Any(c => c.Heading == "Nights since"));
+        }
+
+        [TestMethod]
+        public void ThePrintedReportHasASheetForWhoHasNotBeenSeenOnlyWhenThereIsSomeone()
+        {
+            SetEnvironment.SetSyncfusionLicense();
+            var flagged = new Topo.Services.ReportService().GenerateAttendanceAnalysisWorkbook(AttendanceLayout.Build(AttendanceBuilder.Analyse(FiveNights()), false, false), "Sample Group", "scout");
+            CollectionAssert.AreEqual(new[] { "Attendance", "Not seen lately" }, flagged.Worksheets.Select(w => w.Name).ToList());
+            var sheet = flagged.Worksheets["Not seen lately"];
+            Assert.AreEqual("Cat", sheet.Range[7, 1].Text);
+
+            var quiet = AttendanceLayout.Build(AttendanceBuilder.Analyse(Input(Event("a", Wed(0), who: new[] { "N1", "N2", "N3", "N4" }))), false, false);
+            var workbook = new Topo.Services.ReportService().GenerateAttendanceAnalysisWorkbook(quiet, "Sample Group", "scout");
+            CollectionAssert.AreEqual(new[] { "Attendance" }, workbook.Worksheets.Select(w => w.Name).ToList());
         }
 
         [TestMethod]

@@ -1,8 +1,11 @@
-/* The table scrolls sideways inside its own box, so a wide one does not widen the page */
+/* The table scrolls both ways inside its own box, which is no taller than the screen, so a wide table does not widen the page and
+   the two heading rows stay in view while the rows scroll */
 .scroller {
-    overflow-x: auto;
+    overflow: auto;
     width: 0;
     min-width: 100%;
+    max-height: calc(100vh - 1rem);
+    max-height: calc(100dvh - 1rem);
 }
 
 .attendance {
@@ -19,9 +22,21 @@
     border-bottom: 1px solid #d6d5d5;
 }
 
+/* The two heading rows stack up under each other, so the first is given the height the second sits below */
 .attendance thead th {
+    position: sticky;
+    z-index: 2;
     background-color: #e9ecef;
     font-weight: bold;
+}
+
+.attendance thead tr:nth-child(1) th {
+    top: 0;
+    height: 1.9rem;
+}
+
+.attendance thead tr:nth-child(2) th {
+    top: 1.9rem;
 }
 
 /* The names stay in view while the columns scroll */
@@ -34,8 +49,9 @@
     text-align: left;
 }
 
+/* the corner is above the names and the headings it sits between */
 .attendance thead .name {
-    z-index: 2;
+    z-index: 3;
     background-color: #e9ecef;
 }
 
@@ -46,4 +62,34 @@
 
 .attendance tfoot .name {
     background-color: #f8f9fa;
+}
+
+/* Who has missed several Scout nights in a row: amber from three, red from four */
+.not-seen {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d6d5d5;
+    border-radius: 6px;
+}
+
+.not-seen ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.flag {
+    display: inline-block;
+    min-width: 1.5rem;
+    margin-right: 0.4rem;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.flag-amber {
+    background-color: #ffc000;
+}
+
+.flag-red {
+    background-color: #f8696b;
 }

@@ -22,6 +22,24 @@ else
         }
     </div>
 
+    @if (Report.NotSeen.Count > 0)
+    {
+        <div class="not-seen mb-3">
+            <strong>Not seen lately</strong>
+            <span class="text-muted small">@AttendanceData.AmberNights or more Scout nights since they last came to anything, as at the end of the period, looking back up to a year for anyone not seen in it</span>
+            <ul class="mb-0">
+                @foreach (var flag in Report.NotSeen)
+                {
+                    <li>
+                        <span class="flag flag-@flag.Level">@flag.NightsSince</span>
+                        @flag.Name@(Report.BreakByPatrol || flag.Patrol == "" ? "" : $" ({flag.Patrol})")
+                        &ndash; last seen @(flag.LastSeen == "" ? "not found in the year before the period" : flag.LastSeen), @flag.NightsSince Scout @(flag.NightsSince == 1 ? "night" : "nights") ago
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+
     @foreach (var table in Report.Tables)
     {
         @if (table.Patrol != "")

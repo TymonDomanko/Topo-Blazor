@@ -27,6 +27,19 @@ namespace Topo.Model.Attendance
         public List<AttendanceCell> Cells { get; set; } = new List<AttendanceCell>();
     }
 
+    // A youth who has not been seen for several Scout nights
+    public class AttendanceFlag
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Patrol { get; set; } = string.Empty;
+        // How many Scout nights there have been since they last came to anything
+        public int NightsSince { get; set; }
+        // The last day they came to anything, blank when not in the period
+        public string LastSeen { get; set; } = string.Empty;
+        // "amber" or "red"
+        public string Level { get; set; } = string.Empty;
+    }
+
     public class AttendanceTable
     {
         // Blank when the report is not split by patrol
@@ -50,6 +63,8 @@ namespace Topo.Model.Attendance
         public bool BreakByPatrol { get; set; }
         public List<AttendanceColumn> Columns { get; set; } = new List<AttendanceColumn>();
         public List<AttendanceTable> Tables { get; set; } = new List<AttendanceTable>();
+        // Who has not been seen for three or more Scout nights as at the end of the period, the longest first
+        public List<AttendanceFlag> NotSeen { get; set; } = new List<AttendanceFlag>();
     }
 
     public static class AttendanceLayout
@@ -104,26 +119,57 @@ namespace Topo.Model.Attendance
                         Counts = e => string.Equals(e.ChallengeArea, area, StringComparison.OrdinalIgnoreCase), IsPercent = true
                     });
             }
-            report.Columns = measures.Select(m => m.Column).ToList();
+            // when they were last seen goes first, next to the role, when there have been Scout nights to miss
+            var hasNights = data.Events.Any(e => e.Kind == AttendanceKind.ScoutNight);
+            var seenColumns = hasNights ? 2 : 0;
+            if (hasNights)
+            {
+                report.Columns.Add(new AttendanceColumn { Group = "Last seen", Heading = "Date" });
+                report.Columns.Add(new AttendanceColumn { Group = "Last seen", Heading = "Nights since" });
+            }
+            report.Columns.AddRange(measures.Select(m => m.Column));
 
             var names = SignInSheetLayout.GetDisplayNames(data.Youth, useFullNames);
-            var rows = Sorted(data.Youth).Select(member => new AttendanceRow
+            var flags = new List<AttendanceFlag>();
+            var rows = Sorted(data.Youth).Select(member =>
             {
-                Name = names.TryGetValue(member.id, out var name) ? name : $"{member.first_name} {member.last_name}".Trim(),
-                Patrol = member.patrol_name ?? "",
-                Role = member.patrol_duty ?? "",
-                Cells = measures.Select(m => Cell(data, member, m)).ToList()
+                var row = new AttendanceRow
+                {
+                    Name = names.TryGetValue(member.id, out var name) ? name : $"{member.first_name} {member.last_name}".Trim(),
+                    Patrol = member.patrol_name ?? "",
+                    Role = member.patrol_duty ?? "",
+                    Cells = new List<AttendanceCell>()
+                };
+                if (hasNights)
+                {
+                    var (nightsSince, lastSeen) = data.NotSeen(member);
+                    var level = AttendanceData.NotSeenLevel(nightsSince);
+                    var lastSeenText = lastSeen == null ? "" : lastSeen.Value.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
+                    row.Cells.Add(new AttendanceCell { Text = lastSeenText == "" ? "Not seen" : lastSeenText, Colour = FlagColour(level) });
+                    row.Cells.Add(new AttendanceCell { Text = nightsSince?.ToString() ?? "", Colour = FlagColour(level) });
+                    if (level != "")
+                        flags.Add(new AttendanceFlag { Name = row.Name, Patrol = row.Patrol, NightsSince = nightsSince!.Value, LastSeen = lastSeenText, Level = level });
+                }
+                row.Cells.AddRange(measures.Select(m => Cell(data, member, m)));
+                return row;
             }).ToList();
 
-            ApplyColours(rows, measures.Count);
+            ApplyColours(rows, seenColumns, measures.Count);
+            report.NotSeen = flags.OrderByDescending(f => f.NightsSince).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
             report.Tables = breakByPatrol
                 ? rows.GroupBy(r => r.Patrol).Select(g => new AttendanceTable { Patrol = g.Key == "" ? "Unit" : g.Key, Rows = g.ToList() }).ToList()
                 : new List<AttendanceTable> { new AttendanceTable { Rows = rows } };
             foreach (var table in report.Tables)
-                table.Average = Enumerable.Range(0, measures.Count).Select(i => Average(table.Rows.Select(r => r.Cells[i]), measures[i].IsPercent)).ToList();
+            {
+                // nothing to average for when they were last seen
+                table.Average = Enumerable.Range(0, seenColumns).Select(_ => new AttendanceCell())
+                    .Concat(Enumerable.Range(0, measures.Count).Select(i => Average(table.Rows.Select(r => r.Cells[seenColumns + i]), measures[i].IsPercent))).ToList();
+            }
             return report;
         }
+
+        public static string FlagColour(string level) => level == "red" ? "#F8696B" : level == "amber" ? "#FFC000" : "";
 
         // The number of events and the share of the possible ones, side by side
         private static void AddPair(List<Measure> measures, string group, Func<AttendanceEvent, bool> counts, Func<MemberListModel, bool> appliesTo)
@@ -166,9 +212,9 @@ namespace Topo.Model.Attendance
                 .ThenBy(m => m.first_name, StringComparer.OrdinalIgnoreCase).ThenBy(m => m.last_name, StringComparer.OrdinalIgnoreCase);
 
         // Colours every column from red at its lowest value through yellow in the middle to green at its highest, as a spreadsheet's colour scale does
-        private static void ApplyColours(List<AttendanceRow> rows, int columns)
+        private static void ApplyColours(List<AttendanceRow> rows, int first, int columns)
         {
-            for (var i = 0; i < columns; i++)
+            for (var i = first; i < first + columns; i++)
             {
                 var cells = rows.Select(r => r.Cells[i]).Where(c => c.Value != null).ToList();
                 if (cells.Count == 0)
