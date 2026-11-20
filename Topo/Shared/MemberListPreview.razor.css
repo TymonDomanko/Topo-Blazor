@@ -1,0 +1,16 @@
+/* The shades the printed list uses */
+.second-last {
+    background-color: #ffff00;
+}
+
+.last {
+    background-color: #ff99cc;
+}
+
+.swatch {
+    display: inline-block;
+    width: 1.4rem;
+    height: 0.9rem;
+    border: 1px solid #999;
+    vertical-align: middle;
+}
