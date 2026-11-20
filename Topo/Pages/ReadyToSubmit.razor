@@ -13,7 +13,7 @@
     <div class="form-group mb-3 row">
         <label for="unit" class="col-sm-2 col-form-label">Select Unit</label>
         <div class="col-sm-3">
-            <select id="unit" class="form-select" value="@model.UnitId" @onchange="UnitChange" disabled="@Loading">
+            <select id="unit" class="form-select" value="@model.UnitId" @onchange="UnitChange">
                 <option value="">Select unit</option>
                 @foreach (var unit in model.Units)
                 {
@@ -21,15 +21,9 @@
                 }
             </select>
         </div>
-        @if (Loading)
-        {
-            <div class="col-sm-7 col-form-label">Reading @Progress... this can take a minute.</div>
-        }
-        @if (!string.IsNullOrEmpty(model.ErrorMessage))
-        {
-            <div class="col-sm-7 col-form-label text-danger">@model.ErrorMessage</div>
-        }
     </div>
+
+    <PageStatus Loading="Loading" Progress="@Progress" Error="@model.ErrorMessage" />
 
     <div class="form-group mb-3 row">
         <label class="col-sm-2 col-form-label">Badges</label>
@@ -73,15 +67,13 @@
         </div>
     </div>
 
-    @if (Report != null)
+    @if (NoYouth)
     {
-        <div class="mt-3 mb-3 row">
-            <div class="col-sm-2"></div>
-            <div class="col-sm-10">
-                <button type="button" class="btn btn-primary" @onclick="PdfClick">Ready to Submit (pdf)</button>
-                <button type="button" class="btn btn-success" @onclick="XlsxClick">Ready to Submit (xlsx)</button>
-            </div>
-        </div>
+        <div class="mt-3 mb-3 text-muted">No youth members in this unit.</div>
+    }
+    else if (Report != null)
+    {
+        <ReportButtons Name="Ready to Submit" OnPdf="PdfClick" OnXlsx="XlsxClick" Disabled="@(Report.Items.Count == 0)" />
 
         <div class="mt-3 mb-3 row">
             <label class="col-sm-2 col-form-label">Preview</label>

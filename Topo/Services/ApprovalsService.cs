@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Components.Forms;
 using Newtonsoft.Json;
 using System.Globalization;
+using Topo.Model;
 using Topo.Model.Approvals;
 using Topo.Model.Members;
 
@@ -9,7 +10,7 @@ namespace Topo.Services
 {
     public interface IApprovalsService
     {
-        public Task<List<ApprovalsListModel>> GetApprovalListItems(string unitId);
+        public Task<List<ApprovalsListModel>> GetApprovalListItems(string unitId, Action<string>? progress = null);
         public Task<List<ApprovalsListModel>> ReadApprovalListFromLocalStorage(string unitId);
         public Task UpdateApproval(string unitId, ApprovalsListModel approval);
         public Task<string> DownloadApprovalList(string unitId);
@@ -154,12 +155,15 @@ namespace Topo.Services
         //    return myTI.ToTitleCase(name);
         //}
 
-        public async Task<List<ApprovalsListModel>> GetApprovalListItems(string unitId)
+        public async Task<List<ApprovalsListModel>> GetApprovalListItems(string unitId, Action<string>? progress = null)
         {
+            progress?.Invoke("the pending approvals");
             var pendingApprovals = await _terrainAPIService.GetUnitApprovals(unitId, "pending");
+            progress?.Invoke("the finalised approvals");
             var finalisedApprovals = await _terrainAPIService.GetUnitApprovals(unitId, "finalised");
             var approvals = finalisedApprovals.results.Concat(pendingApprovals.results).ToList();
             var achievementApprovals = approvals.GroupBy(r => r.achievement.id).ToList();
+            progress?.Invoke("the members");
             var memberList = await _memberService.GetMembersAsync(unitId);
             List<ApprovalsListModel> approvalList = new List<ApprovalsListModel>();
             foreach (var result in achievementApprovals)
@@ -317,7 +321,7 @@ namespace Topo.Services
             var approvalItem = savedApprovalItems.Where(a => a.achievement_id == approval.achievement_id && a.submission_type == approval.submission_type).FirstOrDefault();
             if (approvalItem != null)
             {
-                approvalItem.presented_date = approval.presented_date.HasValue ? approval.presented_date.Value.ToLocalTime() : null;
+                approvalItem.presented_date = ReportDate.ForReport(approval.presented_date);
             }
             await WriteApprovalsListToLocalStarage(savedApprovalItems.OrderBy(a => a.submission_date).ToList(), unitId);
         }

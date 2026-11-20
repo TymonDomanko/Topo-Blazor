@@ -59,39 +59,24 @@
         <div class="mt-3 mb-3 row">
             <label class="col-sm-2 col-form-label">From Date</label>
             <div class="col-sm-3">
-                <InputDate @bind-Value="@model.FromDate" class="form-control" />
+                <InputDate @bind-Value="@model.FromDate" @bind-Value:after="DatesChanged" class="form-control" />
             </div>
             <label class="col-sm-2 col-form-label">To Date</label>
             <div class="col-sm-3">
-                <InputDate @bind-Value="@model.ToDate" class="form-control" />
+                <InputDate @bind-Value="@model.ToDate" @bind-Value:after="DatesChanged" class="form-control" />
             </div>
         </div>
     }
 
-    <div class="mt-3 mb-3 row">
-        <div class="col-sm-2"></div>
-        <div class="col-sm-10">
-            <button type="button" class="btn btn-primary" disabled="@Busy" @onclick="GenerateClick">Generate Unit History</button>
-            @if (Busy)
-            {
-                <span class="ms-3">Reading @Progress... @(model.AllTime ? "all time can take several minutes." : "this can take a minute or two.")</span>
-            }
-            @if (!string.IsNullOrEmpty(model.ErrorMessage))
-            {
-                <span class="ms-3 text-danger">@model.ErrorMessage</span>
-            }
-        </div>
-    </div>
+    <PageStatus Loading="Busy" Progress="@Progress" Error="@model.ErrorMessage" />
 </EditForm>
 
 @if (model.Report != null)
 {
     var report = model.Report;
 
-    <div class="mb-3">
-        <button type="button" class="btn btn-primary" @onclick="@(() => DownloadClick(OutputType.PDF))">Unit History (pdf)</button>
-        <button type="button" class="btn btn-success" @onclick="@(() => DownloadClick(OutputType.Excel))">Unit History (xlsx)</button>
-    </div>
+    <ReportButtons Name="Unit History" Disabled="@(report.Members.Total == 0)"
+                   OnPdf="@(() => DownloadClick(OutputType.PDF))" OnXlsx="@(() => DownloadClick(OutputType.Excel))" />
 
     <UnitReportView Report="report" />
 }
