@@ -22,7 +22,8 @@
         ScoutingHistory,
         UnitReport,
         SectionReport,
-        SiaProgress
+        SiaProgress,
+        ReadyToSubmit
     }
 
     public enum OutputType
