@@ -6,6 +6,7 @@ using Topo.Model.Members;
 using Topo.Model.PatrolPlanner;
 using Topo.Model.Milestone;
 using Topo.Model.OAS;
+using Topo.Model.BadgeStore;
 using Topo.Model.Program;
 using Topo.Model.ProgramBuilder;
 using Topo.Model.SIA;
@@ -36,6 +37,7 @@ namespace Topo.Services
         // Records additional awards (Camper, Walkabout and so on) in Terrain, the way its Record Achievements page does. Each item is a member, an award id
         // and the day awarded. Terrain adds a record each time and cannot be asked to remove one, so the caller checks for existing records first.
         public Task<TerrainCallResult> RecordAdditionalAwardsAsync(string unitId, IEnumerable<(string memberId, string awardId, DateTime awarded)> items);
+        public Task<GetEventCommentsResultModel> GetEventCommentsAsync(string eventId);
         public Task<List<ProposedActivityModel>?> GetProposedActivitiesAsync(string unitId);
         // Adds an activity to the unit's calendar; what Terrain answered, as it did not need to be understood
         public Task<ProgramWriteResult> CreateUnitEventAsync(string unitId, object body);
@@ -264,7 +266,7 @@ namespace Topo.Services
             return getEventsResultModel;
         }
 
-        // The comments on an event, newest first. Topo keeps its badge records as comments on one event (see Model/BadgeStore).
+        // Records additional awards in Terrain, the way its Record Achievements page does; Terrain cannot remove a record.
         public async Task<TerrainCallResult> RecordAdditionalAwardsAsync(string unitId, IEnumerable<(string memberId, string awardId, DateTime awarded)> items)
         {
             await RefreshTokenAsync();
@@ -279,6 +281,16 @@ namespace Topo.Services
                 })
             });
             return await SendWriteRequest(HttpMethod.Put, $"{achievementsAddress}units/{unitId}/achievements?type=additional_award", body);
+        }
+
+        // The comments on an event, newest first. Topo keeps its badge records as comments on one event (see Model/BadgeStore).
+        public async Task<GetEventCommentsResultModel> GetEventCommentsAsync(string eventId)
+        {
+            await RefreshTokenAsync();
+
+            string requestUri = $"{eventsAddress}events/{eventId}/comments";
+            var result = await SendRequest(HttpMethod.Get, requestUri);
+            return DeserializeObject<GetEventCommentsResultModel>(result) ?? new GetEventCommentsResultModel();
         }
 
         public async Task<GetEventResultModel?> GetEventAsync(string eventId)
