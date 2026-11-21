@@ -1,0 +1,213 @@
+@page "/approvals/massaward"
+@inherits Controller.MassAwardController
+@using Topo.Model.Approvals
+@using Syncfusion.Blazor.Calendars
+
+<PageTitle>Topo / Mass awarding</PageTitle>
+
+<ApprovalsSubNav />
+
+<div class="mt-3 mb-3 row">
+    <h2>Mass awarding @GroupName</h2>
+</div>
+
+<div class="form-group mb-3 row">
+    <label for="unit" class="col-sm-2 col-form-label">
+        Select Unit
+    </label>
+    <div class="col-sm-3">
+        <select id="unit" class="form-select" value="@UnitId" @onchange="UnitChange" disabled="@IsAwarding">
+            <option value="">Select unit</option>
+            @foreach (var unit in Units)
+            {
+                <option value="@unit.Key">@unit.Value</option>
+            }
+        </select>
+    </div>
+    <div class="col-sm-7">
+    </div>
+</div>
+
+@if (IsLoading)
+{
+    <p>Reading the pending awards from Terrain...</p>
+}
+else if (!string.IsNullOrEmpty(LoadError))
+{
+    <div class="alert alert-danger" role="alert">@LoadError</div>
+    <button type="button" class="btn btn-primary" @onclick="RefreshClick">Try again</button>
+}
+else if (Awards == null || Shown == null || Selection == null)
+{
+    <p>Select a unit to see its pending awards.</p>
+}
+else if (Awards.People.Count == 0)
+{
+    <p id="none">There are no pending awards in this unit.</p>
+    <button type="button" class="btn btn-primary" @onclick="RefreshClick">Read Terrain again</button>
+}
+else
+{
+    <div class="mb-3 row" id="filters">
+        <label for="award-date" class="col-sm-2 col-form-label">Date awarded</label>
+        <div class="col-sm-3">
+            <SfDatePicker TValue="DateTime?" ID="award-date" Value="AwardDate" Min="EarliestDate" Max="Today" Format="dd/MM/yyyy" Enabled="@(!IsAwarding)" ShowClearButton="false">
+                <DatePickerEvents TValue="DateTime?" ValueChange="DateChanged" OnRenderDayCell="RenderDay"></DatePickerEvents>
+            </SfDatePicker>
+            <div class="form-check mt-1">
+                <input class="form-check-input" type="checkbox" id="allow-any-date" @bind="AllowAnyDate" @bind:after="AllowAnyDateChanged" disabled="@IsAwarding" />
+                <label class="form-check-label" for="allow-any-date">Allow any date</label>
+            </div>
+        </div>
+        <label for="event" class="col-sm-2 col-form-label">Only people who attended</label>
+        <div class="col-sm-5">
+            <select id="event" class="form-select" value="@SelectedEventId" @onchange="EventChange" disabled="@(EventsLoading || Events.Count == 0 || IsAwarding)">
+                <option value="">Everyone (no filter)</option>
+                @foreach (var ev in Events)
+                {
+                    <option value="@ev.Id">@ev.Display</option>
+                }
+            </select>
+            @if (EventsLoading)
+            {
+                <div class="form-text">Reading from Terrain...</div>
+            }
+            else if (!string.IsNullOrEmpty(EventMessage))
+            {
+                <div class="form-text" id="event-message">@EventMessage</div>
+            }
+            else if (!string.IsNullOrEmpty(SelectedEventId))
+            {
+                <div class="form-text" id="attended-count">@AttendedCount @(AttendedCount == 1 ? "person" : "people") attended this event in Terrain.</div>
+            }
+            else if (EventsRead && AwardDate == null)
+            {
+                <div class="form-text" id="event-message">Pick the date the awards were presented. The day's event is chosen and the people who attended are ticked.</div>
+            }
+            else if (EventsRead && Events.Count == 0)
+            {
+                <div class="form-text" id="event-message">No events for the unit on that day.</div>
+            }
+        </div>
+    </div>
+
+    <div class="mb-3" id="toolbar">
+        <strong id="selected-count">@Selection.Count selected</strong>
+        <span class="text-muted">of @Shown.Total pending awards for @Shown.People.Count @(Shown.People.Count == 1 ? "person" : "people")@(Shown.Total != Awards.Total ? $" ({Awards.Total} awards in all)" : "")</span>
+        <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="select-all" @onclick="SelectAllClick" disabled="@IsAwarding">Select all</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="clear" @onclick="ClearClick" disabled="@(Selection.Count == 0 || IsAwarding)">Clear</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="refresh" @onclick="RefreshClick" disabled="@IsAwarding">Read Terrain again</button>
+        <button type="button" class="btn btn-success btn-sm ms-3" id="award" @onclick="AwardClick" disabled="@(Selection.Count == 0 || IsAwarding)">Award @Selection.Count selected</button>
+        @if (!string.IsNullOrEmpty(AwardMessage))
+        {
+            <span class="text-danger ms-2" id="award-message">@AwardMessage</span>
+        }
+    </div>
+
+    @if (ConfirmOpen)
+    {
+        var chosen = Selection.SelectedAwards();
+        <div class="card border-warning mb-3" id="confirm">
+            <div class="card-body">
+                <h5 class="card-title">Confirm: award @chosen.Count @(chosen.Count == 1 ? "achievement" : "achievements") on @AwardDate!.Value.ToString("dd/MM/yyyy")</h5>
+                <ul>
+                    @foreach (var person in Shown.People)
+                    {
+                        var theirs = chosen.Where(a => a.Item.MemberId == person.MemberId).ToList();
+                        if (theirs.Count == 0) continue;
+                        <li><strong>@person.Name</strong>: @string.Join(", ", theirs.Select(a => a.Item.AchievementName))</li>
+                    }
+                </ul>
+                <p class="mb-1">Please make sure these achievements have been awarded in a Scouts ceremony first.</p>
+                <p class="text-danger mb-2">This sends each award to Terrain and cannot be undone from Topo.</p>
+                <button type="button" class="btn btn-warning" id="confirm-yes" @onclick="ConfirmAwardClick">Confirm award</button>
+                <button type="button" class="btn btn-outline-secondary" id="confirm-cancel" @onclick="CancelConfirmClick">Cancel</button>
+            </div>
+        </div>
+    }
+
+    @if (IsAwarding)
+    {
+        <div class="alert alert-info" id="awarding">Awarding... @AwardsTried of @AwardsToSend sent. Please wait.</div>
+    }
+    else if (LastResult != null && LastResult.Outcomes.Count > 0)
+    {
+        <div class="card mb-3" id="result">
+            <div class="card-body">
+                <h5 class="card-title">@LastResult.Done.Count of @LastResult.Outcomes.Count awarded</h5>
+                @if (LastResult.Done.Count > 0)
+                {
+                    <p class="mb-1">Awarded:</p>
+                    <ul>
+                        @foreach (var done in LastResult.Done)
+                        {
+                            <li>@done.Award.Item.MemberName: @done.Award.Item.AchievementName</li>
+                        }
+                    </ul>
+                    @if (StillListed > 0)
+                    {
+                        <p class="text-muted">Terrain still lists @StillListed of these as pending; it may need another leader.</p>
+                    }
+                }
+                @if (LastResult.Failed.Count > 0)
+                {
+                    <p class="mb-1 text-danger">Not awarded (they are still ticked, so you can try them again):</p>
+                    <ul>
+                        @foreach (var failed in LastResult.Failed)
+                        {
+                            <li>@failed.Award.Item.MemberName: @failed.Award.Item.AchievementName: @failed.Error</li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    }
+
+    @if (Shown.People.Count == 0)
+    {
+        <p id="nobody">None of the people who attended have a pending award.</p>
+    }
+
+    @foreach (var person in Shown.People)
+    {
+        var (selected, selectable) = Selection.ForPerson(person.MemberId);
+        <div class="card mb-3 person" data-member="@person.MemberId">
+            <div class="card-header">
+                <div class="form-check">
+                    <input class="form-check-input person-toggle" type="checkbox" id="person-@person.MemberId"
+                           checked="@Selection.IsPersonFullySelected(person.MemberId)"
+                           disabled="@(selectable == 0 || IsAwarding)"
+                           @onchange="() => TogglePerson(person.MemberId)" />
+                    <label class="form-check-label fw-bold" for="person-@person.MemberId">@person.Name</label>
+                    <span class="text-muted ms-2">
+                        @(selectable == 0 ? "nothing here you can award" : $"{selected} of {selectable} selected")
+                    </span>
+                </div>
+            </div>
+            <ul class="list-group list-group-flush">
+                @foreach (var award in person.Awards)
+                {
+                    var id = award.Item.SubmissionId;
+                    <li class="list-group-item award">
+                        <div class="form-check">
+                            <input class="form-check-input award-toggle" type="checkbox" id="award-@id"
+                                   checked="@Selection.IsSelected(id)"
+                                   disabled="@(!award.CanAward || IsAwarding)"
+                                   @onchange="() => ToggleAward(id)" />
+                            <label class="form-check-label" for="award-@id">@award.Item.AchievementName</label>
+                            <span class="text-muted ms-2">submitted @award.Item.SubmissionDate.ToLocalTime().ToString("dd/MM/yyyy")</span>
+                            @if (!award.CanAward)
+                            {
+                                <span class="text-muted ms-2">(@award.Reason)</span>
+                            }
+                            @foreach (var previous in award.Item.PreviousActions)
+                            {
+                                <div class="text-muted small ms-4">@previous.By: @previous.Outcome, @previous.Time.ToLocalTime().ToString("dd/MM/yyyy")</div>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+}

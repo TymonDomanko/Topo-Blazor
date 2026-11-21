@@ -60,7 +60,7 @@ namespace Topo.Model.Approvals
             };
         }
 
-        private static PendingApprovalItem FromResult(Result result)
+        internal static PendingApprovalItem FromResult(Result result)
         {
             var submittedBy = result.submitted_by == null || string.IsNullOrEmpty(result.submitted_by.id)
                 ? string.Empty
