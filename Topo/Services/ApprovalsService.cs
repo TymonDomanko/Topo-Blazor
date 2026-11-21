@@ -16,6 +16,7 @@ namespace Topo.Services
         public Task UploadApprovals(IBrowserFile approvalsFile, string unitId);
         public Task<PendingApprovalQueue> GetPendingApprovalQueue(string unitId);
         public Task<List<PendingSubmission>> GetPendingSubmissions(string unitId);
+        public Task<AwardRequestList> GetAwardRequests(string unitId);
         public Task<string?> PerformAction(string submissionId, ApprovalAction action);
         public Task<SubmissionDetails?> GetSubmissionDetails(PendingApprovalItem item);
     }
@@ -329,6 +330,13 @@ namespace Topo.Services
         {
             var pending = await _terrainAPIService.GetUnitApprovals(unitId, "pending");
             return PendingApprovalQueue.FromPending(pending.results, CurrentMemberId(unitId));
+        }
+
+        // Every pending award request in the unit, grouped by person
+        public async Task<AwardRequestList> GetAwardRequests(string unitId)
+        {
+            var pending = await _terrainAPIService.GetUnitApprovals(unitId, "pending");
+            return AwardRequestList.FromPending(pending.results, CurrentMemberId(unitId));
         }
 
         public async Task<List<PendingSubmission>> GetPendingSubmissions(string unitId)
