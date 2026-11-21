@@ -5,6 +5,7 @@ using Topo.Model.Login;
 using Topo.Model.Members;
 using Topo.Model.Milestone;
 using Topo.Model.OAS;
+using Topo.Model.BadgeStore;
 using Topo.Model.Program;
 using Topo.Model.SIA;
 using Topo.Model.AdditionalAwards;
@@ -27,6 +28,11 @@ namespace Topo.Services
         public Task PutCalendarsAsync(string userId, GetCalendarsResultModel putCalendarsResultModel);
         public Task<GetEventsResultModel?> GetEventsAsync(string userId, DateTime fromDate, DateTime toDate);
         public Task<GetEventResultModel?> GetEventAsync(string eventId);
+        public Task<GetEventCommentsResultModel> GetEventCommentsAsync(string eventId);
+        public Task<GetEventsResultModel?> GetOrganisedEventsAsync(string userId);
+        public Task<TerrainCallResult> CreateGroupEventAsync(string groupId, string eventJson);
+        public Task<TerrainCallResult> PostEventCommentAsync(string eventId, string memberId, string text);
+        public Task<TerrainCallResult> DeleteEventCommentAsync(string eventId, string commentId);
         public Task<List<ProposedActivityModel>?> GetProposedActivitiesAsync(string unitId);
         public Task<GetOASTreeResultsModel?> GetOASTreeAsync(string stream);
         public Task<GetOASTemplateResultModel?> GetOASTemplateAsync(string stream);
@@ -232,6 +238,45 @@ namespace Topo.Services
             var getEventsResultModel = DeserializeObject<GetEventsResultModel>(result);
 
             return getEventsResultModel;
+        }
+
+        // The comments on an event, newest first. Topo keeps its badge records as comments on one event (see Model/BadgeStore).
+        public async Task<GetEventCommentsResultModel> GetEventCommentsAsync(string eventId)
+        {
+            await RefreshTokenAsync();
+
+            string requestUri = $"{eventsAddress}events/{eventId}/comments";
+            var result = await SendRequest(HttpMethod.Get, requestUri);
+            return DeserializeObject<GetEventCommentsResultModel>(result) ?? new GetEventCommentsResultModel();
+        }
+
+        // The events the member organises. Unlike the calendar read this shows an event whatever calendars are switched on.
+        public async Task<GetEventsResultModel?> GetOrganisedEventsAsync(string userId)
+        {
+            await RefreshTokenAsync();
+
+            var result = await SendRequest(HttpMethod.Get, $"{eventsAddress}members/{userId}/organised-events");
+            return DeserializeObject<GetEventsResultModel>(result);
+        }
+
+        // Creates a planned group event (204, no id comes back). Needs a group leader.
+        public async Task<TerrainCallResult> CreateGroupEventAsync(string groupId, string eventJson)
+        {
+            await RefreshTokenAsync();
+            return await SendWriteRequest(HttpMethod.Post, $"{eventsAddress}groups/{groupId}/events", eventJson);
+        }
+
+        public async Task<TerrainCallResult> PostEventCommentAsync(string eventId, string memberId, string text)
+        {
+            await RefreshTokenAsync();
+            var body = JsonConvert.SerializeObject(new { member_id = memberId, text });
+            return await SendWriteRequest(HttpMethod.Post, $"{eventsAddress}events/{eventId}/comments", body);
+        }
+
+        public async Task<TerrainCallResult> DeleteEventCommentAsync(string eventId, string commentId)
+        {
+            await RefreshTokenAsync();
+            return await SendWriteRequest(HttpMethod.Delete, $"{eventsAddress}events/{eventId}/comments/{commentId}", "");
         }
 
         public async Task<GetEventResultModel?> GetEventAsync(string eventId)
@@ -601,6 +646,29 @@ namespace Topo.Services
             var getPeakAwardResultsModel = DeserializeObject<GetPeakAwardsResultsModel>(result);
 
             return getPeakAwardResultsModel ?? new GetPeakAwardsResultsModel();
+        }
+
+        // A call that changes Terrain, sent as JSON, that reports what came back instead of only the body. A rejection from the
+        // events host can carry no CORS header, so the browser reports it as no reply at all; that comes back as status 0.
+        private async Task<TerrainCallResult> SendWriteRequest(HttpMethod httpMethod, string requestUri, string jsonBody)
+        {
+            var httpRequest = new HttpRequestMessage(httpMethod, requestUri);
+            if (!string.IsNullOrEmpty(jsonBody))
+                httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+            httpRequest.Headers.Add("authorization", _storageService?.AuthenticationResult?.IdToken);
+            httpRequest.Headers.Add("accept", "application/json, text/plain, */*");
+            try
+            {
+                var response = await _httpClient.SendAsync(httpRequest);
+                var body = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation($"Version: {_storageService.Version}; Request: {httpMethod} {requestUri}; StatusCode: {(int)response.StatusCode}");
+                return new TerrainCallResult { Success = response.IsSuccessStatusCode, StatusCode = (int)response.StatusCode, Body = body };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogInformation($"Version: {_storageService.Version}; Request: {httpMethod} {requestUri}; Exception: {ex.Message}");
+                return new TerrainCallResult { Success = false, StatusCode = 0, Body = ex.Message };
+            }
         }
 
         private async Task<string> SendRequest(HttpMethod httpMethod, string requestUri, string content = "", string xAmzTargetHeader = "")
