@@ -10,6 +10,15 @@ namespace Topo.Services
             return sorted.Chunk(rows).Select(column => column.OrderBy(c => c.Value).ToList()).ToList();
         }
 
+        // The unit's own calendar, which has the unit's id; failing that, the one named after it (see below)
+        public static string? FindForUnit(IEnumerable<KeyValuePair<string, string>> calendars, string? unitId, string? unitName)
+        {
+            var list = calendars.ToList();
+            if (!string.IsNullOrEmpty(unitId) && list.Any(c => c.Key == unitId))
+                return unitId;
+            return FindForUnit(list, unitName);
+        }
+
         // The calendar named after a unit; failing that, one whose name contains the unit's name (or the other way round).
         // Null when there is none.
         public static string? FindForUnit(IEnumerable<KeyValuePair<string, string>> calendars, string? unitName)

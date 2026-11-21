@@ -5,6 +5,7 @@
         public string id { get; set; } = "";
         public string status { get; set; } = "";
         public string title { get; set; } = "";
+        public string description { get; set; } = "";
         public string location { get; set; } = "";
         public Organiser organiser { get; set; } = new Organiser();
         public Organiser[] organisers { get; set; } = new Organiser[0];
