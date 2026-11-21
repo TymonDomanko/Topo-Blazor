@@ -38,6 +38,10 @@ namespace Topo.Services
         // and the day awarded. Terrain adds a record each time and cannot be asked to remove one, so the caller checks for existing records first.
         public Task<TerrainCallResult> RecordAdditionalAwardsAsync(string unitId, IEnumerable<(string memberId, string awardId, DateTime awarded)> items);
         public Task<GetEventCommentsResultModel> GetEventCommentsAsync(string eventId);
+        public Task<GetEventsResultModel?> GetOrganisedEventsAsync(string userId);
+        public Task<TerrainCallResult> CreateGroupEventAsync(string groupId, string eventJson);
+        public Task<TerrainCallResult> PostEventCommentAsync(string eventId, string memberId, string text);
+        public Task<TerrainCallResult> DeleteEventCommentAsync(string eventId, string commentId);
         public Task<List<ProposedActivityModel>?> GetProposedActivitiesAsync(string unitId);
         // Adds an activity to the unit's calendar; what Terrain answered, as it did not need to be understood
         public Task<ProgramWriteResult> CreateUnitEventAsync(string unitId, object body);
@@ -291,6 +295,35 @@ namespace Topo.Services
             string requestUri = $"{eventsAddress}events/{eventId}/comments";
             var result = await SendRequest(HttpMethod.Get, requestUri);
             return DeserializeObject<GetEventCommentsResultModel>(result) ?? new GetEventCommentsResultModel();
+        }
+
+        // The events the member organises. Unlike the calendar read this shows an event whatever calendars are switched on.
+        public async Task<GetEventsResultModel?> GetOrganisedEventsAsync(string userId)
+        {
+            await RefreshTokenAsync();
+
+            var result = await SendRequest(HttpMethod.Get, $"{eventsAddress}members/{userId}/organised-events");
+            return DeserializeObject<GetEventsResultModel>(result);
+        }
+
+        // Creates a planned group event (204, no id comes back). Needs a group leader.
+        public async Task<TerrainCallResult> CreateGroupEventAsync(string groupId, string eventJson)
+        {
+            await RefreshTokenAsync();
+            return await SendWriteRequest(HttpMethod.Post, $"{eventsAddress}groups/{groupId}/events", eventJson);
+        }
+
+        public async Task<TerrainCallResult> PostEventCommentAsync(string eventId, string memberId, string text)
+        {
+            await RefreshTokenAsync();
+            var body = JsonConvert.SerializeObject(new { member_id = memberId, text });
+            return await SendWriteRequest(HttpMethod.Post, $"{eventsAddress}events/{eventId}/comments", body);
+        }
+
+        public async Task<TerrainCallResult> DeleteEventCommentAsync(string eventId, string commentId)
+        {
+            await RefreshTokenAsync();
+            return await SendWriteRequest(HttpMethod.Delete, $"{eventsAddress}events/{eventId}/comments/{commentId}", "");
         }
 
         public async Task<GetEventResultModel?> GetEventAsync(string eventId)
