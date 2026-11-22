@@ -45,7 +45,7 @@ namespace Topo.Services
         // What to hand over for the unit's Scouts: the last scan's findings, against Terrain's records as they are now (so one that has been
         // recorded since is no longer listed). Empty until a scan has run.
         Task<List<AwardRow>> PendingAsync(string unitId);
-        // The Camper and Walkabout Awards Terrain holds a record of for the unit's members, for the "Has been presented" list
+        // The additional awards (Camper, Walkabout and the rest) Terrain holds a record of for the unit's members, for the "Has been presented" list
         Task<List<RecordedAward>> RecordedAsync(string unitId);
         // Records the awards in Terrain as awarded on a day, and the lower levels each covers. Terrain cannot remove a record, so a level it
         // already has a record of is skipped, and the caller has already confirmed.
@@ -272,17 +272,32 @@ namespace Topo.Services
 
         public async Task<List<RecordedAward>> RecordedAsync(string unitId)
         {
-            var tiers = (await TiersAsync()).ToDictionary(t => t.Id);
+            var names = await AwardNamesAsync();
             var members = (await _membersService.GetMembersAsync(unitId)).ToDictionary(m => m.id);
             var recorded = new List<RecordedAward>();
             foreach (var record in RecordDays((await _terrainAPIService.GetUnitAdditionalAwardAchievements(unitId)).results))
             {
                 var key = record.Key.Split('|');
-                if (key.Length != 2 || !tiers.TryGetValue(key[1], out var tier) || !members.TryGetValue(key[0], out var member))
+                if (key.Length != 2 || !members.TryGetValue(key[0], out var member))
                     continue;
-                recorded.Add(new RecordedAward { MemberId = key[0], FirstName = member.first_name, LastName = member.last_name, AwardId = tier.Id, AwardName = tier.Name, Day = record.Value });
+                recorded.Add(new RecordedAward
+                {
+                    MemberId = key[0], FirstName = member.first_name, LastName = member.last_name, AwardId = key[1],
+                    // An award Terrain no longer lists by name is shown by its id
+                    AwardName = names.TryGetValue(key[1], out var name) ? name : key[1],
+                    Day = record.Value
+                });
             }
             return recorded;
+        }
+
+        // Every additional award Terrain lists, by id, with its name
+        private async Task<Dictionary<string, string>> AwardNamesAsync()
+        {
+            var specifications = _storageService.AdditionalAwardSpecifications;
+            if (specifications == null || specifications.Count == 0)
+                return (await _terrainAPIService.GetAdditionalAwardSpecifications()).AwardDescriptions.GroupBy(a => a.id).ToDictionary(g => g.Key, g => g.First().title);
+            return specifications.GroupBy(a => a.id).ToDictionary(g => g.Key, g => g.First().name);
         }
 
         public async Task<AwardWriteSummary> PresentAsync(IEnumerable<AwardRow> rows, DateTime presented)
