@@ -58,7 +58,7 @@ namespace Topo.Model.AdditionalAwards
         public DateTime? Earned { get; set; }
     }
 
-    // A Camper or Walkabout Award Terrain holds a record of: it has been handed over, on that day
+    // An additional award (Camper, Walkabout or another) Terrain holds a record of: it has been handed over, on that day
     public class RecordedAward
     {
         public string MemberId { get; set; } = "";
@@ -74,7 +74,7 @@ namespace Topo.Model.AdditionalAwards
         // The id of a row for an award Terrain already holds, so it can be told from one still to hand over (topo:)
         public const string RecordedIdPrefix = "terrain:";
 
-        // The Camper and Walkabout Awards Terrain holds, as presented rows for the Approvals list ("Has been presented"). The day is the day
+        // The additional awards Terrain holds, as presented rows for the Approvals list ("Has been presented"). The day is the day
         // Terrain has them awarded, which is the day they were handed over; the logbook day is not known for them, so there is no awarded date.
         public static List<ApprovalsListModel> ToRecordedRows(IEnumerable<RecordedAward> recorded) =>
             recorded.Select(r => new ApprovalsListModel
