@@ -10,7 +10,7 @@ using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class LogbookController : ComponentBase
+    public class LogbookController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -95,7 +95,13 @@ namespace Topo.Controller
             catch (OperationCanceledException)
             {
             }
+            _cancel?.Dispose();
+            _cancel = null;
         }
+
+        // Leaving the page stops the reading, so a Scout's profile is not left taken on for the next page. A Scout already being read is
+        // finished first.
+        public void Dispose() => _cancel?.Cancel();
 
         // Reads the logbook of each Scout not read yet, one at a time, showing each as soon as it is in
         private async Task Load()

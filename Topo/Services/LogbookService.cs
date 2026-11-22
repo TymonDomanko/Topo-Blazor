@@ -6,7 +6,6 @@ namespace Topo.Services
 {
     public interface ILogbookService
     {
-        public Task<List<MemberLogbookReportViewModel>> GenerateLogbookData(List<KeyValuePair<string, string>> selectedMembers);
         // Each Scout's totals and entries, read one Scout at a time (a logbook is only readable with that Scout's profile taken on).
         // onRead is told about each Scout as soon as they are read, so a page can show them while the rest are still coming. A Scout whose
         // logbook Terrain will not give (or that cannot be read) is passed to onFailed by name and the others carry on.
@@ -21,9 +20,6 @@ namespace Topo.Services
         {
             _terrainAPIService = terrainAPIService;
         }
-
-        public async Task<List<MemberLogbookReportViewModel>> GenerateLogbookData(List<KeyValuePair<string, string>> selectedMembers) =>
-            MemberLogbook.ReportRows(await ReadLogbooksAsync(selectedMembers));
 
         public async Task<List<MemberLogbook>> ReadLogbooksAsync(IReadOnlyList<KeyValuePair<string, string>> members, Action<MemberLogbook>? onRead = null,
             Action<string>? progress = null, CancellationToken cancellationToken = default, Action<string>? onFailed = null)
