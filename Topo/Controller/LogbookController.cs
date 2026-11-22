@@ -10,7 +10,7 @@ using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class LogbookController : ComponentBase
+    public class LogbookController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -31,6 +31,19 @@ namespace Topo.Controller
         public ILogbookService _LogbookService { get; set; }
 
         public LogbookPageViewModel model = new LogbookPageViewModel();
+        public bool Loading;
+        public string Progress = "";
+        public string ErrorMessage = "";
+        // The logbooks read for the unit, by member id. Switching "Include Leaders" on reads only the leaders added.
+        private readonly Dictionary<string, MemberLogbook> _logbooks = new();
+        private CancellationTokenSource? _cancel;
+        private Task _running = Task.CompletedTask;
+        private int _loadVersion;
+
+        // The Scouts shown, in the order of the member list, as far as they have been read
+        public List<MemberLogbook> Logbooks => model.Members.Where(m => _logbooks.ContainsKey(m.id)).Select(m => _logbooks[m.id]).ToList();
+        // The people ticked beside their names; with none ticked the report is for everyone
+        public HashSet<string> Ticked => model.Members.Where(m => m.selected).Select(m => m.id).ToHashSet();
 
         protected override async Task OnInitializedAsync()
         {
@@ -53,6 +66,10 @@ namespace Topo.Controller
 
         internal async Task UnitChange(string unitId)
         {
+            // Whatever was being read for the last unit stops before this one starts: only one Scout's profile can be taken on at a time
+            await StopReading();
+            _logbooks.Clear();
+            ErrorMessage = "";
             if (string.IsNullOrEmpty(unitId))
             {
                 model.UnitId = unitId;
@@ -65,15 +82,85 @@ namespace Topo.Controller
             _storageService.UnitId = model.UnitId;
             model.UnitName = _storageService.UnitName;
             await PopulateMembers();
+            await Load();
         }
 
-        internal async Task SelectAllChange(ChangeEventArgs e)
+        private async Task StopReading()
         {
-            var selectAll = (bool)e.Value;
-            foreach (var member in model.Members)
+            _cancel?.Cancel();
+            try
             {
-                member.selected = selectAll;
+                await _running;
             }
+            catch (OperationCanceledException)
+            {
+            }
+            _cancel?.Dispose();
+            _cancel = null;
+        }
+
+        // Leaving the page stops the reading, so a Scout's profile is not left taken on for the next page. A Scout already being read is
+        // finished first.
+        public void Dispose() => _cancel?.Cancel();
+
+        // Reads the logbook of each Scout not read yet, one at a time, showing each as soon as it is in
+        private async Task Load()
+        {
+            var version = ++_loadVersion;
+            var unread = model.Members.Where(m => !_logbooks.ContainsKey(m.id))
+                .Select(m => new KeyValuePair<string, string>(m.id, $"{m.first_name} {m.last_name}")).ToList();
+            if (unread.Count == 0)
+                return;
+
+            _cancel = new CancellationTokenSource();
+            Loading = true;
+            _running = ReadAsync(unread, version, _cancel.Token);
+            await _running;
+        }
+
+        private async Task ReadAsync(List<KeyValuePair<string, string>> unread, int version, CancellationToken cancellationToken)
+        {
+            var failed = new List<string>();
+            try
+            {
+                await _LogbookService.ReadLogbooksAsync(unread,
+                    logbook => { if (version == _loadVersion) { _logbooks[logbook.MemberId] = logbook; InvokeAsync(StateHasChanged); } },
+                    step => { if (version == _loadVersion) { Progress = step; InvokeAsync(StateHasChanged); } },
+                    cancellationToken,
+                    name => failed.Add(name));
+                if (version == _loadVersion && failed.Count > 0)
+                    ErrorMessage = $"Couldn't read the logbook of {string.Join(", ", failed)}; Terrain would not give it.";
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception)
+            {
+                if (version == _loadVersion)
+                    ErrorMessage = "Couldn't read the logbooks from Terrain.";
+            }
+            finally
+            {
+                if (version == _loadVersion)
+                {
+                    Loading = false;
+                    Progress = "";
+                }
+            }
+        }
+
+        // Ticking a name puts that person in the report; it is for everyone while none are ticked
+        internal void Toggle((string Id, bool Ticked) change)
+        {
+            var member = model.Members.FirstOrDefault(m => m.id == change.Id);
+            if (member != null)
+                member.selected = change.Ticked;
+        }
+
+        internal void ClearTicks()
+        {
+            foreach (var member in model.Members)
+                member.selected = false;
         }
 
         internal async Task IncludeLeadersChange(ChangeEventArgs e)
@@ -81,7 +168,11 @@ namespace Topo.Controller
             var includeLeaders = (bool)e.Value;
             model.IncludeLeaders = includeLeaders;
             if (model.Members.Any())
+            {
+                await StopReading();
                 await PopulateMembers();
+                await Load();
+            }
         }
 
         private async Task PopulateMembers()
@@ -111,33 +202,18 @@ namespace Topo.Controller
             await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, "application/vnd.ms-excel", report);
         }
 
+        // The report is made from what is on the page: the ticked people's entries, or everyone's when none are ticked
         internal async Task<byte[]> LogbookReport(OutputType outputType = OutputType.PDF)
         {
-            if (!model.Members.Any(m => m.selected))
-            {
-                foreach (var member in model.Members)
-                {
-                    member.selected = true;
-                }
-            }
-            var selectedMembers = model.Members.Where(m => m.selected).Select(m => m.id).ToList();
-
-            var memberKVP = new List<KeyValuePair<string, string>>();
-            foreach (var member in selectedMembers)
-            {
-                var memberName = model.Members.Where(m => m.id == member).Select(m => m.first_name + " " + m.last_name).FirstOrDefault();
-                memberKVP.Add(new KeyValuePair<string, string>(member, memberName ?? ""));
-            }
+            var ticked = model.Members.Where(m => m.selected).ToList();
+            var chosen = (ticked.Count > 0 ? ticked : model.Members).Where(m => _logbooks.ContainsKey(m.id)).Select(m => _logbooks[m.id]);
+            var serialisedReportData = JsonConvert.SerializeObject(MemberLogbook.ReportRows(chosen));
 
             var groupName = _storageService.GroupName ?? "";
             var unitName = _storageService.UnitName ?? "";
             var section = _storageService.Section;
 
-            var reportData = await _LogbookService.GenerateLogbookData(memberKVP);
-            var serialisedReportData = JsonConvert.SerializeObject(reportData);
-
-            var report = await _reportService.GetLogbookReport(groupName, section, unitName, outputType, serialisedReportData);
-            return report;
+            return await _reportService.GetLogbookReport(groupName, section, unitName, outputType, serialisedReportData);
         }
 
     }

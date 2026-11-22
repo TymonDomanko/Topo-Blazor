@@ -1,0 +1,84 @@
+@using System.Globalization
+@using Topo.Model.Logbook
+
+@* The unit's logbooks: a row for each Scout that folds up to their totals (distance, nights, how many entries and the latest) and opens
+   to every entry. The totals sit in columns, the same width on every row, so they can be read down the page. A box beside each name puts that Scout in the report on their own; the others are dimmed once any are ticked. *@
+@if (Logbooks.Count == 0)
+{
+    <div class="text-muted">No logbooks to show.</div>
+}
+
+@foreach (var logbook in Logbooks)
+{
+    var dim = Ticked.Count > 0 && !Ticked.Contains(logbook.MemberId);
+    <details class="logbook @(dim ? "dim" : "")">
+        <summary>
+            <input type="checkbox" class="tick" checked="@Ticked.Contains(logbook.MemberId)" @onchange="e => Toggled.InvokeAsync((logbook.MemberId, (bool)e.Value!))" />
+            <strong class="name" title="@logbook.MemberName">@logbook.MemberName</strong>
+            <span class="stat num">@MemberLogbook.Kilometres(logbook.TotalKilometres)</span>
+            <span class="stat num">@MemberLogbook.Nights(logbook.TotalNights)</span>
+            <span class="stat num">@MemberLogbook.EntryText(logbook.EntryCount)</span>
+            <span class="stat latest text-muted">@(logbook.LastActivity.HasValue ? "latest " + Date(logbook.LastActivity.Value) : "")</span>
+        </summary>
+
+        @if (logbook.EntryCount == 0)
+        {
+            <div class="text-muted entries">No logbook entries.</div>
+        }
+        else
+        {
+            <table class="table table-sm entries">
+                <thead>
+                    <tr><th>Date</th><th>Activity</th><th>Area</th><th>Role</th><th class="num">Distance</th><th class="num">Nights</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var entry in logbook.NewestFirst())
+                    {
+                        <tr>
+                            <td class="date">@Date(entry.ActivityDate)</td>
+                            <td>
+                                @entry.ActivityName
+                                @if (!string.IsNullOrWhiteSpace(More(entry)))
+                                {
+                                    <div class="more">@More(entry)</div>
+                                }
+                            </td>
+                            <td>@Words(entry.ActivityArea)</td>
+                            <td>@entry.MemberRole</td>
+                            <td class="num">@(entry.KilometersHiked > 0 ? MemberLogbook.Kilometres(entry.KilometersHiked) : "")</td>
+                            <td class="num">@(entry.NightsCamped > 0 ? entry.NightsCamped.ToString("0.#", CultureInfo.InvariantCulture) : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </details>
+}
+
+@code {
+    [Parameter]
+    public List<MemberLogbook> Logbooks { get; set; } = new List<MemberLogbook>();
+
+    // The Scouts ticked beside their names, by member id; the others are dimmed once any are ticked
+    [Parameter]
+    public ISet<string> Ticked { get; set; } = new HashSet<string>();
+
+    [Parameter]
+    public EventCallback<(string Id, bool Ticked)> Toggled { get; set; }
+
+    private static string Date(DateTime date) => date.ToString("d MMM yyyy", CultureInfo.InvariantCulture);
+
+    // "personal_growth" as "personal growth"
+    private static string Words(string text) => text.Replace('_', ' ');
+
+    // The rest of what the Scout wrote about it, on a line under the activity. Terrain's "N/A" for a question not answered is left out.
+    private static string More(MemberLogbookReportViewModel entry) =>
+        string.Join(" · ", new[]
+        {
+            entry.Location,
+            string.IsNullOrWhiteSpace(entry.ActivityLead) ? "" : "led by " + entry.ActivityLead,
+            string.IsNullOrWhiteSpace(entry.VerifierName) ? "" : "verified by " + entry.VerifierName,
+            entry.Weather,
+            entry.Grade
+        }.Where(t => !string.IsNullOrWhiteSpace(t) && !t.Trim().Equals("N/A", StringComparison.OrdinalIgnoreCase)));
+}
