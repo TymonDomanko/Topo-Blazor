@@ -28,6 +28,9 @@ namespace Topo.Controller
         public IApprovalsService _approvalsService { get; set; }
 
         [Inject]
+        public IAdditionalAwardCheckService _additionalAwards { get; set; }
+
+        [Inject]
         public NavigationManager NavigationManager { get; set; }
 
         public ApprovalsPageViewModel model = new ApprovalsPageViewModel();
@@ -54,6 +57,22 @@ namespace Topo.Controller
             }
         }
 
+        // The Camper and Walkabout Awards to hand over for the unit (earned by the logbook, not in Terrain yet), as rows like the others. If they
+        // cannot be worked out the list is still shown without them.
+        private async Task<List<ApprovalsListModel>> AdditionalAwardRowsAsync(string unitId)
+        {
+            try
+            {
+                // Those to hand over, then those Terrain already holds (listed as presented)
+                return AwardCheckRows.ToApprovalRows(await _additionalAwards.PendingAsync(unitId))
+                    .Concat(AwardCheckRows.ToRecordedRows(await _additionalAwards.RecordedAsync(unitId))).ToList();
+            }
+            catch (Exception)
+            {
+                return new List<ApprovalsListModel>();
+            }
+        }
+
         internal async Task UnitChange(ChangeEventArgs e)
         {
             var unitId = e.Value?.ToString() ?? "";
@@ -68,13 +87,10 @@ namespace Topo.Controller
             if (!string.IsNullOrEmpty(model.UnitName))
             {
                 model.Approvals = await _approvalsService.GetApprovalListItems(_storageService.UnitId);
-                model.Approvals = model.Approvals?.Where(a => a.submission_date >= model.ApprovalSearchFromDate && a.submission_date <= model.ApprovalSearchToDate.AddDays(1)).ToList() ?? new List<ApprovalsListModel>();
-                if (model.ToBePresented)
-                    model.Approvals = model.Approvals.Where(a => a.submission_type == "Award" && !a.presented_date.HasValue).ToList();
-                if (model.IsPresented)
-                    model.Approvals = model.Approvals.Where(a => a.presented_date.HasValue && a.presented_date != a.awarded_date).ToList();
-                if (!model.ShowRejected)
-                    model.Approvals = model.Approvals.Where(a => a.submission_outcome.ToLower() != "rejected").ToList();
+                model.Approvals = (model.Approvals ?? new List<ApprovalsListModel>()).Concat(await AdditionalAwardRowsAsync(_storageService.UnitId)).ToList();
+                // Worked out over everything, before the filters, so a stage is not called the highest just because a higher one is out of the date range
+                ApprovalsToAward.ApplyOas(model.Approvals);
+                model.Approvals = ApprovalsFilter.Apply(model.Approvals, model.ApprovalSearchFromDate, model.ApprovalSearchToDate, model.ToBePresented, model.IsPresented, model.ShowRejected);
             }
         }
 

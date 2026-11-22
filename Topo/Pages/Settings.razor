@@ -1,0 +1,55 @@
+@page "/settings"
+@inject Topo.Services.StorageService _storageService
+@inject Topo.Services.IAutoAwardService _autoAwards
+@inject NavigationManager NavigationManager
+@implements IDisposable
+
+<PageTitle>Topo / Settings</PageTitle>
+
+<div class="mt-3 mb-3 row">
+    <h2>Settings</h2>
+</div>
+
+<h4>Background tasks</h4>
+
+<div class="mb-3" id="auto">
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="auto-on" checked="@_autoAwards.Settings.Enabled" @onchange="AutoToggle" />
+        <label class="form-check-label" for="auto-on">Keep the list of Camper and Walkabout awards to hand over up to date automatically</label>
+    </div>
+    <div class="form-text">
+        While Topo is open, about once a day, when you have not been using it for a moment, Topo checks every Scout's logbook for Camper and
+        Walkabout Awards they have earned that Terrain has no record of, and lists them on the Approvals page. It only reads from Terrain and
+        never changes anything there. Your own pages always go first.
+    </div>
+    @if (_autoAwards.IsRunning)
+    {
+        <div class="form-text" id="auto-running">Checking logbooks now...</div>
+    }
+    else if (!string.IsNullOrEmpty(_autoAwards.Settings.LastSummary) || _autoAwards.Settings.LastRunUtc.HasValue)
+    {
+        <div class="form-text" id="auto-status">
+            Last automatic check: @(_autoAwards.Settings.LastRunUtc.HasValue ? _autoAwards.Settings.LastRunUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "not finished yet").
+            @_autoAwards.Settings.LastSummary
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(_autoAwards.Settings.LastError))
+    {
+        <div class="form-text text-danger" id="auto-error">@_autoAwards.Settings.LastError</div>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        if (!_storageService.IsAuthenticated)
+            NavigationManager.NavigateTo("index");
+        _autoAwards.Changed += OnAutoChanged;
+    }
+
+    private void OnAutoChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task AutoToggle(ChangeEventArgs e) => await _autoAwards.SetEnabledAsync(e.Value is true);
+
+    public void Dispose() => _autoAwards.Changed -= OnAutoChanged;
+}

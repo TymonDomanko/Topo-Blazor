@@ -24,10 +24,13 @@ builder.Services.AddScoped<IMilestoneService, MilestoneService>();
 builder.Services.AddScoped<ILogbookService, LogbookService>();
 builder.Services.AddScoped<IWallchartService, WallchartService>();
 builder.Services.AddScoped<IAdditionalAwardService, AdditionalAwardService>();
+builder.Services.AddScoped<IAdditionalAwardCheckService, AdditionalAwardCheckService>();
 builder.Services.AddScoped<IApprovalsService, ApprovalsService>();
 builder.Services.AddScoped<IProgressService, ProgressService>();
 
 builder.Services.AddScoped<SpinnerService>();
+builder.Services.AddSingleton<Topo.Model.AdditionalAwards.ActivityMonitor>();
+builder.Services.AddScoped<IAutoAwardService, AutoAwardService>();
 builder.Services.AddScoped<DisplaySpinnerAutomaticallyHttpMessageHandler>();
 builder.Services.AddScoped(s =>
 {
