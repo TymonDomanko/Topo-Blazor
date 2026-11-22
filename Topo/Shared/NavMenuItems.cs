@@ -81,7 +81,7 @@ namespace Topo.Shared
                 new("Approvals", "approvals/approvals", "oi-thumb-up", ActivePrefix: "approvals"),
                 new("Personal Progress", "progress/progress", "oi-person"),
                 new("Scouting History", "scoutinghistory/member", "oi-clock", ActivePrefix: "scoutinghistory"),
-                new("Section Report", "sectionreport", "oi-pie-chart"),
+                new("Section/Group Report", "sectionreport", "oi-pie-chart"),
             }),
             new("Tools", NavAudience.Leader, new NavItem[]
             {
