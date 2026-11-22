@@ -2,7 +2,7 @@
 @using Topo.Model.Logbook
 
 @* The unit's logbooks: a row for each Scout that folds up to their totals (distance, nights, how many entries and the latest) and opens
-   to every entry. A box beside each name puts that Scout in the report on their own; the others are dimmed once any are ticked. *@
+   to every entry. The totals sit in columns, the same width on every row, so they can be read down the page. A box beside each name puts that Scout in the report on their own; the others are dimmed once any are ticked. *@
 @if (Logbooks.Count == 0)
 {
     <div class="text-muted">No logbooks to show.</div>
@@ -14,11 +14,11 @@
     <details class="logbook @(dim ? "dim" : "")">
         <summary>
             <input type="checkbox" class="tick" checked="@Ticked.Contains(logbook.MemberId)" @onchange="e => Toggled.InvokeAsync((logbook.MemberId, (bool)e.Value!))" />
-            <strong class="name">@logbook.MemberName</strong>
-            <span class="stat">@MemberLogbook.Kilometres(logbook.TotalKilometres)</span>
-            <span class="stat">@MemberLogbook.Nights(logbook.TotalNights)</span>
-            <span class="stat">@MemberLogbook.EntryText(logbook.EntryCount)</span>
-            <span class="stat text-muted">@(logbook.LastActivity.HasValue ? "latest " + Date(logbook.LastActivity.Value) : "")</span>
+            <strong class="name" title="@logbook.MemberName">@logbook.MemberName</strong>
+            <span class="stat num">@MemberLogbook.Kilometres(logbook.TotalKilometres)</span>
+            <span class="stat num">@MemberLogbook.Nights(logbook.TotalNights)</span>
+            <span class="stat num">@MemberLogbook.EntryText(logbook.EntryCount)</span>
+            <span class="stat latest text-muted">@(logbook.LastActivity.HasValue ? "latest " + Date(logbook.LastActivity.Value) : "")</span>
         </summary>
 
         @if (logbook.EntryCount == 0)

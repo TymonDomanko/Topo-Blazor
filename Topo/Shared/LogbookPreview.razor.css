@@ -10,24 +10,47 @@
     opacity: 0.5;
 }
 
+/* A column each for the arrow, the tick, the name and the totals, so the totals line up from one person to the next */
 .logbook summary {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 0.8rem 1.2rem 10rem 4.5rem 5.5rem 5.5rem 9.5rem;
     align-items: baseline;
-    gap: 0.25rem 1.25rem;
+    column-gap: 0.5rem;
     cursor: pointer;
+    list-style: none;
+}
+
+.logbook summary::-webkit-details-marker {
+    display: none;
+}
+
+/* The arrow that says the row opens, turned down while it is open */
+.logbook summary::before {
+    content: "\25B8";
+    color: #6c757d;
+}
+
+.logbook[open] > summary::before {
+    content: "\25BE";
 }
 
 .logbook .tick {
     align-self: center;
 }
 
+/* Every column is a fixed width, so the totals are in the same place on every row; a long name is cut short (its full name is the tooltip) */
 .logbook .name {
-    flex: 0 0 14rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .logbook .stat {
     white-space: nowrap;
+}
+
+.logbook .num {
+    text-align: right;
 }
 
 .logbook .entries {
@@ -48,8 +71,17 @@
     color: #6c757d;
 }
 
-@media (max-width: 576px) {
+/* On a narrow screen the name gets a line to itself and the totals run along the next */
+@media (max-width: 700px) {
+    .logbook summary {
+        grid-template-columns: 0.8rem 1.2rem auto auto auto 1fr;
+    }
+
     .logbook .name {
-        flex-basis: 100%;
+        grid-column: 3 / -1;
+    }
+
+    .logbook .stat:first-of-type {
+        grid-column: 3;
     }
 }
