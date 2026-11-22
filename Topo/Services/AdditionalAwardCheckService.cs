@@ -45,6 +45,8 @@ namespace Topo.Services
         // What to hand over for the unit's Scouts: the last scan's findings, against Terrain's records as they are now (so one that has been
         // recorded since is no longer listed). Empty until a scan has run.
         Task<List<AwardRow>> PendingAsync(string unitId);
+        // The Camper and Walkabout Awards Terrain holds a record of for the unit's members, for the "Has been presented" list
+        Task<List<RecordedAward>> RecordedAsync(string unitId);
         // Records the awards in Terrain as awarded on a day, and the lower levels each covers. Terrain cannot remove a record, so a level it
         // already has a record of is skipped, and the caller has already confirmed.
         Task<AwardWriteSummary> PresentAsync(IEnumerable<AwardRow> rows, DateTime presented);
@@ -266,6 +268,21 @@ namespace Topo.Services
                 return new List<AwardRow>();
             var records = await TerrainRecordsAsync(unitId);
             return AwardCheckRows.Pending(forUnit, await TiersAsync(), records);
+        }
+
+        public async Task<List<RecordedAward>> RecordedAsync(string unitId)
+        {
+            var tiers = (await TiersAsync()).ToDictionary(t => t.Id);
+            var members = (await _membersService.GetMembersAsync(unitId)).ToDictionary(m => m.id);
+            var recorded = new List<RecordedAward>();
+            foreach (var record in RecordDays((await _terrainAPIService.GetUnitAdditionalAwardAchievements(unitId)).results))
+            {
+                var key = record.Key.Split('|');
+                if (key.Length != 2 || !tiers.TryGetValue(key[1], out var tier) || !members.TryGetValue(key[0], out var member))
+                    continue;
+                recorded.Add(new RecordedAward { MemberId = key[0], FirstName = member.first_name, LastName = member.last_name, AwardId = tier.Id, AwardName = tier.Name, Day = record.Value });
+            }
+            return recorded;
         }
 
         public async Task<AwardWriteSummary> PresentAsync(IEnumerable<AwardRow> rows, DateTime presented)

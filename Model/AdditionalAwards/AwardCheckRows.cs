@@ -58,8 +58,41 @@ namespace Topo.Model.AdditionalAwards
         public DateTime? Earned { get; set; }
     }
 
+    // A Camper or Walkabout Award Terrain holds a record of: it has been handed over, on that day
+    public class RecordedAward
+    {
+        public string MemberId { get; set; } = "";
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string AwardId { get; set; } = "";
+        public string AwardName { get; set; } = "";
+        public DateTime Day { get; set; }
+    }
+
     public static class AwardCheckRows
     {
+        // The id of a row for an award Terrain already holds, so it can be told from one still to hand over (topo:)
+        public const string RecordedIdPrefix = "terrain:";
+
+        // The Camper and Walkabout Awards Terrain holds, as presented rows for the Approvals list ("Has been presented"). The day is the day
+        // Terrain has them awarded, which is the day they were handed over; the logbook day is not known for them, so there is no awarded date.
+        public static List<ApprovalsListModel> ToRecordedRows(IEnumerable<RecordedAward> recorded) =>
+            recorded.Select(r => new ApprovalsListModel
+            {
+                member_id = r.MemberId,
+                member_first_name = r.FirstName,
+                member_last_name = r.LastName,
+                achievement_id = RecordedIdPrefix + r.MemberId + "|" + r.AwardId,
+                achievement_type = "additional_award",
+                achievement_name = r.AwardName,
+                submission_status = "Finalised",
+                submission_outcome = "Awarded",
+                submission_type = "Award",
+                submission_date = r.Day.Date,
+                awarded_date = null,
+                presented_date = r.Day.Date
+            }).ToList();
+
         // The Camper and Walkabout levels each member's logbook totals reach that Terrain has no record of and that are still to be handed over.
         // A level below one Terrain does hold is left out: that higher badge was presented, so nothing is left to hand over for it.
         public static List<(MemberTotals member, AwardTier tier)> Missing(IEnumerable<MemberTotals> members, IEnumerable<AwardTier> tiers, ISet<string> terrainRecords)
