@@ -13,7 +13,7 @@ using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class ApprovalsController : ComponentBase, IDisposable
+    public class ApprovalsController : ComponentBase
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -31,9 +31,6 @@ namespace Topo.Controller
         public IAdditionalAwardCheckService _additionalAwards { get; set; }
 
         [Inject]
-        public IAutoAwardService _autoAwards { get; set; }
-
-        [Inject]
         public NavigationManager NavigationManager { get; set; }
 
         public ApprovalsPageViewModel model = new ApprovalsPageViewModel();
@@ -49,8 +46,6 @@ namespace Topo.Controller
             if (!_storageService.IsAuthenticated)
                 NavigationManager.NavigateTo("index");
 
-            // The automatic Camper and Walkabout check keeps the list of awards to hand over up to date; this page shows them and its status
-            _autoAwards.Changed += OnAutoChanged;
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             model.ApprovalSearchFromDate = DateTime.Now.AddMonths(-2);
@@ -61,14 +56,6 @@ namespace Topo.Controller
                 model.UnitName = _storageService.UnitName;
             }
         }
-
-        private void OnAutoChanged() => InvokeAsync(StateHasChanged);
-
-        public void Dispose() => _autoAwards.Changed -= OnAutoChanged;
-
-        public bool AutoEnabled => _autoAwards.Settings.Enabled;
-
-        internal async Task AutoToggle(ChangeEventArgs e) => await _autoAwards.SetEnabledAsync(e.Value is true);
 
         // The Camper and Walkabout Awards to hand over for the unit (earned by the logbook, not in Terrain yet), as rows like the others. If they
         // cannot be worked out the list is still shown without them.
