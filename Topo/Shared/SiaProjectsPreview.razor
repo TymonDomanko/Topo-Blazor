@@ -1,0 +1,57 @@
+@using System.Globalization
+@using Topo.Model.SIA
+
+@* What the downloaded report will list: each Scout with their Special Interest Area projects, their area, name, where they are up to
+   and when that last changed; a table for each patrol when the report is broken up by patrol. A box beside each name puts that Scout
+   in the report on their own; the others are dimmed once any are ticked. *@
+@if (Sheets.All(s => s.Scouts.Count == 0))
+{
+    <div class="text-muted">No Special Interest Area projects to show.</div>
+}
+else
+{
+    @foreach (var sheet in Sheets)
+    {
+        @if (Sheets.Count > 1)
+        {
+            <h4 class="mt-3">@(sheet.Patrol == "" ? "No patrol" : sheet.Patrol)</h4>
+        }
+        <table class="table table-sm projects">
+            <tbody>
+                @foreach (var scout in sheet.Scouts)
+                {
+                    var dim = Ticked.Count > 0 && !Ticked.Contains(scout.MemberId);
+                    <tr class="scout @(dim ? "dim" : "")">
+                        <td colspan="4">
+                            <label>
+                                <input type="checkbox" checked="@Ticked.Contains(scout.MemberId)" @onchange="e => Toggled.InvokeAsync((scout.MemberId, (bool)e.Value!))" />
+                                @scout.Name
+                            </label>
+                        </td>
+                    </tr>
+                    @foreach (var project in scout.Projects)
+                    {
+                        <tr class="@(dim ? "dim" : "")">
+                            <td class="area">@project.area</td>
+                            <td>@project.projectName</td>
+                            <td class="status">@project.status</td>
+                            <td class="date">@project.statusUpdated.ToString("d/M/yyyy", CultureInfo.InvariantCulture)</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    [Parameter]
+    public List<SiaProjectsSheet> Sheets { get; set; } = new List<SiaProjectsSheet>();
+
+    // The Scouts ticked beside their names, by member id; the others are dimmed once any are ticked
+    [Parameter]
+    public ISet<string> Ticked { get; set; } = new HashSet<string>();
+
+    [Parameter]
+    public EventCallback<(string Id, bool Ticked)> Toggled { get; set; }
+}
