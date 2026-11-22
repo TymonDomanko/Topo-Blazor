@@ -38,7 +38,8 @@ namespace Topo.Services
                         id = x.id,
                         name = x.title,
                         additionalAwardSortIndex = additionalAwardSortIndex++,
-                        additionalAwardValue = GetAwardValue(x.id)
+                        additionalAwardValue = GetAwardValue(x.id),
+                        sections = x.sections
                     })
                     .ToList();
                 _storageService.AdditionalAwardSpecifications = awardSpecificationsList;

@@ -37,6 +37,53 @@ namespace TopoReportFunctionTest
         private static AwardsTableCell CellFor(AwardsTable table, string name, string awardId) =>
             table.Rows.Single(r => r.Name == name).Cells[table.Columns.FindIndex(c => c.AwardId == awardId)];
 
+        private static readonly List<AdditionalAwardSpecificationListModel> SectionSpecs = new List<AdditionalAwardSpecificationListModel>
+        {
+            new AdditionalAwardSpecificationListModel { id = "camper_award_10", name = "Camper Award - 10 Nights", additionalAwardSortIndex = 0, sections = new[] { "joey", "cub", "scout", "venturer", "rover" } },
+            new AdditionalAwardSpecificationListModel { id = "first_aid", name = "First Aid", additionalAwardSortIndex = 1, sections = new[] { "scout", "venturer", "rover" } },
+            new AdditionalAwardSpecificationListModel { id = "youth_helper", name = "Youth Helper", additionalAwardSortIndex = 2, sections = new[] { "venturer" } },
+            new AdditionalAwardSpecificationListModel { id = "language_emblem", name = "Language Emblem", additionalAwardSortIndex = 3, sections = new[] { "cub", "scout", "venturer", "rover" } }
+        };
+
+        private static AdditionalAwardsReportDataModel HeldByOne(string heldId)
+        {
+            var awards = new List<AdditionalAwardListModel>
+            {
+                new AdditionalAwardListModel { MemberId = "Amy", MemberName = "Amy", AwardId = heldId, AwardSortIndex = SectionSpecs.First(a => a.id == heldId).additionalAwardSortIndex, AwardDate = new DateTime(2026, 5, 1) }
+            };
+            return new AdditionalAwardsReportDataModel { AwardSpecificationsList = SectionSpecs, SortedAdditionalAwardsList = awards, DistinctAwards = AwardsTable.DistinctAwards(awards) };
+        }
+
+        [TestMethod]
+        public void AllAvailableAddsEveryAwardOpenToTheSectionInTerrainsOrder()
+        {
+            var table = AwardsTable.Build(HeldByOne("language_emblem").WithAllAvailable("Scout"));
+            // youth_helper is for Venturers only, so a Scout unit does not get it
+            CollectionAssert.AreEqual(new[] { "camper_award_10", "first_aid", "language_emblem" }, table.Columns.Select(c => c.AwardId).ToList());
+            Assert.IsNotNull(CellFor(table, "Amy", "language_emblem").Date);
+            Assert.IsNull(CellFor(table, "Amy", "first_aid").Date, "an award no one holds is an empty cell");
+        }
+
+        [TestMethod]
+        public void AllAvailableKeepsAnAwardAScoutHoldsEvenWhenTheSectionIsNotListedForIt()
+        {
+            var table = AwardsTable.Build(HeldByOne("youth_helper").WithAllAvailable("scout"));
+            CollectionAssert.AreEqual(new[] { "camper_award_10", "first_aid", "youth_helper", "language_emblem" }, table.Columns.Select(c => c.AwardId).ToList());
+        }
+
+        [TestMethod]
+        public void WithoutAllAvailableOnlyHeldAwardsGetAColumn()
+        {
+            var table = AwardsTable.Build(HeldByOne("language_emblem"));
+            CollectionAssert.AreEqual(new[] { "language_emblem" }, table.Columns.Select(c => c.AwardId).ToList());
+        }
+
+        [TestMethod]
+        public void AnUnknownSectionAddsNothing()
+        {
+            Assert.AreEqual(1, HeldByOne("language_emblem").WithAllAvailable("").DistinctAwards.Count);
+        }
+
         [TestMethod]
         public void EachAwardGetsAColumnInOrderWithItsNameAndABlankOneStandsForNoAward()
         {

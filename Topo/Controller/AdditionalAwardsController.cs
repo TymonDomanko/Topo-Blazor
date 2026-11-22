@@ -123,11 +123,15 @@ namespace Topo.Controller
 
         // The Scouts ticked, or everyone when none are, named as the options ask
         private AdditionalAwardsReportDataModel? ReportData() =>
-            _data?.ForMembers(ReportScope.Names(model.Members, model.UseFullNames));
+            Awards()?.ForMembers(ReportScope.Names(model.Members, model.UseFullNames));
+
+        // What was read for the unit, with a column for every award open to its section when that is asked for
+        private AdditionalAwardsReportDataModel? Awards() =>
+            model.IncludeAllAwards && _data != null ? _data.WithAllAvailable(_storageService.Section) : _data;
 
         // The page shows everyone, so a Scout can be ticked; the report is made from those ticked
         private void Recalculate() =>
-            Tables = _data == null ? null : AwardsTable.BuildSheets(_data.ForMembers(ReportScope.AllNames(model.Members, model.UseFullNames)), model.BreakByPatrol);
+            Tables = _data == null ? null : AwardsTable.BuildSheets(Awards()!.ForMembers(ReportScope.AllNames(model.Members, model.UseFullNames)), model.BreakByPatrol);
 
         internal async Task AwardsReportPdfClick() => await Download(OutputType.PDF, "pdf", "application/pdf");
 
