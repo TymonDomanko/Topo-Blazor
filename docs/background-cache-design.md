@@ -119,6 +119,54 @@ The 30 day cap on recent data is there because the cache holds personal data abo
 
 If the browser is closed for good, a first visit on a new device or after clearing site data starts from nothing: the default windows take about 5-30s per page, and the full event history is about 85s per unit calendar if someone loads all of it.
 
+## How much the pages overlap (measured)
+
+Each of the 20 pages was loaded once on the same unit (39 Scouts) with its default settings, and every Terrain request was recorded. A read counts as the same when the whole URL is the same. Assume/revoke profile calls and the calendar calls are left out of the data figures (see "Calls that can be removed").
+
+| Page | Data reads | Also read by another page |
+|---|---|---|
+| Members, SIA, Milestone, Ready to Submit, Additional Awards, Unit History | 1-42 | 100% |
+| Attendance, Scouting History (one person), Wallchart | 46-55 | 96% |
+| Section report | 27 | 93% |
+| Patrol Planner | 61 | 92% |
+| Program, Sign In Sheet | 16-17 | 88% |
+| Personal Progress (one person), Approvals | 5-10 | 60% |
+| SIA Progress | 4 | 50% |
+| Program Builder (Continue from Terrain) | 86 | 40% |
+| OAS | 3 | 33% |
+| Logbook | 536 | 16% |
+| Program Ideas | 2 | 0% (its two event lists cover all time) |
+
+Across all 20 pages: 995 data reads, of which only 674 are different, so 32% of reads are repeats of a read another page makes. By call time it is 255s down to about 155s (39% less). Logbook is more than half of all reads (457 entry reads that only it and the Scouting History use), so excluding it the repeat share is much higher.
+
+By kind of read (reads across the 20 pages, how many are different, how many pages make it):
+
+| Read | Total | Different | Pages | Call time |
+|---|---|---|---|---|
+| Event details (by event id) | 230 | 86 | 7 | 110s |
+| Logbook entries | 502 | 457 | 2 | 48s |
+| Event lists (by window) | 26 | 20 | 8 | 24s |
+| Unit OAS records | 5 | 2 | 5 | 14s |
+| Per-Scout logbook totals | 118 | 39 | 4 | 10s |
+| Unit SIA records | 6 | 1 | 6 | 8s |
+| Unit members | 15 | 2 | 14 | 7s |
+| Unit milestone records | 5 | 1 | 5 | 7s |
+| Everything else (other record types, award list, per-Scout lists) | | | | under 15s |
+
+## Calls that can be removed
+
+Caching by read removes the repeats above. These need no cache at all, or make it cheaper:
+
+1. **Read an event once, whatever window asks for it.** Event details are keyed by event id, not by window: 230 reads become 86 (63% fewer, about 70s of call time). Patrol Planner alone reads 27 events twice in one page load; Sign In Sheet reads 8 twice and Program 1.
+2. **Read per-Scout logbook totals once.** Four pages each read all 39 Scouts' totals (118 reads for 39 different), and each read needs an assume and a revoke around it: 119 assume and 124 revoke calls (about 24s) across the pages. One cached read per Scout per day replaces all of it.
+3. **Skip the revoke between Scouts.** The code revokes the assumed profile before assuming the next Scout. If assuming a new profile replaces the old one (untested), the revoke between Scouts can go: about 40 fewer calls per full pass.
+4. **Read the logbook in two steps.** Collapsed rows need only totals, the entry count and the latest date. The entry list already gives the count and dates; the entry details (457 reads) are only needed when a row is opened. Reading details lazily, or in the background at low priority, takes the first paint of the Logbook page from about 30s to about 12s.
+5. **Align event list windows to month blocks** so Attendance, Program, Sign In Sheet, Section report and Patrol Planner share lists instead of each asking for its own dates (20 different lists for 26 reads today).
+6. **One members read per unit** (15 reads, 14 pages, 2 different) and one read per unit and record type (SIA is read by 6 pages, OAS and milestone by 5).
+7. **Read the award list once.** It is a static file read by 5 pages.
+
+Across all 20 pages that is 1289 requests today, 294 of them housekeeping (119 assume, 124 revoke, 51 calendars). A cold load of every page with the cache would be about 674 data reads plus about 80 profile switches plus the calendar calls: roughly 35-40% fewer requests. This is for one unit on one day with default settings, and the calendar and profile figures are estimates.
+
 ## Open questions and risks
 
 - **Two tabs.** Two Topo tabs both running background reads would fight over the one assumed profile and the account's calendar selection. Proposal: one tab at a time holds a lock (a stored heartbeat); other tabs only read the cache.
