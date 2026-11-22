@@ -1,6 +1,7 @@
 using Topo.Model;
 using Topo.Model.Milestone;
 using Topo.Model.Progress;
+using Topo.Model;
 using Topo.Model.Members;
 using Topo.Model.UnitReport;
 
@@ -78,27 +79,38 @@ namespace Topo.Services
             return UnitReportBuilder.Build(input);
         }
 
-        // Terrain only shows the calendars the user has switched on, so they are switched to the chosen ones and back
+        // Terrain only shows the calendars the user has switched on, so they are switched to the chosen ones and back. The switch back is made
+        // as soon as the events are listed, while their details are being read, as the details do not depend on which calendars are on.
         public async Task<List<UnitEventInput>> GetEventsForCalendars(DateTime from, DateTime to, string[] calendarIds, CancellationToken cancellationToken = default, Action<string>? progress = null)
         {
+            // one read at a time switches the calendars, whatever page asked for it
+            using var calendarLock = await _programService.LockCalendarsAsync(cancellationToken);
             await _programService.SetCalendar(calendarIds);
+            List<(Topo.Model.Program.Event Summary, string Scope)> summaries;
             try
             {
-                return await GetEventDetails(from, to, cancellationToken, progress);
+                summaries = await ListEvents(from, to, cancellationToken, progress);
+            }
+            catch
+            {
+                await _programService.ResetCalendar();
+                throw;
+            }
+
+            var reset = _programService.ResetCalendar();
+            try
+            {
+                return await ReadEventDetails(summaries, cancellationToken, progress);
             }
             finally
             {
-                await _programService.ResetCalendar();
+                await reset;
             }
         }
 
-        // Every event in the range, in full (attendance, logbook data) with its scope. Asked for in 90 day windows
-        // so that "all time" is many small requests rather than one very large one.
-        //
-        // The windows don't depend on each other, so their lists are asked for together. Then each event is a request of its
-        // own (the list has no attendance), and those are read a few at a time, in the order they were listed, instead of
-        // one after another. An event that shows up in two windows is read once.
-        private async Task<List<UnitEventInput>> GetEventDetails(DateTime from, DateTime to, CancellationToken cancellationToken, Action<string>? progress)
+        // Every event in the range, as the list has it. Asked for in 90 day windows so that "all time" is many small requests rather than one very
+        // large one; the windows don't depend on each other, so they are asked for together. An event that shows up in two windows is listed once.
+        private async Task<List<(Topo.Model.Program.Event Summary, string Scope)>> ListEvents(DateTime from, DateTime to, CancellationToken cancellationToken, Action<string>? progress)
         {
             var userId = _storageService.GetProfilesResult?.profiles?.FirstOrDefault()?.member?.id ?? "";
             var windows = new List<(DateTime start, DateTime end)>();
@@ -110,20 +122,25 @@ namespace Topo.Services
             cancellationToken.ThrowIfCancellationRequested();
 
             var seen = new HashSet<string>();
-            var summaries = lists.SelectMany(l => l?.results ?? new Topo.Model.Program.Event[0]).Where(e => seen.Add(e.id)).ToList();
+            return lists.SelectMany(l => l?.results ?? new Topo.Model.Program.Event[0]).Where(e => seen.Add(e.id)).Select(e => (e, e.invitee_type)).ToList();
+        }
 
+        // Each event in full (attendance, logbook data) with its scope: a request of its own, as the list has no attendance. They are read a few at a
+        // time, in the order they were listed, instead of one after another.
+        private async Task<List<UnitEventInput>> ReadEventDetails(List<(Topo.Model.Program.Event Summary, string Scope)> summaries, CancellationToken cancellationToken, Action<string>? progress)
+        {
             var done = 0;
-            var details = await ReadsAtOnce.SelectAsync(summaries, async summary =>
+            var details = await ReadsAtOnce.SelectAsync(summaries, async item =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var detail = await _terrainAPIService.GetEventAsync(summary.id);
+                var detail = await _terrainAPIService.GetEventAsync(item.Summary.id);
                 progress?.Invoke($"events: {Interlocked.Increment(ref done)} of {summaries.Count}");
                 return detail;
             });
 
-            return summaries.Zip(details, (summary, detail) => (summary, detail))
+            return summaries.Zip(details, (item, detail) => (item, detail))
                 .Where(x => x.detail != null)
-                .Select(x => new UnitEventInput { Scope = x.summary.invitee_type, Event = x.detail! })
+                .Select(x => new UnitEventInput { Scope = x.item.Scope, Event = x.detail! })
                 .ToList();
         }
     }

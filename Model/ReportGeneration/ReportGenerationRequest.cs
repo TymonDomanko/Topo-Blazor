@@ -24,7 +24,8 @@
         SectionReport,
         SiaProgress,
         ReadyToSubmit,
-        AttendanceAnalysis
+        AttendanceAnalysis,
+        ProgramCalendar
     }
 
     public enum OutputType
