@@ -1,3 +1,4 @@
+using Topo.Model;
 using Topo.Model.Milestone;
 using Topo.Model.Progress;
 using Topo.Model.Members;
@@ -93,34 +94,37 @@ namespace Topo.Services
 
         // Every event in the range, in full (attendance, logbook data) with its scope. Asked for in 90 day windows
         // so that "all time" is many small requests rather than one very large one.
+        //
+        // The windows don't depend on each other, so their lists are asked for together. Then each event is a request of its
+        // own (the list has no attendance), and those are read a few at a time, in the order they were listed, instead of
+        // one after another. An event that shows up in two windows is read once.
         private async Task<List<UnitEventInput>> GetEventDetails(DateTime from, DateTime to, CancellationToken cancellationToken, Action<string>? progress)
         {
             var userId = _storageService.GetProfilesResult?.profiles?.FirstOrDefault()?.member?.id ?? "";
-            var events = new List<UnitEventInput>();
-            var seen = new HashSet<string>();
-            var windows = Math.Max(1, (int)Math.Ceiling(((to.Date - from.Date).TotalDays + 1) / 90));
-            var window = 0;
+            var windows = new List<(DateTime start, DateTime end)>();
             for (var windowStart = from.Date; windowStart <= to.Date; windowStart = windowStart.AddDays(90))
+                windows.Add((windowStart, windowStart.AddDays(89) < to.Date ? windowStart.AddDays(89) : to.Date));
+
+            progress?.Invoke($"events, {windows.Count} period{(windows.Count == 1 ? "" : "s")}");
+            var lists = await Task.WhenAll(windows.Select(w => _terrainAPIService.GetEventsAsync(userId, w.start.AddDays(-1), w.end.AddDays(1))));
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var seen = new HashSet<string>();
+            var summaries = lists.SelectMany(l => l?.results ?? new Topo.Model.Program.Event[0]).Where(e => seen.Add(e.id)).ToList();
+
+            var done = 0;
+            var details = await ReadsAtOnce.SelectAsync(summaries, async summary =>
             {
-                window++;
-                progress?.Invoke($"events, period {window} of {windows}");
-                var windowEnd = windowStart.AddDays(89) < to.Date ? windowStart.AddDays(89) : to.Date;
-                var result = await _terrainAPIService.GetEventsAsync(userId, windowStart.AddDays(-1), windowEnd.AddDays(1));
-                var summaries = result?.results ?? new Topo.Model.Program.Event[0];
-                var done = 0;
-                foreach (var summary in summaries)
-                {
-                    done++;
-                    if (!seen.Add(summary.id))
-                        continue;
-                    cancellationToken.ThrowIfCancellationRequested();
-                    progress?.Invoke($"events, period {window} of {windows}: event {done} of {summaries.Length}");
-                    var detail = await _terrainAPIService.GetEventAsync(summary.id);
-                    if (detail != null)
-                        events.Add(new UnitEventInput { Scope = summary.invitee_type, Event = detail });
-                }
-            }
-            return events;
+                cancellationToken.ThrowIfCancellationRequested();
+                var detail = await _terrainAPIService.GetEventAsync(summary.id);
+                progress?.Invoke($"events: {Interlocked.Increment(ref done)} of {summaries.Count}");
+                return detail;
+            });
+
+            return summaries.Zip(details, (summary, detail) => (summary, detail))
+                .Where(x => x.detail != null)
+                .Select(x => new UnitEventInput { Scope = x.summary.invitee_type, Event = x.detail! })
+                .ToList();
         }
     }
 }

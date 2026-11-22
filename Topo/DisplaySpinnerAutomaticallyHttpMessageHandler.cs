@@ -19,6 +19,9 @@ namespace Topo
             if (_activityMonitor.InBackground)
                 return await base.SendAsync(request, cancellationToken);
 
+            if (_spinnerService.IsQuiet)
+                return await base.SendAsync(request, cancellationToken);
+
             _spinnerService.Show();
             try
             {
