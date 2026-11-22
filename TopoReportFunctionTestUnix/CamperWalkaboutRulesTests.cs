@@ -214,6 +214,38 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public void LevelsBelowOneTerrainHoldsAreRecordedOnTheNearestHigherLevelsDay()
+        {
+            var dates = new Dictionary<string, DateTime>
+            {
+                ["m1|camper_award_50"] = new DateTime(2026, 4, 3), ["m1|camper_award_10"] = new DateTime(2024, 1, 6),
+                ["m1|walkabout_100"] = new DateTime(2026, 2, 21), ["m1|walkabout_50"] = new DateTime(2025, 6, 9)
+            };
+            var lower = AwardCheckRows.LowerLevels(Tiers, dates, new[] { "m1" });
+            // camper 25 is below 50 (held) and not held; walkabout 10 is below 50 and 100 and not held, and takes the day of 50, the nearest above it
+            CollectionAssert.AreEquivalent(new[] { "camper_award_25", "walkabout_10" }, lower.Select(l => l.tier.Id).ToArray());
+            Assert.AreEqual(new DateTime(2026, 4, 3), lower.Single(l => l.tier.Id == "camper_award_25").day);
+            Assert.AreEqual(new DateTime(2025, 6, 9), lower.Single(l => l.tier.Id == "walkabout_10").day);
+        }
+
+        [TestMethod]
+        public void NothingIsRecordedBelowTheHighestLevelAMemberHasNorAboveIt()
+        {
+            var dates = new Dictionary<string, DateTime> { ["m1|camper_award_25"] = new DateTime(2026, 4, 3), ["m1|camper_award_10"] = new DateTime(2026, 1, 1) };
+            Assert.AreEqual(0, AwardCheckRows.LowerLevels(Tiers, dates, new[] { "m1" }).Count);
+            Assert.AreEqual(0, AwardCheckRows.LowerLevels(Tiers, new Dictionary<string, DateTime>(), new[] { "m1" }).Count);
+        }
+
+        [TestMethod]
+        public void OnlyTheMembersAskedForAreLookedAtAndAKindIsNotMixedWithTheOther()
+        {
+            var dates = new Dictionary<string, DateTime> { ["m1|walkabout_100"] = new DateTime(2026, 2, 21), ["m2|camper_award_50"] = new DateTime(2026, 4, 3) };
+            var lower = AwardCheckRows.LowerLevels(Tiers, dates, new[] { "m1" });
+            CollectionAssert.AreEquivalent(new[] { "walkabout_10", "walkabout_50" }, lower.Select(l => l.tier.Id).ToArray());
+            Assert.IsTrue(lower.All(l => l.memberId == "m1"));
+        }
+
+        [TestMethod]
         public void PresentingTheHighestCoversTheLowerOnesOfTheSameMember()
         {
             var rows = AwardCheckRows.Pending(new[]

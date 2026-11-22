@@ -10,6 +10,9 @@ namespace Topo.Services
         // Levels to hand over, and levels earned that a higher one covers, as of this scan
         public int ToBePresented { get; set; }
         public int NotHighest { get; set; }
+        // Lower levels written to Terrain because a higher level of the same kind is already recorded there
+        public int LowerLevelsRecorded { get; set; }
+        public List<string> Failures { get; set; } = new List<string>();
         // The background run was stopped because a page needed Terrain; it will try again later
         public bool Stopped { get; set; }
         // Members whose logbook could not be read, so nothing is said about them
@@ -34,7 +37,8 @@ namespace Topo.Services
     public interface IAdditionalAwardCheckService
     {
         // Reads each Scout's logbook in the units (one profile at a time) and works out which Camper and Walkabout awards they have earned that
-        // Terrain has no record of, with the day each was earned. Nothing is written. A Scout in more than one unit is checked once.
+        // Terrain has no record of, with the day each was earned. The one thing it writes is the lower levels of a kind when a higher level is
+        // already recorded in Terrain (those were awarded too), dated the same day as that higher level. A Scout in more than one unit is checked once.
         // With pacing (the background run) it waits for a gap before each Scout and stops at once if a page needs Terrain.
         Task<AwardScanResult> ScanAsync(IReadOnlyList<string> unitIds, Action<string>? progress, ICheckPacing? pacing = null);
         // What to hand over for the unit's Scouts: the last scan's findings, against Terrain's records as they are now (so one that has been
@@ -90,6 +94,7 @@ namespace Topo.Services
             var youth = new List<MemberListModel>();
             var unitOf = new Dictionary<string, (string id, string name)>();
             var terrainRecords = new HashSet<string>();
+            var recordDates = new Dictionary<string, Dictionary<string, DateTime>>();
             foreach (var unitId in unitIds)
             {
                 var unitName = _storageService.Units.TryGetValue(unitId, out var name) ? name : "";
@@ -97,8 +102,41 @@ namespace Topo.Services
                     if (unitOf.TryAdd(member.id, (unitId, unitName)))
                         youth.Add(member);
                 progress?.Invoke($"Terrain's award records for {unitName}");
-                foreach (var record in (await _terrainAPIService.GetUnitAdditionalAwardAchievements(unitId)).results)
-                    terrainRecords.Add(record.member_id + "|" + record.achievement_meta.additional_award_id);
+                recordDates[unitId] = RecordDays((await _terrainAPIService.GetUnitAdditionalAwardAchievements(unitId)).results);
+                terrainRecords.UnionWith(recordDates[unitId].Keys);
+            }
+
+            // A higher badge being awarded means the lower ones were too, so record them (the same day) before looking at what is left
+            foreach (var unitId in unitIds)
+            {
+                var scouts = youth.Where(m => unitOf[m.id].id == unitId).Select(m => m.id).ToList();
+                if (AwardCheckRows.LowerLevels(tiers, recordDates[unitId], scouts).Count == 0)
+                    continue;
+                progress?.Invoke($"Recording lower levels for {unitOf.Values.First(u => u.id == unitId).name}");
+                try
+                {
+                    if (pacing != null)
+                        await pacing.WaitForGapAsync();
+                    // Read again just before writing: Terrain adds a record every time, so only what is still missing now is written
+                    var fresh = RecordDays((await _terrainAPIService.GetUnitAdditionalAwardAchievements(unitId)).results);
+                    var items = AwardCheckRows.LowerLevels(tiers, fresh, scouts).Select(l => (l.memberId, l.tier.Id, l.day)).ToList();
+                    if (items.Count == 0)
+                        continue;
+                    var written = await _terrainAPIService.RecordAdditionalAwardsAsync(unitId, items);
+                    if (written.Success)
+                    {
+                        result.LowerLevelsRecorded += items.Count;
+                        foreach (var item in items)
+                            terrainRecords.Add(item.memberId + "|" + item.Id);
+                    }
+                    else
+                        result.Failures.Add($"{unitOf.Values.First(u => u.id == unitId).name}: Terrain did not record the lower levels (status {written.StatusCode}). {Trim(written.Body)}".Trim());
+                }
+                catch (OperationCanceledException)
+                {
+                    result.Stopped = true;
+                    return result;
+                }
             }
 
             // One profile at a time: Terrain keeps only one taken on, and a Scout's logbook can only be read with theirs. In the background
@@ -264,6 +302,20 @@ namespace Topo.Services
                 await _localStorage.SetItemAsync(CacheKey, cache);
             }
             return summary;
+        }
+
+        // Terrain's records as member|award -> the day awarded (the earliest, if Terrain holds more than one)
+        private static Dictionary<string, DateTime> RecordDays(IEnumerable<Topo.Model.AdditionalAwards.Result> records)
+        {
+            var days = new Dictionary<string, DateTime>();
+            foreach (var record in records)
+            {
+                var key = record.member_id + "|" + record.achievement_meta.additional_award_id;
+                var day = Topo.Model.AwardDate.Resolve(record.date_awarded, record.imported?.date_awarded, record.status_updated).Date;
+                if (!days.TryGetValue(key, out var existing) || day < existing)
+                    days[key] = day;
+            }
+            return days;
         }
 
         private static string Trim(string body) => body.Length > 160 ? body.Substring(0, 160) : body;
