@@ -106,7 +106,7 @@ One queue, three lanes (profile, unit, calendar), each lane running its jobs in 
 
 ## If you do not visit the site
 
-Topo is a web page. **Nothing runs and nothing refreshes while it is closed.** The cache just gets older. Proposed behaviour (these numbers are a proposal to confirm):
+Topo is a web page. **Nothing runs and nothing refreshes while it is closed.** The cache just gets older. Behaviour (1 day and 30 days confirmed 2026-11-22):
 
 | Data | While you are away | First visit afterwards |
 |---|---|---|
@@ -115,7 +115,7 @@ Topo is a web page. **Nothing runs and nothing refreshes while it is closed.** T
 | Events older than 4 months | kept with no expiry until Refresh data | shown as stored; never refreshed unless forced |
 | Whole cache | cleared on logout, or if the browser clears site data | read again from scratch |
 
-The 30 day cap on recent data is there because the cache holds personal data about young people; say if you want it shorter or longer. Events older than 4 months have no cap, as you asked, so an old event whose attendance is changed later in Terrain shows the old values until Refresh data is pressed.
+The 30 day cap on recent data is there because the cache holds personal data about young people. Events older than 4 months have no cap, as decided, so an old event whose attendance is changed later in Terrain shows the old values until Refresh data is pressed.
 
 If the browser is closed for good, a first visit on a new device or after clearing site data starts from nothing: the default windows take about 5-30s per page, and the full event history is about 85s per unit calendar if someone loads all of it.
 
