@@ -133,8 +133,8 @@ namespace Topo.Model.AdditionalAwards
     // What Topo remembers, in this browser, about the automatic check for one group
     public class AutoAwardSettings
     {
-        // Off until a leader turns it on: it reads every Scout's logbook, one profile at a time, which is a lot of requests to ask of Terrain unasked.
-        public bool Enabled { get; set; }
+        // On unless a leader turns it off in Settings, so it needs nobody to do anything but open Topo. It only reads from Terrain.
+        public bool Enabled { get; set; } = true;
         public DateTime? LastRunUtc { get; set; }
         public DateTime? LastAttemptUtc { get; set; }
         public string LastSummary { get; set; } = "";

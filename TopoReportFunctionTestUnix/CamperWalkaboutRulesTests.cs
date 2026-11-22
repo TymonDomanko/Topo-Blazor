@@ -399,9 +399,9 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
-        public void TheCheckIsOffUntilSwitchedOnAndItsRetryAndQuietTimesAreShort()
+        public void TheCheckIsOnUnlessSwitchedOffAndItsRetryAndQuietTimesAreShort()
         {
-            Assert.IsFalse(new AutoAwardSettings().Enabled);
+            Assert.IsTrue(new AutoAwardSettings().Enabled);
             Assert.IsTrue(AutoAwardSchedule.RetryAfter <= TimeSpan.FromMinutes(10));
         }
     }

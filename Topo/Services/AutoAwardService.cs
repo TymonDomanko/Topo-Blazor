@@ -16,7 +16,7 @@ namespace Topo.Services
 
     // Keeps the list of Camper and Walkabout awards to hand over up to date with nobody doing anything but having Topo open: about once
     // a day, when the leader has not used Topo for a little while, it checks every Scout's logbook for awards Terrain has no record of. The
-    // badge to hand over is only listed. It reads from Terrain and never writes to it. It is off until a leader turns it on in Settings.
+    // badge to hand over is only listed. It reads from Terrain and never writes to it. It is on unless a leader turns it off in Settings.
     //
     // Pages come first. It only starts a Scout in a gap between the leader's own requests, and if a page needs Terrain while a Scout's
     // profile is taken on it hands the profile back at once and stops, to try again a few minutes later. It runs only while Topo is open
