@@ -46,9 +46,6 @@
         public int NightsCamped { get; set; }
         public int NightsCampedInSection { get; set; }
         public int KMsHiked { get; set; }
-        // The highest Camper Award (nights) and Walkabout Award (km) level Terrain has a record of for the member. 0 for none.
-        public int CamperAward { get; set; }
-        public int WalkaboutAward { get; set; }
         public int OASStageProgressions { get; set; }
         public int SIAAdventureSport { get; set; }
         public int SIAArtsLiterature { get; set; }

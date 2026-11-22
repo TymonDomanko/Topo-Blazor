@@ -60,7 +60,7 @@ namespace Topo.Model.Wallchart
         // The headings over the columns after the name, and how many columns each covers
         public static readonly (string Heading, int Span)[] Groups =
         {
-            ("", 3), ("MILESTONE 1", 5), ("MILESTONE 2", 5), ("MILESTONE 3", 5), ("OUTDOOR ADVENTURE SKILLS", 12), ("SPECIAL INTEREST AREAS", 6), ("", 4), ("AWARDS", 2)
+            ("", 3), ("MILESTONE 1", 5), ("MILESTONE 2", 5), ("MILESTONE 3", 5), ("OUTDOOR ADVENTURE SKILLS", 12), ("SPECIAL INTEREST AREAS", 6), ("", 4)
         };
 
         // The headings over the Outdoor Adventure Skill columns
@@ -75,8 +75,7 @@ namespace Topo.Model.Wallchart
             "Bushcraft", "Bushwalking", "Camping", "Alpine", "Cycling", "Vertical", "Aquatics", "Boating", "Paddling",
             "Total Progressions", "Total Nights Camped", "Total KMs Hiked",
             "Adventure & Sport", "Arts & Literature", "Environment", "STEM & Innovation", "Growth & Development", "Creating a Better World",
-            "Leadership Course", "Adventurous Journey", "Personal Reflection", "PEAK AWARD",
-            "Camper Award", "Walkabout Award"
+            "Leadership Course", "Adventurous Journey", "Personal Reflection", "PEAK AWARD"
         };
 
         // How the Wallchart is laid out, shared by the page's preview and the pdf and spreadsheet
@@ -114,9 +113,7 @@ namespace Topo.Model.Wallchart
                 // the percentage towards the top award until it is granted, then the day it was
                 w.PeakAwardAwarded.HasValue
                     ? DateCell(w.PeakAwardAwarded, Purple)
-                    : new WallchartCell { Kind = WallchartCellKind.Percent, Fraction = w.PeakAward, Colour = Purple },
-                // the highest level of each that Terrain has a record of
-                LevelCell(w.CamperAward), LevelCell(w.WalkaboutAward)
+                    : new WallchartCell { Kind = WallchartCellKind.Percent, Fraction = w.PeakAward, Colour = Purple }
             });
             return new WallchartRow { Name = w.MemberName, Cells = cells };
         }
@@ -138,11 +135,6 @@ namespace Topo.Model.Wallchart
                 .Select(c => new WallchartCell { Kind = WallchartCellKind.Count, Count = c, Colour = Met(c, participateTarget) ? Complete : null })
                 .Append(new WallchartCell { Kind = WallchartCellKind.Count, Count = lead, Colour = Met(lead, leadTarget) ? Complete : Grey });
         }
-
-        private const string Recorded = "#90ee90";
-
-        private static WallchartCell LevelCell(int level) =>
-            new WallchartCell { Kind = WallchartCellKind.Count, Count = level, Colour = level == 0 ? null : Recorded };
 
         private static WallchartCell CountCell(int count, string colour) => new WallchartCell { Kind = WallchartCellKind.Count, Count = count, Colour = colour };
 

@@ -1657,7 +1657,7 @@ namespace Topo.Services
 
             foreach (var wallchartSheet in wallchartSheets)
             {
-                IWorksheet sheet = AddLogoToSheet(workbook, worksheetIndex, groupName, section, 44);
+                IWorksheet sheet = AddLogoToSheet(workbook, worksheetIndex, groupName, section, 42);
                 sheet.Name = string.IsNullOrEmpty(wallchartSheet.Patrol) ? "Unit" : wallchartSheet.Patrol;
                 int rowNumber = 1;
                 int columnNumber = 1;
@@ -1669,7 +1669,7 @@ namespace Topo.Services
                 var unit = sheet.Range[rowNumber, 2];
                 unit.Text = unitName;
                 unit.CellStyle = headingStyle;
-                sheet.Range[rowNumber, 2, rowNumber, 44].Merge();
+                sheet.Range[rowNumber, 2, rowNumber, 42].Merge();
                 sheet.SetRowHeight(rowNumber, 25);
 
                 // Add Title
@@ -1677,7 +1677,7 @@ namespace Topo.Services
                 var title = sheet.Range[rowNumber, 2];
                 title.Text = $"{(string.IsNullOrEmpty(wallchartSheet.Patrol) ? "" : wallchartSheet.Patrol) + " "}Group Life Wallchart as at {DateTime.Now.ToShortDateString()}";
                 title.CellStyle = headingStyle;
-                sheet.Range[rowNumber, 2, rowNumber, 44].Merge();
+                sheet.Range[rowNumber, 2, rowNumber, 42].Merge();
                 sheet.SetRowHeight(rowNumber, 25);
 
                 // Add Heading 1
@@ -1707,14 +1707,9 @@ namespace Topo.Services
                 sheet.Range[rowNumber, 32, rowNumber, 37].CellStyle.Borders[ExcelBordersIndex.EdgeRight].LineStyle = ExcelLineStyle.Thin;
                 sheet.Range[rowNumber, 38, rowNumber, 41].CellStyle.Borders[ExcelBordersIndex.EdgeLeft].LineStyle = ExcelLineStyle.Thin;
                 sheet.Range[rowNumber, 38, rowNumber, 41].CellStyle.Borders[ExcelBordersIndex.EdgeRight].LineStyle = ExcelLineStyle.Thin;
-                sheet.Range[rowNumber, 42].Text = "AWARDS";
-                sheet.Range[rowNumber, 42, rowNumber, 43].Merge();
-                sheet.Range[rowNumber, 42, rowNumber, 43].CellStyle.WrapText = true;
-                sheet.Range[rowNumber, 42, rowNumber, 43].CellStyle.Borders[ExcelBordersIndex.EdgeLeft].LineStyle = ExcelLineStyle.Thin;
-                sheet.Range[rowNumber, 42, rowNumber, 43].CellStyle.Borders[ExcelBordersIndex.EdgeRight].LineStyle = ExcelLineStyle.Thin;
-                sheet.Range[rowNumber, 2, rowNumber, 43].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
-                sheet.Range[rowNumber, 2, rowNumber, 43].CellStyle.VerticalAlignment = ExcelVAlign.VAlignTop;
-                sheet.Range[rowNumber, 2, rowNumber, 43].CellStyle.Font.Bold = true;
+                sheet.Range[rowNumber, 2, rowNumber, 41].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                sheet.Range[rowNumber, 2, rowNumber, 41].CellStyle.VerticalAlignment = ExcelVAlign.VAlignTop;
+                sheet.Range[rowNumber, 2, rowNumber, 41].CellStyle.Font.Bold = true;
                 sheet.SetRowHeight(rowNumber, 30);
 
                 // Add Heading 2
@@ -1733,19 +1728,19 @@ namespace Topo.Services
                 sheet.Range[rowNumber, 26, rowNumber, 28].Merge();
                 sheet.Range[rowNumber, 26, rowNumber, 28].CellStyle.Borders[ExcelBordersIndex.EdgeLeft].LineStyle = ExcelLineStyle.Thin;
                 sheet.Range[rowNumber, 26, rowNumber, 28].CellStyle.Borders[ExcelBordersIndex.EdgeRight].LineStyle = ExcelLineStyle.Thin;
-                sheet.Range[rowNumber, 29, rowNumber, 43].CellStyle.Borders[ExcelBordersIndex.EdgeLeft].LineStyle = ExcelLineStyle.Thin;
-                sheet.Range[rowNumber, 29, rowNumber, 43].CellStyle.Borders[ExcelBordersIndex.EdgeRight].LineStyle = ExcelLineStyle.Thin;
-                sheet.Range[rowNumber, 2, rowNumber, 43].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
-                sheet.Range[rowNumber, 2, rowNumber, 43].CellStyle.Font.Bold = true;
+                sheet.Range[rowNumber, 29, rowNumber, 41].CellStyle.Borders[ExcelBordersIndex.EdgeLeft].LineStyle = ExcelLineStyle.Thin;
+                sheet.Range[rowNumber, 29, rowNumber, 41].CellStyle.Borders[ExcelBordersIndex.EdgeRight].LineStyle = ExcelLineStyle.Thin;
+                sheet.Range[rowNumber, 2, rowNumber, 41].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                sheet.Range[rowNumber, 2, rowNumber, 41].CellStyle.Font.Bold = true;
 
                 // Add Heading 3
                 rowNumber++;
-                sheet.Range[rowNumber, 2, rowNumber, 43].CellStyle.Borders[ExcelBordersIndex.EdgeLeft].LineStyle = ExcelLineStyle.Thin;
-                sheet.Range[rowNumber, 2, rowNumber, 43].CellStyle.Borders[ExcelBordersIndex.EdgeRight].LineStyle = ExcelLineStyle.Thin;
-                sheet.Range[rowNumber, 2, rowNumber, 43].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
-                sheet.Range[rowNumber, 2, rowNumber, 43].CellStyle.VerticalAlignment = ExcelVAlign.VAlignBottom;
-                sheet.Range[rowNumber, 2, rowNumber, 43].CellStyle.Rotation = 90;
-                sheet.Range[rowNumber, 1, rowNumber, 43].CellStyle.Font.Bold = true;
+                sheet.Range[rowNumber, 2, rowNumber, 41].CellStyle.Borders[ExcelBordersIndex.EdgeLeft].LineStyle = ExcelLineStyle.Thin;
+                sheet.Range[rowNumber, 2, rowNumber, 41].CellStyle.Borders[ExcelBordersIndex.EdgeRight].LineStyle = ExcelLineStyle.Thin;
+                sheet.Range[rowNumber, 2, rowNumber, 41].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                sheet.Range[rowNumber, 2, rowNumber, 41].CellStyle.VerticalAlignment = ExcelVAlign.VAlignBottom;
+                sheet.Range[rowNumber, 2, rowNumber, 41].CellStyle.Rotation = 90;
+                sheet.Range[rowNumber, 1, rowNumber, 41].CellStyle.Font.Bold = true;
                 sheet.Range[rowNumber, 1].Text = " Name";
                 sheet.Range[rowNumber, 2].Text = " Intro To Scouting";
                 sheet.Range[rowNumber, 3].Text = " Intro To Section";
@@ -1787,8 +1782,6 @@ namespace Topo.Services
                 sheet.Range[rowNumber, 39].Text = " Adventurous Journey";
                 sheet.Range[rowNumber, 40].Text = " Personal Reflection";
                 sheet.Range[rowNumber, 41].Text = " PEAK AWARD";
-                sheet.Range[rowNumber, 42].Text = " Camper Award";
-                sheet.Range[rowNumber, 43].Text = " Walkabout Award";
                 sheet.SetRowHeight(rowNumber, 120);
 
                 foreach (var wallchartRow in wallchartSheet.Rows)
@@ -1806,13 +1799,13 @@ namespace Topo.Services
                             sheet.Range[rowNumber, column, rowNumber, column + cell.Span - 1].CellStyle.Color = Colour(cell.Colour);
                         column += cell.Span;
                     }
-                    sheet.Range[rowNumber, 1, rowNumber, 43].BorderAround();
-                    sheet.Range[rowNumber, 1, rowNumber, 43].BorderInside();
-                    sheet.Range[rowNumber, 2, rowNumber, 43].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                    sheet.Range[rowNumber, 1, rowNumber, 41].BorderAround();
+                    sheet.Range[rowNumber, 1, rowNumber, 41].BorderInside();
+                    sheet.Range[rowNumber, 2, rowNumber, 41].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
                 }
 
 
-                sheet.Range[1, 1, rowNumber, 43].AutofitColumns();
+                sheet.Range[1, 1, rowNumber, 41].AutofitColumns();
 
                 sheet.PageSetup.PaperSize = ExcelPaperSize.PaperA4;
                 sheet.PageSetup.Orientation = ExcelPageOrientation.Landscape;

@@ -761,8 +761,6 @@ namespace TopoReportFunctionTest
 
 namespace TopoReportFunctionTest
 {
-    using Topo.Model.Wallchart;
-
     [TestClass]
     public class ApprovalsReportCamperWalkaboutTests
     {
@@ -792,78 +790,6 @@ namespace TopoReportFunctionTest
             Assert.AreNotEqual(red, sheet.Range[First("B Walkabout 10"), 2].CellStyle.Color.ToArgb(), "a level that is not the highest is not handed over");
             Assert.AreNotEqual(red, sheet.Range[First("D OAS Camping 2"), 2].CellStyle.Color.ToArgb());
             workbook.Close();
-        }
-    }
-
-    [TestClass]
-    public class WallchartCamperWalkaboutTests
-    {
-        private static WallchartItemModel Scout(int camper, int walkabout) => new WallchartItemModel { MemberName = "Amy Ay", CamperAward = camper, WalkaboutAward = walkabout };
-
-        [TestMethod]
-        public void TheWallchartHasCamperAndWalkaboutColumnsAtTheEndUnderTheirOwnHeading()
-        {
-            CollectionAssert.AreEqual(new[] { "PEAK AWARD", "Camper Award", "Walkabout Award" }, WallchartLayout.Columns.TakeLast(3).ToArray());
-            Assert.AreEqual(("AWARDS", 2), WallchartLayout.Groups.Last());
-        }
-
-        [TestMethod]
-        public void TheHighestLevelTerrainHoldsIsShownInGreen()
-        {
-            var row = WallchartLayout.Build(new[] { Scout(25, 100) }, false).Single().Rows.Single();
-            Assert.AreEqual(25, row.Cells[^2].Count);
-            Assert.AreEqual("#90ee90", row.Cells[^2].Colour);
-            Assert.AreEqual(100, row.Cells[^1].Count);
-            Assert.AreEqual("#90ee90", row.Cells[^1].Colour);
-        }
-
-        [TestMethod]
-        public void NoLevelLeavesTheCellsUnshaded()
-        {
-            var row = WallchartLayout.Build(new[] { Scout(0, 0) }, false).Single().Rows.Single();
-            Assert.IsNull(row.Cells[^2].Colour);
-            Assert.IsNull(row.Cells[^1].Colour);
-            Assert.AreEqual(42, row.Cells.Sum(c => c.Span));
-        }
-
-        [TestMethod]
-        public void TheSheetHasTheNewHeadingsAndKeepsPeakAwardWhereItWas()
-        {
-            SetEnvironment.SetSyncfusionLicense();
-            var workbook = new Topo.Services.ReportService().GenerateWallchartWorkbook(new List<WallchartItemModel> { Scout(25, 100) }, "Group", "scout", "Scout Unit", false);
-            var sheet = workbook.Worksheets[0];
-            // the column headings row is the one with " Name" in column 1
-            int heading = Enumerable.Range(1, 15).First(r => sheet.Range[r, 1].Text == " Name");
-            Assert.AreEqual(" PEAK AWARD", sheet.Range[heading, 41].Text);
-            Assert.AreEqual(" Camper Award", sheet.Range[heading, 42].Text);
-            Assert.AreEqual(" Walkabout Award", sheet.Range[heading, 43].Text);
-            Assert.AreEqual("AWARDS", sheet.Range[heading - 2, 42].Text);
-            var data = heading + 1;
-            Assert.AreEqual("25", sheet.Range[data, 42].DisplayText);
-            Assert.AreEqual("100", sheet.Range[data, 43].DisplayText);
-            Assert.AreEqual(System.Drawing.ColorTranslator.FromHtml("#90ee90").ToArgb(), sheet.Range[data, 42].CellStyle.Color.ToArgb());
-            workbook.Close();
-        }
-    }
-}
-
-namespace TopoReportFunctionTest
-{
-    [TestClass]
-    public class HighestAwardLevelsTests
-    {
-        [TestMethod]
-        public void TheHighestLevelOfEachKindInTerrainsRecordsIsUsed()
-        {
-            var levels = HighestAwardLevels.For(new[] { "camper_award_10", "camper_award_50", "camper_award_25", "walkabout_10", "walkabout_150", "first_aid" });
-            Assert.AreEqual((50, 150), levels);
-        }
-
-        [TestMethod]
-        public void NoCamperOrWalkaboutRecordsMeansNoLevel()
-        {
-            Assert.AreEqual((0, 0), HighestAwardLevels.For(new[] { "first_aid" }));
-            Assert.AreEqual((0, 0), HighestAwardLevels.For(Array.Empty<string>()));
         }
     }
 }
