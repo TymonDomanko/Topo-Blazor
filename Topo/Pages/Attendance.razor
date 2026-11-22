@@ -1,0 +1,88 @@
+@page "/attendance"
+@inherits Controller.AttendanceController
+@using Topo.Model.ReportGeneration
+
+<PageTitle>Topo / Attendance</PageTitle>
+
+<EditForm Model="@model">
+    <div class="mt-3 mb-3 row">
+        <h2>Attendance @model.GroupName</h2>
+    </div>
+
+    <div class="form-group mb-3 row">
+        <label for="unit" class="col-sm-2 col-form-label">Select Unit</label>
+        <div class="col-sm-3">
+            <select id="unit" class="form-select" value="@model.UnitId" @onchange="UnitChange">
+                <option value="">Select unit</option>
+                @foreach (var unit in model.Units)
+                {
+                    <option value="@unit.Key">@unit.Value</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    <div class="form-group mb-3 row">
+        <label class="col-sm-2 col-form-label">Calendars</label>
+        <div class="col-sm-10 col-form-label">
+            <div class="d-flex flex-wrap gap-4">
+                @foreach (var column in CalendarColumns())
+                {
+                    <div class="d-flex flex-column">
+                        @foreach (var calendar in column)
+                        {
+                            <label class="text-nowrap">
+                                <input type="checkbox" checked="@model.SelectedCalendars.Contains(calendar.Key)"
+                                       @onchange="@(e => ToggleCalendar(calendar.Key, (bool)(e.Value ?? false)))" /> @calendar.Value
+                            </label>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-3 mb-3 row">
+        <label class="col-sm-2 col-form-label">Period</label>
+        <div class="col-sm-10 col-form-label">
+            <button type="button" class="btn btn-outline-secondary btn-sm me-1" @onclick="LastMonth">Last month</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm me-1" @onclick="ThisQuarter">This quarter</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm me-1" @onclick="LastQuarter">Last quarter</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ThisYear">This year</button>
+        </div>
+    </div>
+    <div class="mt-3 mb-3 row">
+        <label class="col-sm-2 col-form-label">From Date</label>
+        <div class="col-sm-3">
+            <InputDate @bind-Value="@model.From" @bind-Value:after="DatesChanged" class="form-control" />
+        </div>
+        <label class="col-sm-2 col-form-label">To Date</label>
+        <div class="col-sm-3">
+            <InputDate @bind-Value="@model.To" @bind-Value:after="DatesChanged" class="form-control" />
+        </div>
+    </div>
+
+    <div class="mt-3 mb-3 row">
+        <div class="col-sm-3">
+            <InputCheckbox id="breakByPatrol" class="form-check-input" @bind-Value="model.BreakByPatrol" @bind-Value:after="OptionChanged" />
+            <label class="form-check-label" for="breakByPatrol">
+                Break by Patrol
+            </label>
+        </div>
+        <div class="col-sm-9">
+            <InputCheckbox id="useFullNames" class="form-check-input" @bind-Value="model.UseFullNames" @bind-Value:after="OptionChanged" />
+            <label class="form-check-label" for="useFullNames">
+                Use full names (otherwise first name plus enough of the surname to tell people apart)
+            </label>
+        </div>
+    </div>
+
+    <PageStatus Loading="Busy" Progress="@Progress" Error="@model.ErrorMessage" />
+
+    @if (Report != null)
+    {
+        <ReportButtons Name="Attendance" OnPdf="@(() => DownloadClick(OutputType.PDF))" OnXlsx="@(() => DownloadClick(OutputType.Excel))" Disabled="@(Report.Tables.Count == 0)" />
+
+        <AttendancePreview Report="Report" />
+    }
+</EditForm>

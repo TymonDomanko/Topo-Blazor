@@ -78,6 +78,7 @@ namespace Topo.Shared
                 new("Program", "program", "oi-calendar"),
                 new("Logbook", "logbook", "oi-book"),
                 new("Wallchart", "wallchart", "oi-bar-chart"),
+                new("Attendance", "attendance", "oi-bar-chart"),
                 new("Approvals", "approvals/approvals", "oi-thumb-up", ActivePrefix: "approvals"),
                 new("Personal Progress", "progress/progress", "oi-person"),
                 new("Scouting History", "scoutinghistory/member", "oi-clock", ActivePrefix: "scoutinghistory"),

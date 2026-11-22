@@ -1,0 +1,49 @@
+/* The table scrolls sideways inside its own box, so a wide one does not widen the page */
+.scroller {
+    overflow-x: auto;
+    width: 0;
+    min-width: 100%;
+}
+
+.attendance {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.attendance th,
+.attendance td {
+    padding: 0.15rem 0.45rem;
+    border-right: 1px solid #d6d5d5;
+    border-bottom: 1px solid #d6d5d5;
+}
+
+.attendance thead th {
+    background-color: #e9ecef;
+    font-weight: bold;
+}
+
+/* The names stay in view while the columns scroll */
+.attendance .name {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 8rem;
+    background-color: #fff;
+    text-align: left;
+}
+
+.attendance thead .name {
+    z-index: 2;
+    background-color: #e9ecef;
+}
+
+.attendance tfoot td {
+    font-weight: bold;
+    background-color: #f8f9fa;
+}
+
+.attendance tfoot .name {
+    background-color: #f8f9fa;
+}
