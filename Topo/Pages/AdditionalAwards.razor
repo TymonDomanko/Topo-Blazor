@@ -36,6 +36,14 @@
                 </label>
             </div>
             <div class="col-sm-9">
+                <InputCheckbox id="includeAllAwards" class="form-check-input" @bind-Value="model.IncludeAllAwards" @bind-Value:after="OptionChanged" />
+                <label class="form-check-label" for="includeAllAwards">
+                    Include all the additional awards available to this unit (not only those someone has)
+                </label>
+            </div>
+        </div>
+        <div class="mb-3 row">
+            <div class="col-sm-9 offset-sm-3">
                 <InputCheckbox id="useFullNames" class="form-check-input" @bind-Value="model.UseFullNames" @bind-Value:after="OptionChanged" />
                 <label class="form-check-label" for="useFullNames">
                     Use full names (otherwise first name plus enough of the surname to tell Scouts apart)
