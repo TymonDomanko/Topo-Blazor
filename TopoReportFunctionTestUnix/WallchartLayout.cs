@@ -27,8 +27,8 @@ namespace TopoReportFunctionTest
         [TestMethod]
         public void EveryRowCoversExactlyTheColumnsTheHeadingsDo()
         {
-            Assert.AreEqual(42, WallchartLayout.Columns.Length);
-            Assert.AreEqual(42, WallchartLayout.Groups.Sum(g => g.Span));
+            Assert.AreEqual(40, WallchartLayout.Columns.Length);
+            Assert.AreEqual(40, WallchartLayout.Groups.Sum(g => g.Span));
             Assert.AreEqual(9, WallchartLayout.OutdoorGroups.Sum(g => g.Span));
 
             var bare = RowOf(Scout("Amy"));
@@ -37,8 +37,8 @@ namespace TopoReportFunctionTest
             awarded.Milestone2Awarded = new DateTime(2026, 4, 6);
             var withDates = RowOf(awarded);
 
-            Assert.AreEqual(42, bare.Cells.Sum(c => c.Span));
-            Assert.AreEqual(42, withDates.Cells.Sum(c => c.Span)); // a milestone that is one date still covers its five columns
+            Assert.AreEqual(40, bare.Cells.Sum(c => c.Span));
+            Assert.AreEqual(40, withDates.Cells.Sum(c => c.Span)); // a milestone that is one date still covers its five columns
         }
 
         [TestMethod]
