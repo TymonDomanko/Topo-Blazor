@@ -15,6 +15,7 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 builder.Services.AddSingleton<StorageService>();
 builder.Services.AddScoped<ITerrainAPIService, TerrainAPIService>();
 builder.Services.AddScoped<IMembersService, MembersService>();
+builder.Services.AddScoped<IPatrolPushService, PatrolPushService>();
 builder.Services.AddScoped<ILoginService, LoginService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IProgramService, ProgramService>();

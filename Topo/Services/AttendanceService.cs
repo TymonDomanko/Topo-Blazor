@@ -7,11 +7,21 @@ namespace Topo.Services
     public interface IAttendanceService
     {
         // Who came to the events on the chosen calendars in the period
-        public Task<AttendanceData> GetAttendance(string unitId, DateTime from, DateTime to, string[] calendarIds, Action<string>? progress = null, CancellationToken cancellationToken = default);
+        // eventsRead, when given, remembers each event read (by id), so a second look over an overlapping period does not read them again
+        public Task<AttendanceData> GetAttendance(string unitId, DateTime from, DateTime to, string[] calendarIds, Action<string>? progress = null, CancellationToken cancellationToken = default,
+            IDictionary<string, Topo.Model.Program.GetEventResultModel>? eventsRead = null);
+        // How many of the unit's last Scout nights each youth came to, from the calendar named after the unit; null when there is no such calendar
+        public Task<RecentNights?> GetRecentNights(string unitId, int nights, Action<string>? progress = null, CancellationToken cancellationToken = default);
     }
 
     public class AttendanceService : IAttendanceService
     {
+        // How far back to look for the last Scout nights: ten weekly nights with room for term breaks. Most of the time the last
+        // ten fall inside the first, shorter look (one 90 day window of events, about half the reading); only a unit that has had
+        // fewer than that many nights in it, say over the holidays, goes on to the longer one.
+        private const int RecentDaysFirst = 89;
+        private const int RecentDays = 180;
+
         // When each youth was invested into the section (the date is blank for someone who has not been), kept for the session since it
         // does not change when the period does
         private readonly Dictionary<string, DateTime?> _investedOn = new Dictionary<string, DateTime?>();
@@ -20,22 +30,25 @@ namespace Topo.Services
         private readonly IMembersService _membersService;
         private readonly ITerrainAPIService _terrainAPIService;
         private readonly IUnitReportService _unitReportService;
+        private readonly IProgramService _programService;
 
-        public AttendanceService(StorageService storageService, IMembersService membersService, ITerrainAPIService terrainAPIService, IUnitReportService unitReportService)
+        public AttendanceService(StorageService storageService, IMembersService membersService, ITerrainAPIService terrainAPIService, IUnitReportService unitReportService, IProgramService programService)
         {
             _storageService = storageService;
             _membersService = membersService;
             _terrainAPIService = terrainAPIService;
             _unitReportService = unitReportService;
+            _programService = programService;
         }
 
-        public async Task<AttendanceData> GetAttendance(string unitId, DateTime from, DateTime to, string[] calendarIds, Action<string>? progress = null, CancellationToken cancellationToken = default)
+        public async Task<AttendanceData> GetAttendance(string unitId, DateTime from, DateTime to, string[] calendarIds, Action<string>? progress = null, CancellationToken cancellationToken = default,
+            IDictionary<string, Topo.Model.Program.GetEventResultModel>? eventsRead = null)
         {
             var profile = _storageService.GetProfilesResult?.profiles?.FirstOrDefault(p => p.unit?.id == unitId);
             progress?.Invoke("the members");
             var members = await _membersService.GetMembersAsync(unitId);
             cancellationToken.ThrowIfCancellationRequested();
-            var events = await _unitReportService.GetEventsForCalendars(from, to, calendarIds, cancellationToken, progress);
+            var events = await _unitReportService.GetEventsForCalendars(from, to, calendarIds, cancellationToken, progress, eventsRead);
 
             // so that the events before a youth joined the section are not counted against them (nothing to work out when there are no events)
             var section = profile?.unit?.section ?? "";
@@ -65,6 +78,24 @@ namespace Topo.Services
                 UnitName = profile?.unit?.name ?? "", Section = section, From = from, To = to, AsOf = DateTime.Now,
                 Members = members, Events = events, InvestedOn = invested
             });
+        }
+
+        public async Task<RecentNights?> GetRecentNights(string unitId, int nights, Action<string>? progress = null, CancellationToken cancellationToken = default)
+        {
+            var calendars = await _programService.GetCalendars();
+            var unitName = _storageService.GetProfilesResult?.profiles?.FirstOrDefault(p => p.unit?.id == unitId)?.unit?.name;
+            var calendar = CalendarMatcher.FindForUnit(calendars, unitName);
+            if (calendar == null)
+                return null;
+
+            // The last ten nights are the ten most recent, so when the shorter look has found that many the longer one would give
+            // exactly the same answer and is not read. When it is read it contains the shorter look, so the events already read are
+            // kept and only the ones not seen before are read.
+            var eventsRead = new Dictionary<string, Topo.Model.Program.GetEventResultModel>();
+            var recent = AttendanceBuilder.Recent(await GetAttendance(unitId, DateTime.Today.AddDays(-RecentDaysFirst), DateTime.Today, new[] { calendar }, progress, cancellationToken, eventsRead), nights);
+            if (recent.Nights >= nights)
+                return recent;
+            return AttendanceBuilder.Recent(await GetAttendance(unitId, DateTime.Today.AddDays(-RecentDays), DateTime.Today, new[] { calendar }, progress, cancellationToken, eventsRead), nights);
         }
     }
 }

@@ -1,3 +1,4 @@
+using Topo.Model;
 using Topo.Model.Milestone;
 using Topo.Model.Progress;
 using Topo.Model.Members;
@@ -9,7 +10,9 @@ namespace Topo.Services
     {
         public Task<UnitReportModel> GetUnitReport(string unitId, DateTime from, DateTime to, string[] calendarIds, Action<string>? progress = null, CancellationToken cancellationToken = default);
         // Every event in the range from the chosen calendars, in full (attendance, logbook data) with its scope
-        public Task<List<UnitEventInput>> GetEventsForCalendars(DateTime from, DateTime to, string[] calendarIds, CancellationToken cancellationToken = default, Action<string>? progress = null);
+        // eventsRead, when given, remembers each event read (by id) so a later read for the same page load does not read it again
+        public Task<List<UnitEventInput>> GetEventsForCalendars(DateTime from, DateTime to, string[] calendarIds, CancellationToken cancellationToken = default, Action<string>? progress = null,
+            IDictionary<string, Topo.Model.Program.GetEventResultModel>? eventsRead = null);
     }
 
     public class UnitReportService : IUnitReportService
@@ -78,12 +81,13 @@ namespace Topo.Services
         }
 
         // Terrain only shows the calendars the user has switched on, so they are switched to the chosen ones and back
-        public async Task<List<UnitEventInput>> GetEventsForCalendars(DateTime from, DateTime to, string[] calendarIds, CancellationToken cancellationToken = default, Action<string>? progress = null)
+        public async Task<List<UnitEventInput>> GetEventsForCalendars(DateTime from, DateTime to, string[] calendarIds, CancellationToken cancellationToken = default, Action<string>? progress = null,
+            IDictionary<string, Topo.Model.Program.GetEventResultModel>? eventsRead = null)
         {
             await _programService.SetCalendar(calendarIds);
             try
             {
-                return await GetEventDetails(from, to, cancellationToken, progress);
+                return await GetEventDetails(from, to, cancellationToken, progress, eventsRead);
             }
             finally
             {
@@ -93,34 +97,38 @@ namespace Topo.Services
 
         // Every event in the range, in full (attendance, logbook data) with its scope. Asked for in 90 day windows
         // so that "all time" is many small requests rather than one very large one.
-        private async Task<List<UnitEventInput>> GetEventDetails(DateTime from, DateTime to, CancellationToken cancellationToken, Action<string>? progress)
+        //
+        // The windows don't depend on each other, so their lists are asked for together. Then each event is a request of its
+        // own (the list has no attendance), and those are read a few at a time, in the order they were listed, instead of
+        // one after another. An event that shows up in two windows is read once.
+        private async Task<List<UnitEventInput>> GetEventDetails(DateTime from, DateTime to, CancellationToken cancellationToken, Action<string>? progress,
+            IDictionary<string, Topo.Model.Program.GetEventResultModel>? eventsRead)
         {
             var userId = _storageService.GetProfilesResult?.profiles?.FirstOrDefault()?.member?.id ?? "";
-            var events = new List<UnitEventInput>();
-            var seen = new HashSet<string>();
-            var windows = Math.Max(1, (int)Math.Ceiling(((to.Date - from.Date).TotalDays + 1) / 90));
-            var window = 0;
+            var windows = new List<(DateTime start, DateTime end)>();
             for (var windowStart = from.Date; windowStart <= to.Date; windowStart = windowStart.AddDays(90))
-            {
-                window++;
-                progress?.Invoke($"events, period {window} of {windows}");
-                var windowEnd = windowStart.AddDays(89) < to.Date ? windowStart.AddDays(89) : to.Date;
-                var result = await _terrainAPIService.GetEventsAsync(userId, windowStart.AddDays(-1), windowEnd.AddDays(1));
-                var summaries = result?.results ?? new Topo.Model.Program.Event[0];
-                var done = 0;
-                foreach (var summary in summaries)
+                windows.Add((windowStart, windowStart.AddDays(89) < to.Date ? windowStart.AddDays(89) : to.Date));
+
+            progress?.Invoke($"events, {windows.Count} period{(windows.Count == 1 ? "" : "s")}");
+            var lists = await Task.WhenAll(windows.Select(w => _terrainAPIService.GetEventsAsync(userId, w.start.AddDays(-1), w.end.AddDays(1))));
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var seen = new HashSet<string>();
+            var summaries = lists.SelectMany(l => l?.results ?? new Topo.Model.Program.Event[0]).Where(e => seen.Add(e.id)).ToList();
+
+            // an event already read for this page load (by an earlier, overlapping period) is reused, not read again
+            var details = await ReadOnce.SelectAsync(summaries, summary => summary.id, eventsRead,
+                async summary =>
                 {
-                    done++;
-                    if (!seen.Add(summary.id))
-                        continue;
                     cancellationToken.ThrowIfCancellationRequested();
-                    progress?.Invoke($"events, period {window} of {windows}: event {done} of {summaries.Length}");
-                    var detail = await _terrainAPIService.GetEventAsync(summary.id);
-                    if (detail != null)
-                        events.Add(new UnitEventInput { Scope = summary.invitee_type, Event = detail });
-                }
-            }
-            return events;
+                    return await _terrainAPIService.GetEventAsync(summary.id);
+                },
+                (done, total) => progress?.Invoke($"events: {done} of {total}"));
+
+            return summaries.Zip(details, (summary, detail) => (summary, detail))
+                .Where(x => x.detail != null)
+                .Select(x => new UnitEventInput { Scope = x.summary.invitee_type, Event = x.detail! })
+                .ToList();
         }
     }
 }
