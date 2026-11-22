@@ -11,7 +11,5 @@
         public DateTime? AwardDate { get; set; }
         public DateTime? PresentedDate { get; set; }
         public int AwardUnits { get; set; } = 0;
-        // From the Topo records: a lower level covered by a higher one that is the badge to hand over, so nothing of its own to present
-        public bool NotHighest { get; set; }
     }
 }

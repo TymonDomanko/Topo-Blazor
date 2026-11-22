@@ -49,7 +49,7 @@ namespace Topo.Controller
             if (!_storageService.IsAuthenticated)
                 NavigationManager.NavigateTo("index");
 
-            // The automatic Camper and Walkabout check keeps its records up to date; this page shows them and its status
+            // The automatic Camper and Walkabout check keeps the list of awards to hand over up to date; this page shows them and its status
             _autoAwards.Changed += OnAutoChanged;
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
@@ -70,13 +70,13 @@ namespace Topo.Controller
 
         internal async Task AutoToggle(ChangeEventArgs e) => await _autoAwards.SetEnabledAsync(e.Value is true);
 
-        // The Camper and Walkabout Awards the Topo records hold for the unit, as rows like the others. If the records cannot be read the
-        // list is still shown without them.
+        // The Camper and Walkabout Awards to hand over for the unit (earned by the logbook, not in Terrain yet), as rows like the others. If they
+        // cannot be worked out the list is still shown without them.
         private async Task<List<ApprovalsListModel>> AdditionalAwardRowsAsync(string unitId)
         {
             try
             {
-                return AwardCheckRows.ToApprovalRows(await _additionalAwards.StoredAsync(unitId));
+                return AwardCheckRows.ToApprovalRows(await _additionalAwards.PendingAsync(unitId));
             }
             catch (Exception)
             {

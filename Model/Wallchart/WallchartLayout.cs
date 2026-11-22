@@ -60,7 +60,7 @@ namespace Topo.Model.Wallchart
         // The headings over the columns after the name, and how many columns each covers
         public static readonly (string Heading, int Span)[] Groups =
         {
-            ("", 3), ("MILESTONE 1", 5), ("MILESTONE 2", 5), ("MILESTONE 3", 5), ("OUTDOOR ADVENTURE SKILLS", 12), ("SPECIAL INTEREST AREAS", 6), ("", 4), ("ADDITIONAL AWARDS", 2)
+            ("", 3), ("MILESTONE 1", 5), ("MILESTONE 2", 5), ("MILESTONE 3", 5), ("OUTDOOR ADVENTURE SKILLS", 12), ("SPECIAL INTEREST AREAS", 6), ("", 4), ("AWARDS", 2)
         };
 
         // The headings over the Outdoor Adventure Skill columns
@@ -115,8 +115,8 @@ namespace Topo.Model.Wallchart
                 w.PeakAwardAwarded.HasValue
                     ? DateCell(w.PeakAwardAwarded, Purple)
                     : new WallchartCell { Kind = WallchartCellKind.Percent, Fraction = w.PeakAward, Colour = Purple },
-                // the highest level of each: green once presented, orange while it is still to be presented
-                LevelCell(w.CamperAward, w.CamperAwardPresented), LevelCell(w.WalkaboutAward, w.WalkaboutAwardPresented)
+                // the highest level of each that Terrain has a record of
+                LevelCell(w.CamperAward), LevelCell(w.WalkaboutAward)
             });
             return new WallchartRow { Name = w.MemberName, Cells = cells };
         }
@@ -139,11 +139,10 @@ namespace Topo.Model.Wallchart
                 .Append(new WallchartCell { Kind = WallchartCellKind.Count, Count = lead, Colour = Met(lead, leadTarget) ? Complete : Grey });
         }
 
-        private const string Presented = "#90ee90";
-        private const string ToPresent = "#ffa500";
+        private const string Recorded = "#90ee90";
 
-        private static WallchartCell LevelCell(int level, bool presented) =>
-            new WallchartCell { Kind = WallchartCellKind.Count, Count = level, Colour = level == 0 ? null : presented ? Presented : ToPresent };
+        private static WallchartCell LevelCell(int level) =>
+            new WallchartCell { Kind = WallchartCellKind.Count, Count = level, Colour = level == 0 ? null : Recorded };
 
         private static WallchartCell CountCell(int count, string colour) => new WallchartCell { Kind = WallchartCellKind.Count, Count = count, Colour = colour };
 

@@ -1,4 +1,4 @@
-using Topo.Model.BadgeStore;
+using Topo.Model.AdditionalAwards;
 using Topo.Services;
 
 namespace Topo

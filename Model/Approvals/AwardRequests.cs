@@ -10,8 +10,8 @@ namespace Topo.Model.Approvals
         public PendingApprovalItem Item { get; init; } = new();
         public bool CanAward { get; init; }
         public string Reason { get; init; } = string.Empty;
-        // A Camper or Walkabout Award flagged in the Topo records, which has no award request in Terrain
-        public bool IsStoreAward => Item.SubmissionId.StartsWith(PendingApprovalItem.StoreIdPrefix, StringComparison.Ordinal);
+        // A Camper or Walkabout Award Topo worked out from the logbook, which has no award request in Terrain
+        public bool IsTopoAward => Item.SubmissionId.StartsWith(PendingApprovalItem.TopoIdPrefix, StringComparison.Ordinal);
     }
 
     // All of one person's pending awards
@@ -40,8 +40,8 @@ namespace Topo.Model.Approvals
         public AwardRequestList OnlyMembers(ISet<string> memberIds) =>
             new() { People = People.Where(p => memberIds.Contains(p.MemberId)).ToList() };
 
-        // The Camper and Walkabout awards flagged as to be presented, listed with the pending awards as one more kind of badge.
-        // They have no award request in Terrain, so each gets an id that starts with PendingApprovalItem.StoreIdPrefix.
+        // The Camper and Walkabout awards to hand over, listed with the pending awards as one more kind of badge.
+        // They have no award request in Terrain, so each gets an id that starts with PendingApprovalItem.TopoIdPrefix.
         public AwardRequestList WithAdditionalAwards(IEnumerable<AwardRow> toBePresented)
         {
             var rows = toBePresented.Where(r => r.Status == AwardRowStatus.ToBePresented).ToList();
@@ -61,7 +61,7 @@ namespace Topo.Model.Approvals
                     CanAward = true,
                     Item = new PendingApprovalItem
                     {
-                        SubmissionId = PendingApprovalItem.StoreIdPrefix + row.Key,
+                        SubmissionId = PendingApprovalItem.TopoIdPrefix + row.Key,
                         SubmissionType = "award",
                         SubmissionDate = row.Earned ?? DateTime.Today,
                         MemberId = row.MemberId,

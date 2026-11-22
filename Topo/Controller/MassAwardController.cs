@@ -62,10 +62,10 @@ namespace Topo.Controller
         public int AttendedCount => _attended?.Count ?? 0;
         public bool IsLoading;
         public string? LoadError;
-        // The Camper and Walkabout awards flagged in the Topo records are listed with the pending awards, as one more badge. They have
-        // no award request in Terrain, so awarding one writes to the Topo records instead. By the id they are listed under.
-        private Dictionary<string, AwardRow> _storeAwards = new();
-        public string? StoreNote;
+        // The Camper and Walkabout awards to hand over are listed with the pending awards, as one more badge. They have no award request in
+        // Terrain, so awarding one records it in Terrain's additional awards instead. By the id they are listed under.
+        private Dictionary<string, AwardRow> _topoAwards = new();
+        public string? TopoNote;
 
         protected override async Task OnInitializedAsync()
         {
@@ -103,7 +103,7 @@ namespace Topo.Controller
             LoadError = null;
             try
             {
-                var awards = await WithStoreAwardsAsync(unitId, await _approvalsService.GetAwardRequests(unitId));
+                var awards = await WithTopoAwardsAsync(unitId, await _approvalsService.GetAwardRequests(unitId));
                 // The leader picked another unit while this was loading; that unit's own read decides what is shown
                 if (unitId != UnitId) return;
                 Awards = awards;
@@ -318,7 +318,7 @@ namespace Topo.Controller
         {
             try
             {
-                var awards = await WithStoreAwardsAsync(unitId, await _approvalsService.GetAwardRequests(unitId));
+                var awards = await WithTopoAwardsAsync(unitId, await _approvalsService.GetAwardRequests(unitId));
                 if (unitId != UnitId) return;
                 // An award that went through but is still pending in Terrain has an awarded response recorded, so it is not listed
                 StillListed = result.Done.Count(o => awards.Hidden.Contains(o.Award.Item.SubmissionId));
@@ -334,37 +334,37 @@ namespace Topo.Controller
             }
         }
 
-        // Adds the Camper and Walkabout awards flagged as to be presented to the pending awards. If the Topo records cannot be read the
-        // pending awards are still shown, with a note.
-        private async Task<AwardRequestList> WithStoreAwardsAsync(string unitId, AwardRequestList awards)
+        // Adds the Camper and Walkabout awards to hand over to the pending awards. If they cannot be worked out the pending awards are still
+        // shown, with a note.
+        private async Task<AwardRequestList> WithTopoAwardsAsync(string unitId, AwardRequestList awards)
         {
-            StoreNote = null;
-            _storeAwards = new Dictionary<string, AwardRow>();
+            TopoNote = null;
+            _topoAwards = new Dictionary<string, AwardRow>();
             try
             {
-                var rows = (await _additionalAwards.StoredAsync(unitId)).Where(r => r.Status == AwardRowStatus.ToBePresented).ToList();
-                _storeAwards = rows.ToDictionary(r => PendingApprovalItem.StoreIdPrefix + r.Key);
+                var rows = (await _additionalAwards.PendingAsync(unitId)).Where(r => r.Status == AwardRowStatus.ToBePresented).ToList();
+                _topoAwards = rows.ToDictionary(r => PendingApprovalItem.TopoIdPrefix + r.Key);
                 return awards.WithAdditionalAwards(rows);
             }
             catch (Exception)
             {
-                StoreNote = "The Camper and Walkabout awards could not be read from the Topo records in Terrain, so they are not listed.";
+                TopoNote = "The Camper and Walkabout awards could not be worked out, so they are not listed.";
                 return awards;
             }
         }
 
-        // One award: a Terrain award request goes to Terrain, a Camper or Walkabout Award is recorded as presented in the Topo records.
-        // Returns null when it worked, otherwise what went wrong.
+        // One award: a Terrain award request goes to Terrain's approvals, a Camper or Walkabout Award is recorded in Terrain's additional
+        // awards (with the lower levels it covers, on the same day). Returns null when it worked, otherwise what went wrong.
         private async Task<string?> SendAsync(string submissionId, ApprovalAction action)
         {
-            if (!submissionId.StartsWith(PendingApprovalItem.StoreIdPrefix, StringComparison.Ordinal))
+            if (!submissionId.StartsWith(PendingApprovalItem.TopoIdPrefix, StringComparison.Ordinal))
                 return await _approvalsService.PerformAction(submissionId, action);
-            if (!_storeAwards.TryGetValue(submissionId, out var row))
-                return "That award is no longer flagged as to be presented.";
+            if (!_topoAwards.TryGetValue(submissionId, out var row))
+                return "That award is no longer on the list to hand over.";
             var written = await _additionalAwards.PresentAsync(new[] { row }, action.DateAwarded!.Value);
-            if (written.Failures.Count == 0 && !written.NoStoreEvent && written.Done + written.Skipped == 1)
+            if (written.Failures.Count == 0 && written.Done + written.Skipped > 0)
                 return null;
-            return written.NoStoreEvent ? "The group has no Topo records event." : written.Failures.FirstOrDefault() ?? "It was not recorded.";
+            return written.Failures.FirstOrDefault() ?? "It was not recorded.";
         }
     }
 }

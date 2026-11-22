@@ -133,74 +133,97 @@ namespace TopoReportFunctionTest
 
 namespace TopoReportFunctionTest
 {
-    using Topo.Model.BadgeStore;
-
     [TestClass]
     public class AwardCheckRowsTests
     {
-        private static BadgeStoreRecord Rec(string member, string award, string awarded, string? presented = null) => new BadgeStoreRecord
+        private static readonly List<AwardTier> Tiers = CamperWalkaboutRules.Tiers(new[]
         {
-            MemberId = member, AwardId = award, Awarded = DateTime.Parse(awarded), Presented = presented == null ? null : DateTime.Parse(presented), EventId = "e1", CommentId = "c-" + member + award
-        };
-
-        private static List<AwardTier> Tiers() => CamperWalkaboutRules.Tiers(new[]
-        {
-            ("camper_award_10", "Camper Award - 10 Nights"), ("camper_award_25", "Camper Award - 25 Nights"), ("walkabout_10", "Walkabout Award - 10km")
+            ("camper_award_10", "Camper Award - 10 Nights"), ("camper_award_25", "Camper Award - 25 Nights"), ("camper_award_50", "Camper Award - 50 Nights"),
+            ("walkabout_10", "Walkabout Award - 10km"), ("walkabout_50", "Walkabout Award - 50km"), ("walkabout_100", "Walkabout Award - 100km")
         });
 
-        [TestMethod]
-        public void StoreRecordsBecomeToBePresentedOrPresentedRowsForTheUnitsMembersOnly()
+        private static MemberTotals Totals(string member, double nights, double km) => new MemberTotals { MemberId = member, Name = member, Nights = nights, Kilometres = km };
+
+        private static MissingAward Missing(string member, string award, string name, string? earned = null) => new MissingAward
         {
-            var contents = new BadgeStoreContents { Records = { Rec("m1", "camper_award_10", "2026-08-26"), Rec("m2", "walkabout_10", "2026-08-26", "2026-09-02"), Rec("other", "camper_award_10", "2026-08-26") } };
-            var rows = AwardCheckRows.FromStore(contents,
-                new Dictionary<string, string> { ["m1"] = "Zed Zee", ["m2"] = "Amy Ay" },
-                new Dictionary<string, string> { ["camper_award_10"] = "Camper Award - 10 Nights" });
-            Assert.AreEqual(2, rows.Count);
-            Assert.AreEqual("Amy Ay", rows[0].MemberName);
-            Assert.AreEqual(AwardRowStatus.Presented, rows[0].Status);
-            Assert.AreEqual("walkabout_10", rows[0].AwardName, "an award with no name in the list shows its id");
-            Assert.AreEqual(AwardRowStatus.ToBePresented, rows[1].Status);
-            Assert.AreEqual("Camper Award - 10 Nights", rows[1].AwardName);
-            Assert.AreEqual(new DateTime(2026, 8, 26), rows[1].Earned);
-            Assert.AreEqual("c-m1camper_award_10", rows[1].CommentId);
-        }
+            MemberId = member, MemberName = member, SortName = member, AwardId = award, AwardName = name, UnitId = "u1", Unit = "Scouts", Earned = earned == null ? null : DateTime.Parse(earned)
+        };
 
         [TestMethod]
-        public void TiersTheLogbookReachesWithNoRecordAnywhereAreMissing()
+        public void EveryLevelTheTotalsReachThatTerrainHasNoRecordOfIsMissing()
         {
-            var members = new[] { new MemberTotals { MemberId = "m1", Name = "A", Nights = 26, Kilometres = 12 } };
-            var missing = AwardCheckRows.Missing(members, Tiers(), new HashSet<string>(), new BadgeStoreContents());
+            var missing = AwardCheckRows.Missing(new[] { Totals("m1", 27, 12) }, Tiers, new HashSet<string>());
             CollectionAssert.AreEquivalent(new[] { "camper_award_10", "camper_award_25", "walkabout_10" }, missing.Select(m => m.tier.Id).ToArray());
         }
 
         [TestMethod]
-        public void ATierWithATerrainRecordOrAStoreRecordIsNotMissing()
+        public void ALevelTerrainHoldsIsNotMissingAndNeitherIsOneBelowIt()
         {
-            var members = new[] { new MemberTotals { MemberId = "m1", Name = "A", Nights = 26, Kilometres = 12 } };
-            var store = new BadgeStoreContents { Records = { Rec("m1", "camper_award_25", "2026-08-26") } };
-            var missing = AwardCheckRows.Missing(members, Tiers(), new HashSet<string> { "m1|camper_award_10" }, store);
-            CollectionAssert.AreEqual(new[] { "walkabout_10" }, missing.Select(m => m.tier.Id).ToArray());
+            var terrain = new HashSet<string> { "m1|camper_award_25" };
+            var missing = AwardCheckRows.Missing(new[] { Totals("m1", 27, 0) }, Tiers, terrain);
+            Assert.AreEqual(0, missing.Count, "10 nights is below a level Terrain holds, so it was presented with it");
         }
 
         [TestMethod]
-        public void AMemberWhoHasNotReachedATierHasNothingMissingForIt()
+        public void ALevelAboveOneTerrainHoldsIsMissing()
         {
-            var members = new[] { new MemberTotals { MemberId = "m1", Name = "A", Nights = 9, Kilometres = 9 } };
-            Assert.AreEqual(0, AwardCheckRows.Missing(members, Tiers(), new HashSet<string>(), new BadgeStoreContents()).Count);
+            var terrain = new HashSet<string> { "m1|camper_award_10" };
+            var missing = AwardCheckRows.Missing(new[] { Totals("m1", 55, 0) }, Tiers, terrain);
+            CollectionAssert.AreEquivalent(new[] { "camper_award_25", "camper_award_50" }, missing.Select(m => m.tier.Id).ToArray());
         }
 
         [TestMethod]
-        public void RowsForFlaggingCarryTheDayEarnedWhenKnownAndNothingWhenNot()
+        public void OnlyTheHighestMissingLevelOfAKindIsToBePresentedAndTheOthersAreNotTheHighest()
         {
-            var a = new MemberTotals { MemberId = "m1", Name = "Amy" };
-            var tiers = Tiers();
-            var missing = new[] { (a, tiers[0]), (a, tiers[2]) };
-            var dates = new Dictionary<string, Dictionary<string, DateTime?>> { ["m1"] = new Dictionary<string, DateTime?> { ["camper_award_10"] = new DateTime(2026, 5, 4), ["walkabout_10"] = null } };
-            var rows = AwardCheckRows.ForFlagging(missing, dates);
-            Assert.AreEqual(new DateTime(2026, 5, 4), rows.Single(r => r.AwardId == "camper_award_10").Earned);
-            Assert.IsNull(rows.Single(r => r.AwardId == "walkabout_10").Earned);
-            Assert.IsTrue(rows.All(r => r.Status == AwardRowStatus.NotFlagged));
-            Assert.AreEqual("m1|camper_award_10", rows.First(r => r.AwardId == "camper_award_10").Key);
+            var rows = AwardCheckRows.Pending(new[]
+            {
+                Missing("m1", "camper_award_10", "Camper Award - 10 Nights"), Missing("m1", "camper_award_25", "Camper Award - 25 Nights"), Missing("m1", "camper_award_50", "Camper Award - 50 Nights"),
+                Missing("m1", "walkabout_10", "Walkabout Award - 10km")
+            }, Tiers, new HashSet<string>());
+            Assert.AreEqual(AwardRowStatus.ToBePresented, rows.Single(r => r.AwardId == "camper_award_50").Status);
+            Assert.AreEqual(AwardRowStatus.NotHighest, rows.Single(r => r.AwardId == "camper_award_25").Status);
+            Assert.AreEqual("camper_award_50", rows.Single(r => r.AwardId == "camper_award_25").SupersededBy);
+            Assert.AreEqual("Camper Award - 50 Nights", rows.Single(r => r.AwardId == "camper_award_10").SupersededByName);
+            Assert.AreEqual(AwardRowStatus.ToBePresented, rows.Single(r => r.AwardId == "walkabout_10").Status, "walkabout is its own kind");
+        }
+
+        [TestMethod]
+        public void ALevelBelowOneTerrainNowHoldsIsNoLongerListed()
+        {
+            var missing = new[] { Missing("m1", "walkabout_10", "Walkabout Award - 10km"), Missing("m1", "walkabout_50", "Walkabout Award - 50km") };
+            var rows = AwardCheckRows.Pending(missing, Tiers, new HashSet<string> { "m1|walkabout_50" });
+            Assert.AreEqual(0, rows.Count, "recorded since the check, so 10km is covered and 50km is done");
+        }
+
+        [TestMethod]
+        public void ALevelTerrainRecordedSinceTheCheckLeavesTheLowerOnesToTheNextHighest()
+        {
+            var missing = new[] { Missing("m1", "camper_award_10", "Camper Award - 10 Nights"), Missing("m1", "camper_award_25", "Camper Award - 25 Nights"), Missing("m1", "camper_award_50", "Camper Award - 50 Nights") };
+            var rows = AwardCheckRows.Pending(missing, Tiers, new HashSet<string> { "m1|camper_award_10" });
+            CollectionAssert.AreEqual(new[] { "camper_award_25", "camper_award_50" }, rows.Select(r => r.AwardId).ToArray());
+            Assert.AreEqual(AwardRowStatus.NotHighest, rows[0].Status);
+            Assert.AreEqual(AwardRowStatus.ToBePresented, rows[1].Status);
+        }
+
+        [TestMethod]
+        public void RowsAreInOrderOfMemberThenAward()
+        {
+            var a = Missing("m2", "walkabout_10", "Walkabout Award - 10km"); a.SortName = "Adams Al";
+            var b = Missing("m1", "walkabout_10", "Walkabout Award - 10km"); b.SortName = "Brown Bea";
+            CollectionAssert.AreEqual(new[] { "m2", "m1" }, AwardCheckRows.Pending(new[] { b, a }, Tiers, new HashSet<string>()).Select(r => r.MemberId).ToArray());
+        }
+
+        [TestMethod]
+        public void PresentingTheHighestCoversTheLowerOnesOfTheSameMember()
+        {
+            var rows = AwardCheckRows.Pending(new[]
+            {
+                Missing("m1", "camper_award_10", "Camper Award - 10 Nights"), Missing("m1", "camper_award_25", "Camper Award - 25 Nights"),
+                Missing("m2", "camper_award_10", "Camper Award - 10 Nights")
+            }, Tiers, new HashSet<string>());
+            var covered = AwardCheckRows.CoveredBy(rows.Single(r => r.MemberId == "m1" && r.AwardId == "camper_award_25"), rows);
+            CollectionAssert.AreEqual(new[] { "camper_award_10" }, covered.Select(r => r.AwardId).ToArray());
+            Assert.AreEqual(0, AwardCheckRows.CoveredBy(rows.Single(r => r.MemberId == "m2"), rows).Count);
         }
     }
 }
@@ -237,7 +260,7 @@ namespace TopoReportFunctionTest
         public void WithNothingFlaggedTheListIsReturnedAsItWas()
         {
             var list = Pending();
-            Assert.AreSame(list, list.WithAdditionalAwards(new[] { Flagged("m2", "Bea Brown", "Brown Bea", "camper_award_10", "Camper Award - 10 Nights", "2026-05-04", AwardRowStatus.Presented) }));
+            Assert.AreSame(list, list.WithAdditionalAwards(new[] { Flagged("m2", "Bea Brown", "Brown Bea", "camper_award_10", "Camper Award - 10 Nights", "2026-05-04", AwardRowStatus.NotHighest) }));
             Assert.AreSame(list, list.WithAdditionalAwards(Array.Empty<AwardRow>()));
         }
 
@@ -248,11 +271,11 @@ namespace TopoReportFunctionTest
             var bea = merged.People.Single(p => p.MemberId == "m2");
             CollectionAssert.AreEqual(new[] { "Camper Award - 10 Nights", "Milestone 2", "OAS Camping 2" }, bea.Awards.Select(a => a.Item.AchievementName).ToArray());
             var camper = bea.Awards[0];
-            Assert.IsTrue(camper.IsStoreAward);
+            Assert.IsTrue(camper.IsTopoAward);
             Assert.IsTrue(camper.CanAward);
-            Assert.AreEqual("store:m2|camper_award_10", camper.Item.SubmissionId);
+            Assert.AreEqual("topo:m2|camper_award_10", camper.Item.SubmissionId);
             Assert.AreEqual(new DateTime(2026, 5, 4), camper.Item.SubmissionDate);
-            Assert.IsFalse(bea.Awards[1].IsStoreAward);
+            Assert.IsFalse(bea.Awards[1].IsTopoAward);
         }
 
         [TestMethod]
@@ -285,9 +308,9 @@ namespace TopoReportFunctionTest
             var selection = new AwardSelection(merged);
             selection.SelectAll();
             Assert.AreEqual(4, selection.Count);
-            Assert.AreEqual(1, selection.SelectedAwards().Count(a => a.IsStoreAward));
+            Assert.AreEqual(1, selection.SelectedAwards().Count(a => a.IsTopoAward));
             selection.Clear();
-            selection.Toggle("store:m2|camper_award_10");
+            selection.Toggle("topo:m2|camper_award_10");
             Assert.AreEqual(1, selection.Count);
         }
     }
@@ -295,183 +318,7 @@ namespace TopoReportFunctionTest
 
 namespace TopoReportFunctionTest
 {
-    using Topo.Model.BadgeStore;
-
-    [TestClass]
-    public class AwardFlagPlanTests
-    {
-        private static readonly DateTime Today = new DateTime(2026, 11, 22);
-
-        private static List<AwardTier> Tiers() => CamperWalkaboutRules.Tiers(new[]
-        {
-            ("camper_award_10", "Camper Award - 10 Nights"), ("camper_award_25", "Camper Award - 25 Nights"), ("camper_award_50", "Camper Award - 50 Nights"),
-            ("walkabout_10", "Walkabout Award - 10km"), ("walkabout_50", "Walkabout Award - 50km"), ("walkabout_100", "Walkabout Award - 100km"),
-            ("walkabout_150", "Walkabout Award - 150km"), ("walkabout_300", "Walkabout Award - 300km")
-        });
-
-        private static AwardRow Missing(string award, string? earned = "2025-01-01", string member = "m1") => new AwardRow
-        {
-            MemberId = member, MemberName = "Amy Ay", SortName = "Ay Amy", AwardId = award, AwardName = award, Earned = earned == null ? null : DateTime.Parse(earned), Status = AwardRowStatus.NotFlagged
-        };
-
-        private static Dictionary<string, DateTime> Terrain(params (string award, string day)[] records) =>
-            records.ToDictionary(r => "m1|" + r.award, r => DateTime.Parse(r.day));
-
-        private static BadgeStoreContents Store(params BadgeStoreRecord[] records)
-        {
-            var contents = new BadgeStoreContents();
-            contents.Records.AddRange(records);
-            return contents;
-        }
-
-        private static BadgeStoreRecord Rec(string award, string awarded, string? presented = null, string superseded = "") => new BadgeStoreRecord
-        {
-            MemberId = "m1", AwardId = award, Awarded = DateTime.Parse(awarded), Presented = presented == null ? null : DateTime.Parse(presented), SupersededBy = superseded,
-            EventId = "e1", CommentId = "c-" + award
-        };
-
-        private static List<PlannedAward> Plan(IEnumerable<AwardRow> missing, Dictionary<string, DateTime>? terrain = null, BadgeStoreContents? store = null) =>
-            AwardFlagPlan.Build(missing, Tiers(), terrain ?? new Dictionary<string, DateTime>(), store ?? new BadgeStoreContents(), Today);
-
-        private static PlannedAward Of(List<PlannedAward> plan, string award) => plan.Single(p => p.Row.AwardId == award);
-
-        [TestMethod]
-        public void ALevelBelowOneAlreadyPresentedIsPresentedOnTheSameDay()
-        {
-            var plan = Plan(new[] { Missing("walkabout_10") }, Terrain(("walkabout_50", "2024-05-08")));
-            var p = Of(plan, "walkabout_10");
-            Assert.AreEqual(PlannedKind.AlreadyPresented, p.Kind);
-            Assert.AreEqual(new DateTime(2024, 5, 8), p.Awarded);
-            Assert.AreEqual(new DateTime(2024, 5, 8), p.Presented);
-            Assert.AreEqual("walkabout_50", p.CoveredBy!.Id);
-            Assert.AreEqual("", p.SupersededBy);
-        }
-
-        [TestMethod]
-        public void TheNearestHigherPresentedLevelGivesTheDay()
-        {
-            var plan = Plan(new[] { Missing("walkabout_10") }, Terrain(("walkabout_100", "2026-08-26"), ("walkabout_50", "2024-05-08"), ("walkabout_150", "2026-09-02")));
-            Assert.AreEqual(new DateTime(2024, 5, 8), Of(plan, "walkabout_10").Presented);
-        }
-
-        [TestMethod]
-        public void ALevelPresentedAccordingToTheStoreCountsAsPresentedToo()
-        {
-            var plan = Plan(new[] { Missing("camper_award_10") }, store: Store(Rec("camper_award_25", "2025-03-01", "2025-03-05")));
-            var p = Of(plan, "camper_award_10");
-            Assert.AreEqual(PlannedKind.AlreadyPresented, p.Kind);
-            Assert.AreEqual(new DateTime(2025, 3, 5), p.Presented);
-        }
-
-        [TestMethod]
-        public void WithNoHigherLevelPresentedOnlyTheHighestMissingIsToBePresentedAndTheRestAreNotTheHighest()
-        {
-            var plan = Plan(new[] { Missing("walkabout_10"), Missing("walkabout_50"), Missing("walkabout_100") });
-            Assert.AreEqual(PlannedKind.ToBePresented, Of(plan, "walkabout_100").Kind);
-            Assert.IsNull(Of(plan, "walkabout_100").Presented);
-            foreach (var low in new[] { "walkabout_10", "walkabout_50" })
-            {
-                Assert.AreEqual(PlannedKind.NotHighest, Of(plan, low).Kind, low);
-                Assert.AreEqual("walkabout_100", Of(plan, low).SupersededBy, low);
-                Assert.IsNull(Of(plan, low).Presented, low);
-            }
-        }
-
-        [TestMethod]
-        public void APresentedLevelInTheMiddleSplitsTheOthers()
-        {
-            // 150 was presented; 10 is below it (presented), 300 is above it (the one to present)
-            var plan = Plan(new[] { Missing("walkabout_10"), Missing("walkabout_300") }, Terrain(("walkabout_150", "2026-09-02")));
-            Assert.AreEqual(PlannedKind.AlreadyPresented, Of(plan, "walkabout_10").Kind);
-            Assert.AreEqual(new DateTime(2026, 9, 2), Of(plan, "walkabout_10").Presented);
-            Assert.AreEqual(PlannedKind.ToBePresented, Of(plan, "walkabout_300").Kind);
-        }
-
-        [TestMethod]
-        public void ALevelAlreadyFlaggedBelowANewHigherOneIsRewrittenAsNotTheHighest()
-        {
-            var plan = Plan(new[] { Missing("walkabout_100") }, store: Store(Rec("walkabout_50", "2025-06-01")));
-            Assert.AreEqual(PlannedKind.ToBePresented, Of(plan, "walkabout_100").Kind);
-            var update = Of(plan, "walkabout_50");
-            Assert.IsTrue(update.IsUpdate);
-            Assert.AreEqual(PlannedKind.NotHighest, update.Kind);
-            Assert.AreEqual("walkabout_100", update.SupersededBy);
-            Assert.AreEqual(new DateTime(2025, 6, 1), update.Awarded, "its own day is kept");
-        }
-
-        [TestMethod]
-        public void ALevelAlreadyCoveredByTheSameHigherOneIsLeftAlone()
-        {
-            var plan = Plan(new[] { Missing("walkabout_10") }, store: Store(Rec("walkabout_100", "2025-09-01"), Rec("walkabout_50", "2025-06-01", superseded: "walkabout_100")));
-            Assert.IsFalse(plan.Any(p => p.Row.AwardId == "walkabout_50"));
-            Assert.AreEqual("walkabout_100", Of(plan, "walkabout_10").SupersededBy);
-        }
-
-        [TestMethod]
-        public void AFlaggedLevelBelowAPresentedOneIsRewrittenAsPresented()
-        {
-            var plan = Plan(new[] { Missing("walkabout_10") }, Terrain(("walkabout_100", "2026-08-26")), Store(Rec("walkabout_50", "2025-06-01")));
-            var update = Of(plan, "walkabout_50");
-            Assert.AreEqual(PlannedKind.AlreadyPresented, update.Kind);
-            Assert.AreEqual(new DateTime(2026, 8, 26), update.Presented);
-            Assert.IsTrue(update.IsUpdate);
-        }
-
-        [TestMethod]
-        public void CamperAndWalkaboutAreSeparateKinds()
-        {
-            var plan = Plan(new[] { Missing("camper_award_10"), Missing("walkabout_10"), Missing("walkabout_50") }, Terrain(("camper_award_25", "2025-03-05")));
-            Assert.AreEqual(PlannedKind.AlreadyPresented, Of(plan, "camper_award_10").Kind);
-            Assert.AreEqual(PlannedKind.ToBePresented, Of(plan, "walkabout_50").Kind);
-            Assert.AreEqual(PlannedKind.NotHighest, Of(plan, "walkabout_10").Kind);
-        }
-
-        [TestMethod]
-        public void AlevelTheLogbookCannotDateIsToBePresentedWithTodayAsTheDay()
-        {
-            var plan = Plan(new[] { Missing("camper_award_10", earned: null) });
-            Assert.AreEqual(Today, Of(plan, "camper_award_10").Awarded);
-            Assert.AreEqual(PlannedKind.ToBePresented, Of(plan, "camper_award_10").Kind);
-        }
-
-        [TestMethod]
-        public void EachMemberIsPlannedOnTheirOwn()
-        {
-            var plan = Plan(new[] { Missing("walkabout_10", member: "m1"), Missing("walkabout_50", member: "m2") });
-            Assert.AreEqual(PlannedKind.ToBePresented, plan.Single(p => p.Row.MemberId == "m1").Kind);
-            Assert.AreEqual(PlannedKind.ToBePresented, plan.Single(p => p.Row.MemberId == "m2").Kind);
-        }
-
-        [TestMethod]
-        public void TheNoteSaysWhatWillBeRecorded()
-        {
-            var plan = Plan(new[] { Missing("walkabout_10"), Missing("walkabout_50") });
-            StringAssert.Contains(Of(plan, "walkabout_10").Note, "not the highest");
-            StringAssert.Contains(Of(plan, "walkabout_10").Note, "Walkabout Award - 50km");
-            Assert.AreEqual("to be presented", Of(plan, "walkabout_50").Note);
-            var presented = Plan(new[] { Missing("walkabout_10") }, Terrain(("walkabout_50", "2024-05-08")));
-            StringAssert.Contains(Of(presented, "walkabout_10").Note, "08/05/2024");
-        }
-
-        [TestMethod]
-        public void TheSupersededFieldIsWrittenAndReadAndNeedsADifferentWrite()
-        {
-            var text = BadgeStoreReader.AwardText("m1", "walkabout_10", new DateTime(2025, 1, 1), null, "walkabout_50");
-            Assert.AreEqual("{\"v\":1,\"t\":\"award\",\"m\":\"m1\",\"a\":\"walkabout_10\",\"d\":\"2025-01-01\",\"x\":\"walkabout_50\"}", text);
-            var record = BadgeStoreReader.Resolve(new[] { new EventComment { id = "c", text = text, status = "active", member = new EventCommentMember { id = "l" } } }, _ => true).Records.Single();
-            Assert.AreEqual("walkabout_50", record.SupersededBy);
-            var contents = new BadgeStoreContents();
-            contents.Records.Add(record);
-            Assert.IsTrue(BadgeStoreWrites.IsAlreadyRecorded(contents, "m1", "walkabout_10", new DateTime(2025, 1, 1), null, "walkabout_50"));
-            Assert.IsFalse(BadgeStoreWrites.IsAlreadyRecorded(contents, "m1", "walkabout_10", new DateTime(2025, 1, 1), null, ""));
-            Assert.IsFalse(BadgeStoreWrites.IsAlreadyRecorded(contents, "m1", "walkabout_10", new DateTime(2025, 1, 1), null, "walkabout_100"));
-        }
-    }
-}
-
-namespace TopoReportFunctionTest
-{
-    using Topo.Model.BadgeStore;
+    using Topo.Model.AdditionalAwards;
 
     [TestClass]
     public class AutoAwardTests
@@ -579,7 +426,7 @@ namespace TopoReportFunctionTest
 
 namespace TopoReportFunctionTest
 {
-    using Topo.Model.BadgeStore;
+    using Topo.Model.AdditionalAwards;
 
     [TestClass]
     public class PagesFirstTests
@@ -667,14 +514,14 @@ namespace TopoReportFunctionTest
     [TestClass]
     public class ApprovalsListWithBadgesTests
     {
-        private static AwardRow Row(AwardRowStatus status, string earned, string? presented = null, string superseded = "", string supersededName = "") => new AwardRow
+        private static AwardRow Row(AwardRowStatus status, string earned, string superseded = "", string supersededName = "") => new AwardRow
         {
             MemberId = "m1", MemberName = "Amy Ay", FirstName = "Amy", LastName = "Ay", AwardId = "walkabout_10", AwardName = "Walkabout Award - 10km", Status = status,
-            Earned = DateTime.Parse(earned), Presented = presented == null ? null : DateTime.Parse(presented), SupersededBy = superseded, SupersededByName = supersededName
+            Earned = DateTime.Parse(earned), SupersededBy = superseded, SupersededByName = supersededName
         };
 
         [TestMethod]
-        public void AFlaggedBadgeIsAnAwardRowWithNoPresentedDateAndSaysToAwardIt()
+        public void ABadgeToHandOverIsAnAwardRowWithNoPresentedDateAndSaysToAwardIt()
         {
             var row = AwardCheckRows.ToApprovalRows(new[] { Row(AwardRowStatus.ToBePresented, "2026-02-16") }).Single();
             Assert.AreEqual("Amy Ay", row.member_display_name);
@@ -682,52 +529,25 @@ namespace TopoReportFunctionTest
             Assert.AreEqual("Award", row.submission_type);
             Assert.IsNull(row.presented_date);
             Assert.AreEqual(new DateTime(2026, 2, 16), row.awarded_date);
+            Assert.AreEqual(new DateTime(2026, 2, 16), row.submission_date, "the date range looks at the day it was earned");
             Assert.AreEqual("Award", row.to_award);
             Assert.AreEqual("additional_award", row.achievement_type);
-            StringAssert.StartsWith(row.achievement_id, "store:");
-        }
-
-        [TestMethod]
-        public void ABadgeNotYetPresentedIsDatedFromWhenItWasFlaggedNotWhenItWasEarned()
-        {
-            var flagged = Row(AwardRowStatus.ToBePresented, "2024-05-08");
-            flagged.FlaggedOn = new DateTime(2026, 11, 22);
-            Assert.AreEqual(new DateTime(2026, 11, 22), AwardCheckRows.ToApprovalRows(new[] { flagged }).Single().submission_date);
-            Assert.AreEqual(new DateTime(2024, 5, 8), AwardCheckRows.ToApprovalRows(new[] { flagged }).Single().awarded_date);
-        }
-
-        [TestMethod]
-        public void TheFlaggedDayComesFromWhenTheStoreRecordWasWritten()
-        {
-            var contents = new Topo.Model.BadgeStore.BadgeStoreContents();
-            contents.Records.Add(new Topo.Model.BadgeStore.BadgeStoreRecord { MemberId = "m1", AwardId = "walkabout_10", Awarded = new DateTime(2024, 5, 8), RecordedAt = new DateTime(2026, 11, 22, 12, 0, 0, DateTimeKind.Unspecified) });
-            var row = AwardCheckRows.FromStore(contents, new Dictionary<string, string> { ["m1"] = "Amy Ay" }, new Dictionary<string, string>()).Single();
-            Assert.AreEqual(new DateTime(2026, 11, 22), row.FlaggedOn);
+            StringAssert.StartsWith(row.achievement_id, "topo:");
         }
 
         [TestMethod]
         public void ABadgeCoveredByAHigherOneSaysWhichToAwardInstead()
         {
-            var row = AwardCheckRows.ToApprovalRows(new[] { Row(AwardRowStatus.NotHighest, "2026-02-16", superseded: "walkabout_50", supersededName: "Walkabout Award - 50km") }).Single();
+            var row = AwardCheckRows.ToApprovalRows(new[] { Row(AwardRowStatus.NotHighest, "2026-02-16", "walkabout_50", "Walkabout Award - 50km") }).Single();
             Assert.AreEqual("Not the highest - award Walkabout Award - 50km", row.to_award);
             Assert.IsNull(row.presented_date);
-        }
-
-        [TestMethod]
-        public void APresentedBadgeHasItsPresentedDateAndNothingToAward()
-        {
-            var row = AwardCheckRows.ToApprovalRows(new[] { Row(AwardRowStatus.Presented, "2026-02-16", "2026-03-01") }).Single();
-            Assert.AreEqual(new DateTime(2026, 3, 1), row.presented_date);
-            Assert.AreEqual("", row.to_award);
-            Assert.AreEqual("Awarded", row.submission_outcome);
-            Assert.AreEqual(new DateTime(2026, 3, 1), row.submission_date, "the date range looks at the day it was presented");
         }
 
         private static List<ApprovalsListModel> Mixed() => AwardCheckRows.ToApprovalRows(new[]
         {
             Row(AwardRowStatus.ToBePresented, "2026-10-01"),
-            Row(AwardRowStatus.Presented, "2026-09-01", "2026-09-01"),
-            Row(AwardRowStatus.NotHighest, "2026-10-02", superseded: "walkabout_50", supersededName: "Walkabout Award - 50km")
+            Row(AwardRowStatus.NotHighest, "2026-10-02", "walkabout_50", "Walkabout Award - 50km"),
+            Row(AwardRowStatus.NotHighest, "2026-06-02", "walkabout_50", "Walkabout Award - 50km")
         }).Concat(new[]
         {
             new ApprovalsListModel { achievement_name = "OAS Camping 2", submission_type = "Award", submission_outcome = "Awarded", submission_date = new DateTime(2026, 10, 3), awarded_date = new DateTime(2026, 10, 3) },
@@ -738,33 +558,30 @@ namespace TopoReportFunctionTest
         public void TheDateRangeFilterAppliesToTheBadgesToo()
         {
             var rows = ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 10, 1), new DateTime(2026, 10, 31), false, false, true);
-            Assert.IsFalse(rows.Any(r => r.presented_date.HasValue && r.achievement_type == "additional_award"), "the badge presented in September is outside the range");
-            Assert.AreEqual(4, rows.Count);
+            Assert.AreEqual(4, rows.Count, "the badge earned in June is outside the range");
         }
 
         [TestMethod]
-        public void ToBePresentedListsTheBadgesNotYetPresentedIncludingThoseNotTheHighest()
+        public void ToBePresentedListsTheBadgesToHandOverIncludingThoseNotTheHighest()
         {
-            var rows = ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 8, 1), new DateTime(2026, 10, 31), true, false, true);
-            Assert.AreEqual(3, rows.Count(r => r.achievement_type == "additional_award") + rows.Count(r => r.achievement_name == "OAS Camping 2"));
+            var rows = ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 6, 1), new DateTime(2026, 10, 31), true, false, true);
+            Assert.AreEqual(3, rows.Count(r => r.achievement_type == "additional_award"));
             Assert.IsTrue(rows.Any(r => r.to_award == "Award"));
             Assert.IsTrue(rows.Any(r => r.to_award.StartsWith("Not the highest")));
-            Assert.IsFalse(rows.Any(r => r.presented_date.HasValue && r.achievement_type == "additional_award"));
         }
 
         [TestMethod]
-        public void HasBeenPresentedListsAPresentedBadgeEvenWhenItsAwardedDayIsTheSame()
+        public void HasBeenPresentedListsNoneOfThemBecauseTerrainOnlyHoldsPresentedOnes()
         {
-            var rows = ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 8, 1), new DateTime(2026, 10, 31), false, true, true);
-            Assert.AreEqual(1, rows.Count);
-            Assert.AreEqual("additional_award", rows[0].achievement_type);
+            var rows = ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 6, 1), new DateTime(2026, 10, 31), false, true, true);
+            Assert.AreEqual(0, rows.Count(r => r.achievement_type == "additional_award"));
         }
 
         [TestMethod]
         public void RejectedRowsAreLeftOutUnlessShown()
         {
-            Assert.IsFalse(ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 8, 1), new DateTime(2026, 10, 31), false, false, false).Any(r => r.submission_outcome == "Rejected"));
-            Assert.IsTrue(ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 8, 1), new DateTime(2026, 10, 31), false, false, true).Any(r => r.submission_outcome == "Rejected"));
+            Assert.IsFalse(ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 6, 1), new DateTime(2026, 10, 31), false, false, false).Any(r => r.submission_outcome == "Rejected"));
+            Assert.IsTrue(ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 6, 1), new DateTime(2026, 10, 31), false, false, true).Any(r => r.submission_outcome == "Rejected"));
         }
 
         [TestMethod]
@@ -850,158 +667,66 @@ namespace TopoReportFunctionTest
 
 namespace TopoReportFunctionTest
 {
+    using Topo.Model.Wallchart;
+
     [TestClass]
-    public class AdditionalAwardsWithTopoRecordsTests
+    public class ApprovalsReportCamperWalkaboutTests
     {
-        private static AwardRow Stored(string award, AwardRowStatus status, string earned, string? presented = null, string member = "m1") => new AwardRow
+        private static Topo.Model.Approvals.ApprovalsListModel Row(string name, string toAward, string type = "additional_award") => new Topo.Model.Approvals.ApprovalsListModel
         {
-            MemberId = member, MemberName = "Amy Ay", AwardId = award, AwardName = award, Status = status, Earned = DateTime.Parse(earned), Presented = presented == null ? null : DateTime.Parse(presented)
+            member_first_name = "Amy", member_last_name = "Ay", achievement_type = type, achievement_name = name, submission_type = "Award",
+            awarded_date = new DateTime(2026, 5, 4), to_award = toAward
         };
 
-        private static Dictionary<string, AdditionalAwardSpecificationListModel> Specs() => new Dictionary<string, AdditionalAwardSpecificationListModel>
-        {
-            ["walkabout_10"] = new AdditionalAwardSpecificationListModel { id = "walkabout_10", name = "Walkabout Award - 10km", additionalAwardSortIndex = 5, additionalAwardValue = 10 },
-            ["walkabout_50"] = new AdditionalAwardSpecificationListModel { id = "walkabout_50", name = "Walkabout Award - 50km", additionalAwardSortIndex = 6, additionalAwardValue = 50 }
-        };
-
-        private static Dictionary<string, (string name, int nights, int kms)> Totals() => new Dictionary<string, (string name, int nights, int kms)> { ["m1"] = ("Amy Ay (3 Nights, 60 KMs)", 3, 60) };
-
         [TestMethod]
-        public void StoredAwardsBecomeReportRowsWithTheirDatesAndTheMembersTotals()
+        public void AnAwardToHandOverIsRedAndHasItsToAwardColumn()
         {
-            var rows = AdditionalAwardReportRows.FromStore(new[] { Stored("walkabout_50", AwardRowStatus.ToBePresented, "2026-05-04"), Stored("walkabout_10", AwardRowStatus.Presented, "2026-02-01", "2026-03-01") },
-                new HashSet<string>(), Specs(), Totals());
-            var flagged = rows.Single(r => r.AwardId == "walkabout_50");
-            Assert.AreEqual(new DateTime(2026, 5, 4), flagged.AwardDate);
-            Assert.IsNull(flagged.PresentedDate);
-            Assert.AreEqual(6, flagged.AwardSortIndex);
-            Assert.AreEqual(50, flagged.AwardUnits);
-            Assert.AreEqual("Amy Ay (3 Nights, 60 KMs)", flagged.MemberName);
-            Assert.AreEqual(60, flagged.KMsHiked);
-            Assert.AreEqual(new DateTime(2026, 3, 1), rows.Single(r => r.AwardId == "walkabout_10").PresentedDate);
-            Assert.IsFalse(rows.Any(r => r.NotHighest));
-        }
-
-        [TestMethod]
-        public void AnAwardTerrainAlreadyHasARecordOfIsLeftToThatRecord()
-        {
-            var rows = AdditionalAwardReportRows.FromStore(new[] { Stored("walkabout_10", AwardRowStatus.ToBePresented, "2026-02-01") }, new HashSet<string> { "m1|walkabout_10" }, Specs(), Totals());
-            Assert.AreEqual(0, rows.Count);
-        }
-
-        [TestMethod]
-        public void ALevelCoveredByAHigherOneIsMarkedNotTheHighest()
-        {
-            var rows = AdditionalAwardReportRows.FromStore(new[] { Stored("walkabout_10", AwardRowStatus.NotHighest, "2026-02-01") }, new HashSet<string>(), Specs(), Totals());
-            Assert.IsTrue(rows.Single().NotHighest);
-            Assert.IsNull(rows.Single().PresentedDate);
-        }
-
-        [TestMethod]
-        public void AnAwardWithNoSpecificationKeepsItsOwnNameAndAMemberWithNoTotalsKeepsTheirName()
-        {
-            var rows = AdditionalAwardReportRows.FromStore(new[] { Stored("mystery", AwardRowStatus.ToBePresented, "2026-02-01") }, new HashSet<string>(), Specs(), new Dictionary<string, (string name, int nights, int kms)>());
-            Assert.AreEqual("mystery", rows.Single().AwardName);
-            Assert.AreEqual("Amy Ay", rows.Single().MemberName);
-        }
-
-        [TestMethod]
-        public void TheReportColoursNotYetPresentedOrangePresentedGreenAndCoveredLevelsKhaki()
-        {
-            var specs = new List<AdditionalAwardSpecificationListModel>(Specs().Values);
-            var rows = new List<AdditionalAwardListModel>
-            {
-                new AdditionalAwardListModel { MemberName = "Amy", AwardId = "walkabout_10", AwardName = "W10", AwardDate = new DateTime(2026, 2, 1), NotHighest = true, AwardUnits = 10 },
-                new AdditionalAwardListModel { MemberName = "Amy", AwardId = "walkabout_50", AwardName = "W50", AwardDate = new DateTime(2026, 5, 4), AwardUnits = 50 },
-                new AdditionalAwardListModel { MemberName = "Bea", AwardId = "walkabout_50", AwardName = "W50", AwardDate = new DateTime(2026, 5, 4), PresentedDate = new DateTime(2026, 6, 1), AwardUnits = 50 }
-            };
             SetEnvironment.SetSyncfusionLicense();
-            var workbook = new Topo.Services.ReportService().GenerateAdditionalAwardsWorkbook(specs, rows, new List<string> { "walkabout_10", "walkabout_50" }, "Group", "scout", "Scout Unit");
+            var rows = new List<Topo.Model.Approvals.ApprovalsListModel>
+            {
+                Row("A Walkabout 50", "Award"),
+                Row("B Walkabout 10", "Not the highest - award Walkabout Award - 50km"),
+                Row("D OAS Camping 2", "Award", "outdoor_adventure_skill")
+            };
+            var workbook = new Topo.Services.ReportService().GenerateApprovalsWorkbook(rows, "Group", "scout", "Scout Unit", new DateTime(2026, 1, 1), new DateTime(2026, 12, 31), false, false);
             var sheet = workbook.Worksheets[0];
-            // find each member's row by name in column A
-            int RowOf(string name) { for (var r = 1; r < 30; r++) if (sheet.Range[r, 1].Text == name) return r; throw new AssertFailedException(name); }
-            var amy = RowOf("Amy");
-            var bea = RowOf("Bea");
-            Assert.AreEqual(System.Drawing.Color.Khaki.ToArgb(), sheet.Range[amy, 3].CellStyle.Color.ToArgb(), "covered level");
-            Assert.AreEqual(System.Drawing.Color.Orange.ToArgb(), sheet.Range[amy, 4].CellStyle.Color.ToArgb(), "awarded, not presented");
-            Assert.AreEqual(System.Drawing.Color.LightGreen.ToArgb(), sheet.Range[bea, 4].CellStyle.Color.ToArgb(), "presented");
-            var legend = Enumerable.Range(1, 40).Select(r => sheet.Range[r, 1].Text).ToList();
-            CollectionAssert.Contains(legend, "Not the highest");
+            int First(string text) => Enumerable.Range(1, 20).First(r => sheet.Range[r, 1].Text == text) + 1;
+            var red = System.Drawing.ColorTranslator.FromHtml("#ff0000").ToArgb();
+            Assert.AreEqual("To award", sheet.Range[First("A Walkabout 50") - 1, 8].Text);
+            Assert.AreEqual("Award", sheet.Range[First("A Walkabout 50"), 8].Text);
+            Assert.AreEqual(red, sheet.Range[First("A Walkabout 50"), 2].CellStyle.Color.ToArgb());
+            Assert.AreNotEqual(red, sheet.Range[First("B Walkabout 10"), 2].CellStyle.Color.ToArgb(), "a level that is not the highest is not handed over");
+            Assert.AreNotEqual(red, sheet.Range[First("D OAS Camping 2"), 2].CellStyle.Color.ToArgb());
             workbook.Close();
         }
     }
-}
-
-namespace TopoReportFunctionTest
-{
-    [TestClass]
-    public class PersonalProgressAwardsTests
-    {
-        private static AwardRow Row(string member, string award, AwardRowStatus status, string earned, string? presented = null, string superseded = "", string supersededName = "") => new AwardRow
-        {
-            MemberId = member, AwardId = award, AwardName = award + " name", Status = status, Earned = DateTime.Parse(earned), Presented = presented == null ? null : DateTime.Parse(presented),
-            SupersededBy = superseded, SupersededByName = supersededName
-        };
-
-        [TestMethod]
-        public void OnlyTheMembersOwnAwardsAreListedLowestLevelFirstWithTheirStatus()
-        {
-            var rows = new[]
-            {
-                Row("m1", "walkabout_50", AwardRowStatus.ToBePresented, "2026-05-04"),
-                Row("m2", "walkabout_10", AwardRowStatus.Presented, "2026-01-01", "2026-02-01"),
-                Row("m1", "walkabout_10", AwardRowStatus.NotHighest, "2026-01-01", superseded: "walkabout_50", supersededName: "Walkabout Award - 50km"),
-                Row("m1", "camper_award_10", AwardRowStatus.Presented, "2025-01-01", "2025-02-01")
-            };
-            var mine = AwardRecordSummaries.ForMember(rows, "m1");
-            CollectionAssert.AreEqual(new[] { "camper_award_10 name", "walkabout_10 name", "walkabout_50 name" }, mine.Select(a => a.Name).ToArray());
-            CollectionAssert.AreEqual(new[] { "Presented", "Not the highest - award Walkabout Award - 50km", "To be presented" }, mine.Select(a => a.Status).ToArray());
-            Assert.AreEqual(new DateTime(2025, 2, 1), mine[0].Presented);
-        }
-
-        [TestMethod]
-        public void AMemberWithNoRecordsHasAnEmptyList()
-        {
-            Assert.AreEqual(0, AwardRecordSummaries.ForMember(new[] { Row("m2", "walkabout_10", AwardRowStatus.Presented, "2026-01-01") }, "m1").Count);
-        }
-    }
-}
-
-namespace TopoReportFunctionTest
-{
-    using Topo.Model.Wallchart;
 
     [TestClass]
     public class WallchartCamperWalkaboutTests
     {
-        private static WallchartItemModel Scout(int camper, bool camperPresented, int walkabout, bool walkaboutPresented) => new WallchartItemModel
-        {
-            MemberName = "Amy Ay", CamperAward = camper, CamperAwardPresented = camperPresented, WalkaboutAward = walkabout, WalkaboutAwardPresented = walkaboutPresented
-        };
+        private static WallchartItemModel Scout(int camper, int walkabout) => new WallchartItemModel { MemberName = "Amy Ay", CamperAward = camper, WalkaboutAward = walkabout };
 
         [TestMethod]
         public void TheWallchartHasCamperAndWalkaboutColumnsAtTheEndUnderTheirOwnHeading()
         {
             CollectionAssert.AreEqual(new[] { "PEAK AWARD", "Camper Award", "Walkabout Award" }, WallchartLayout.Columns.TakeLast(3).ToArray());
-            Assert.AreEqual(("ADDITIONAL AWARDS", 2), WallchartLayout.Groups.Last());
+            Assert.AreEqual(("AWARDS", 2), WallchartLayout.Groups.Last());
         }
 
         [TestMethod]
-        public void ThePresentedLevelIsGreenAndOneStillToBePresentedIsOrange()
+        public void TheHighestLevelTerrainHoldsIsShownInGreen()
         {
-            var row = WallchartLayout.Build(new[] { Scout(25, true, 100, false) }, false).Single().Rows.Single();
-            var camper = row.Cells[^2];
-            var walkabout = row.Cells[^1];
-            Assert.AreEqual(25, camper.Count);
-            Assert.AreEqual("#90ee90", camper.Colour);
-            Assert.AreEqual(100, walkabout.Count);
-            Assert.AreEqual("#ffa500", walkabout.Colour);
+            var row = WallchartLayout.Build(new[] { Scout(25, 100) }, false).Single().Rows.Single();
+            Assert.AreEqual(25, row.Cells[^2].Count);
+            Assert.AreEqual("#90ee90", row.Cells[^2].Colour);
+            Assert.AreEqual(100, row.Cells[^1].Count);
+            Assert.AreEqual("#90ee90", row.Cells[^1].Colour);
         }
 
         [TestMethod]
         public void NoLevelLeavesTheCellsUnshaded()
         {
-            var row = WallchartLayout.Build(new[] { Scout(0, false, 0, false) }, false).Single().Rows.Single();
+            var row = WallchartLayout.Build(new[] { Scout(0, 0) }, false).Single().Rows.Single();
             Assert.IsNull(row.Cells[^2].Colour);
             Assert.IsNull(row.Cells[^1].Colour);
             Assert.AreEqual(42, row.Cells.Sum(c => c.Span));
@@ -1011,19 +736,18 @@ namespace TopoReportFunctionTest
         public void TheSheetHasTheNewHeadingsAndKeepsPeakAwardWhereItWas()
         {
             SetEnvironment.SetSyncfusionLicense();
-            var workbook = new Topo.Services.ReportService().GenerateWallchartWorkbook(new List<WallchartItemModel> { Scout(25, true, 100, false) }, "Group", "scout", "Scout Unit", false);
+            var workbook = new Topo.Services.ReportService().GenerateWallchartWorkbook(new List<WallchartItemModel> { Scout(25, 100) }, "Group", "scout", "Scout Unit", false);
             var sheet = workbook.Worksheets[0];
             // the column headings row is the one with " Name" in column 1
             int heading = Enumerable.Range(1, 15).First(r => sheet.Range[r, 1].Text == " Name");
             Assert.AreEqual(" PEAK AWARD", sheet.Range[heading, 41].Text);
             Assert.AreEqual(" Camper Award", sheet.Range[heading, 42].Text);
             Assert.AreEqual(" Walkabout Award", sheet.Range[heading, 43].Text);
-            Assert.AreEqual("ADDITIONAL AWARDS", sheet.Range[heading - 2, 42].Text);
+            Assert.AreEqual("AWARDS", sheet.Range[heading - 2, 42].Text);
             var data = heading + 1;
             Assert.AreEqual("25", sheet.Range[data, 42].DisplayText);
             Assert.AreEqual("100", sheet.Range[data, 43].DisplayText);
             Assert.AreEqual(System.Drawing.ColorTranslator.FromHtml("#90ee90").ToArgb(), sheet.Range[data, 42].CellStyle.Color.ToArgb());
-            Assert.AreEqual(System.Drawing.ColorTranslator.FromHtml("#ffa500").ToArgb(), sheet.Range[data, 43].CellStyle.Color.ToArgb());
             workbook.Close();
         }
     }
@@ -1034,39 +758,18 @@ namespace TopoReportFunctionTest
     [TestClass]
     public class HighestAwardLevelsTests
     {
-        private static AwardRow Stored(string member, string award, AwardRowStatus status) => new AwardRow { MemberId = member, AwardId = award, Status = status };
-
         [TestMethod]
-        public void TerrainsOwnRecordsCountAsPresentedAndTheHighestOfEachKindIsUsed()
+        public void TheHighestLevelOfEachKindInTerrainsRecordsIsUsed()
         {
-            var levels = HighestAwardLevels.For("m1", new[] { "camper_award_10", "camper_award_25", "walkabout_10", "walkabout_100", "first_aid" }, Array.Empty<AwardRow>());
-            Assert.AreEqual((25, true, 100, true), levels);
+            var levels = HighestAwardLevels.For(new[] { "camper_award_10", "camper_award_50", "camper_award_25", "walkabout_10", "walkabout_150", "first_aid" });
+            Assert.AreEqual((50, 150), levels);
         }
 
         [TestMethod]
-        public void ATopoRecordHigherThanTerrainsIsUsedAndIsPresentedOnlyIfItSaysSo()
+        public void NoCamperOrWalkaboutRecordsMeansNoLevel()
         {
-            var levels = HighestAwardLevels.For("m1", new[] { "walkabout_50" }, new[] { Stored("m1", "walkabout_100", AwardRowStatus.ToBePresented), Stored("m1", "camper_award_10", AwardRowStatus.Presented) });
-            Assert.AreEqual((10, true, 100, false), levels);
-        }
-
-        [TestMethod]
-        public void ALevelCoveredByAHigherOneNeverBeatsTheHigherOne()
-        {
-            var levels = HighestAwardLevels.For("m1", Array.Empty<string>(), new[] { Stored("m1", "walkabout_10", AwardRowStatus.NotHighest), Stored("m1", "walkabout_50", AwardRowStatus.ToBePresented) });
-            Assert.AreEqual((0, false, 50, false), levels);
-        }
-
-        [TestMethod]
-        public void OtherMembersRecordsAndNoRecordsGiveNothing()
-        {
-            Assert.AreEqual((0, false, 0, false), HighestAwardLevels.For("m1", Array.Empty<string>(), new[] { Stored("m2", "walkabout_50", AwardRowStatus.Presented) }));
-        }
-
-        [TestMethod]
-        public void AnAwardInBothTerrainAndTheStoreCountsAsPresented()
-        {
-            Assert.AreEqual((0, false, 50, true), HighestAwardLevels.For("m1", new[] { "walkabout_50" }, new[] { Stored("m1", "walkabout_50", AwardRowStatus.ToBePresented) }));
+            Assert.AreEqual((0, 0), HighestAwardLevels.For(new[] { "first_aid" }));
+            Assert.AreEqual((0, 0), HighestAwardLevels.For(Array.Empty<string>()));
         }
     }
 }

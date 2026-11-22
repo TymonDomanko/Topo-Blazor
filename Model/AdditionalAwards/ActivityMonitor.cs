@@ -1,4 +1,4 @@
-namespace Topo.Model.BadgeStore
+namespace Topo.Model.AdditionalAwards
 {
     // Tells whether the leader is using Topo, so work meant for quiet moments (the automatic Camper and Walkabout check) only runs when
     // nothing else is happening and stops as soon as the leader does something. Terrain keeps one Scout's profile taken on at a time,

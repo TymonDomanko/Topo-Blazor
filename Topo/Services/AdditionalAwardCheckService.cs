@@ -1,103 +1,105 @@
+using Blazored.LocalStorage;
 using Topo.Model.AdditionalAwards;
-using Topo.Model.BadgeStore;
 using Topo.Model.Members;
 
 namespace Topo.Services
 {
-    public class AwardCheckResult
+    public class AwardScanResult
     {
-        // What to write: each missing level and how it will be recorded, and levels already flagged that a higher level changes
-        public List<PlannedAward> Planned { get; set; } = new List<PlannedAward>();
-        public bool StoreExists { get; set; }
         public int MembersChecked { get; set; }
-        // The background run was stopped because a page needed Terrain; nothing was written and it will try again later
+        // Levels to hand over, and levels earned that a higher one covers, as of this scan
+        public int ToBePresented { get; set; }
+        public int NotHighest { get; set; }
+        // The background run was stopped because a page needed Terrain; it will try again later
         public bool Stopped { get; set; }
         // Members whose logbook could not be read, so nothing is said about them
         public List<string> MembersNotRead { get; set; } = new List<string>();
-        // What the store already holds for this unit, so the page can say so
-        public int AlreadyFlagged { get; set; }
-        public int AlreadyPresented { get; set; }
     }
 
     public class AwardWriteSummary
     {
+        // Levels written to Terrain, and levels Terrain already had a record of (left alone)
         public int Done { get; set; }
         public int Skipped { get; set; }
         public List<string> Failures { get; set; } = new List<string>();
-        public bool NoStoreEvent { get; set; }
-        // A page needed Terrain, so the rest was left for the next run
-        public bool Stopped { get; set; }
+    }
+
+    // What the last logbook check found, kept between visits
+    public class AwardScanCache
+    {
+        public DateTime ScannedAtUtc { get; set; }
+        public List<MissingAward> Missing { get; set; } = new List<MissingAward>();
     }
 
     public interface IAdditionalAwardCheckService
     {
-        // Reads each Scout's logbook in the units (one profile at a time) and works out which Camper and Walkabout awards they have earned
-        // that nothing records. A Scout in more than one unit is checked once.
+        // Reads each Scout's logbook in the units (one profile at a time) and works out which Camper and Walkabout awards they have earned that
+        // Terrain has no record of, with the day each was earned. Nothing is written. A Scout in more than one unit is checked once.
         // With pacing (the background run) it waits for a gap before each Scout and stops at once if a page needs Terrain.
-        Task<AwardCheckResult> CheckLogbooksAsync(IReadOnlyList<string> unitIds, Action<string>? progress, ICheckPacing? pacing = null);
-        // The Camper and Walkabout awards the store holds for the unit's members, to be presented or presented
-        Task<List<AwardRow>> StoredAsync(string unitId);
-        // Writes the planned awards to the store (the caller has already confirmed)
-        Task<AwardWriteSummary> FlagAsync(IEnumerable<PlannedAward> planned, ICheckPacing? pacing = null);
-        // Records awards in the store as presented on a day
+        Task<AwardScanResult> ScanAsync(IReadOnlyList<string> unitIds, Action<string>? progress, ICheckPacing? pacing = null);
+        // What to hand over for the unit's Scouts: the last scan's findings, against Terrain's records as they are now (so one that has been
+        // recorded since is no longer listed). Empty until a scan has run.
+        Task<List<AwardRow>> PendingAsync(string unitId);
+        // Records the awards in Terrain as awarded on a day, and the lower levels each covers. Terrain cannot remove a record, so a level it
+        // already has a record of is skipped, and the caller has already confirmed.
         Task<AwardWriteSummary> PresentAsync(IEnumerable<AwardRow> rows, DateTime presented);
-        // Creates the group's store event (the caller has already confirmed)
-        Task<BadgeStoreWriteResult> CreateStoreAsync(ICheckPacing? pacing = null);
     }
 
-    // The Camper and Walkabout awards: Terrain counts the nights and km but never records the award, so Topo works out from the
-    // logbook when each was earned, flags it as to be presented in the badge store, and records it as presented.
+    // The Camper and Walkabout awards: Terrain counts the nights and km but never records the award, so Topo works out from the logbook
+    // when each was earned, lists it as to be presented, and records it in Terrain when a leader presents it.
     public class AdditionalAwardCheckService : IAdditionalAwardCheckService
     {
         private readonly StorageService _storageService;
         private readonly ITerrainAPIService _terrainAPIService;
         private readonly IMembersService _membersService;
-        private readonly IBadgeStoreService _badgeStoreService;
+        private readonly ILocalStorageService _localStorage;
 
-        public AdditionalAwardCheckService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, IBadgeStoreService badgeStoreService)
+        public AdditionalAwardCheckService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, ILocalStorageService localStorage)
         {
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
             _membersService = membersService;
-            _badgeStoreService = badgeStoreService;
+            _localStorage = localStorage;
         }
 
-        private string UserId => _storageService.GetProfilesResult?.profiles?.FirstOrDefault()?.member?.id ?? "";
-        private string GroupId => _storageService.GroupId ?? "";
+        private string CacheKey => $"TopoAwardScan:{_storageService.GroupId}";
+        private AwardScanCache? _cache;
+        private string _cacheGroup = "";
 
         // What a background run has read, kept for the rest of this visit so a run that is stopped carries on where it left off
         private readonly Dictionary<string, (MemberTotals totals, List<LogbookAwardEntry>? entries, DateTime readAt)> _readCache = new();
         private static readonly TimeSpan CacheFor = TimeSpan.FromHours(6);
 
-        public async Task<AwardCheckResult> CheckLogbooksAsync(IReadOnlyList<string> unitIds, Action<string>? progress, ICheckPacing? pacing = null)
+        private async Task<AwardScanCache> LoadCacheAsync()
         {
-            var result = new AwardCheckResult();
+            var group = _storageService.GroupId ?? "";
+            if (_cache == null || _cacheGroup != group)
+            {
+                _cache = await _localStorage.GetItemAsync<AwardScanCache>(CacheKey) ?? new AwardScanCache();
+                _cacheGroup = group;
+            }
+            return _cache;
+        }
+
+        public async Task<AwardScanResult> ScanAsync(IReadOnlyList<string> unitIds, Action<string>? progress, ICheckPacing? pacing = null)
+        {
+            var result = new AwardScanResult();
             var tiers = await TiersAsync();
 
             // The Scouts of every unit asked for, each once, with the first unit they were found in
             var youth = new List<MemberListModel>();
-            var unitOf = new Dictionary<string, string>();
-            var terrainDates = new Dictionary<string, DateTime>();
+            var unitOf = new Dictionary<string, (string id, string name)>();
+            var terrainRecords = new HashSet<string>();
             foreach (var unitId in unitIds)
             {
                 var unitName = _storageService.Units.TryGetValue(unitId, out var name) ? name : "";
                 foreach (var member in (await _membersService.GetMembersAsync(unitId)).Where(m => m.isAdultLeader == 0))
-                    if (unitOf.TryAdd(member.id, unitName))
+                    if (unitOf.TryAdd(member.id, (unitId, unitName)))
                         youth.Add(member);
                 progress?.Invoke($"Terrain's award records for {unitName}");
                 foreach (var record in (await _terrainAPIService.GetUnitAdditionalAwardAchievements(unitId)).results)
-                    terrainDates[record.member_id + "|" + record.achievement_meta.additional_award_id] = TerrainRecordDay(record);
+                    terrainRecords.Add(record.member_id + "|" + record.achievement_meta.additional_award_id);
             }
-
-            progress?.Invoke("the badge records");
-            // Reading the records switches the group calendar for a moment, so in the background it waits for a gap too
-            if (pacing != null)
-                await pacing.WaitForGapAsync();
-            var snapshot = await _badgeStoreService.SnapshotAsync(UserId, GroupId, await TrustedAsync());
-            result.StoreExists = snapshot.StoreExists;
-            var forUnits = AwardCheckRows.FromStore(snapshot.Contents, youth.ToDictionary(m => m.id, Name), tiers.ToDictionary(t => t.Id, t => t.Name));
-            result.AlreadyFlagged = forUnits.Count(r => r.Status == AwardRowStatus.ToBePresented);
-            result.AlreadyPresented = forUnits.Count(r => r.Status == AwardRowStatus.Presented);
 
             // One profile at a time: Terrain keeps only one taken on, and a Scout's logbook can only be read with theirs. In the background
             // each Scout is read in a gap between the leader's own requests, and the profile is handed back at once if a page needs Terrain.
@@ -113,7 +115,7 @@ namespace Topo.Services
                     {
                         // Read earlier in this visit by a run that was stopped, and still fresh enough
                         if (pacing != null && _readCache.TryGetValue(member.id, out var cached) && DateTime.UtcNow - cached.readAt < CacheFor
-                            && (cached.entries != null || AwardCheckRows.Missing(new[] { cached.totals }, tiers, terrainDates.Keys.ToHashSet(), snapshot.Contents).Count == 0))
+                            && (cached.entries != null || AwardCheckRows.Missing(new[] { cached.totals }, tiers, terrainRecords).Count == 0))
                         {
                             totals.Add(cached.totals);
                             if (cached.entries != null)
@@ -138,10 +140,9 @@ namespace Topo.Services
                                 Nights = metrics.results.FirstOrDefault(r => r.name == "total_nights_camped")?.value ?? 0,
                                 Kilometres = (metrics.results.FirstOrDefault(r => r.name == "total_distance_hiked")?.value ?? 0) / 1000.0
                             };
-                            // The entries are only read for a Scout who has something to flag
+                            // The entries are only read for a Scout who has something to hand over
                             List<LogbookAwardEntry>? entries = null;
-                            var needs = AwardCheckRows.Missing(new[] { memberTotals }, tiers, terrainDates.Keys.ToHashSet(), snapshot.Contents);
-                            if (needs.Count > 0)
+                            if (AwardCheckRows.Missing(new[] { memberTotals }, tiers, terrainRecords).Count > 0)
                                 entries = await ReadEntriesAsync(member.id, pacing);
                             totals.Add(memberTotals);
                             if (entries != null)
@@ -178,131 +179,99 @@ namespace Topo.Services
             if (result.Stopped)
                 return result;
 
-            var missing = AwardCheckRows.Missing(totals, tiers, terrainDates.Keys.ToHashSet(), snapshot.Contents);
-            var earnedDates = new Dictionary<string, Dictionary<string, DateTime?>>();
-            foreach (var group in missing.GroupBy(m => m.member.MemberId))
+            var members = youth.ToDictionary(m => m.id);
+            var missing = new List<MissingAward>();
+            foreach (var group in AwardCheckRows.Missing(totals, tiers, terrainRecords).GroupBy(m => m.member.MemberId))
             {
                 var member = group.First().member;
-                earnedDates[group.Key] = CamperWalkaboutRules.EarnedDates(
+                var earned = CamperWalkaboutRules.EarnedDates(
                     CamperWalkaboutRules.Reached(tiers, member.Nights, member.Kilometres).Where(t => group.Any(g => g.tier.Id == t.Id)),
                     entriesByMember.TryGetValue(group.Key, out var entries) ? entries : new List<LogbookAwardEntry>(),
                     member.Nights, member.Kilometres);
+                var listed = members[group.Key];
+                foreach (var (_, tier) in group)
+                    missing.Add(new MissingAward
+                    {
+                        MemberId = group.Key,
+                        MemberName = Name(listed),
+                        SortName = $"{listed.last_name} {listed.first_name}".Trim(),
+                        FirstName = listed.first_name,
+                        LastName = listed.last_name,
+                        UnitId = unitOf[group.Key].id,
+                        Unit = unitOf[group.Key].name,
+                        AwardId = tier.Id,
+                        AwardName = tier.Name,
+                        Earned = earned.TryGetValue(tier.Id, out var day) ? day : null
+                    });
             }
-            var rows = AwardCheckRows.ForFlagging(missing, earnedDates);
-            foreach (var row in rows)
-                row.Unit = unitOf.TryGetValue(row.MemberId, out var unit) ? unit : "";
 
-            // What each is recorded as depends on the higher levels: presented already, or still to be presented
-            result.Planned = AwardFlagPlan.Build(rows, tiers, terrainDates, snapshot.Contents, DateTime.Today);
-            var members = youth.ToDictionary(m => m.id);
-            foreach (var planned in result.Planned.Where(p => p.Row.MemberName.Length == 0))
-                if (members.TryGetValue(planned.Row.MemberId, out var member))
-                {
-                    planned.Row.MemberName = Name(member);
-                    planned.Row.SortName = $"{member.last_name} {member.first_name}".Trim();
-                    planned.Row.Unit = unitOf.TryGetValue(member.id, out var unit) ? unit : "";
-                }
+            // Members whose logbook could not be read keep what an earlier scan found for them rather than losing it
+            var keep = (await LoadCacheAsync()).Missing.Where(m => result.MembersNotRead.Any(n => n == m.MemberName)).ToList();
+            _cache = new AwardScanCache { ScannedAtUtc = DateTime.UtcNow, Missing = missing.Concat(keep).ToList() };
+            await _localStorage.SetItemAsync(CacheKey, _cache);
+
+            var rows = AwardCheckRows.Pending(_cache.Missing, tiers, terrainRecords);
+            result.ToBePresented = rows.Count(r => r.Status == AwardRowStatus.ToBePresented);
+            result.NotHighest = rows.Count(r => r.Status == AwardRowStatus.NotHighest);
             return result;
         }
 
-        public async Task<List<AwardRow>> StoredAsync(string unitId)
+        public async Task<List<AwardRow>> PendingAsync(string unitId)
         {
-            var tiers = await TiersAsync();
-            var members = (await _membersService.GetMembersAsync(unitId)).Where(m => m.isAdultLeader == 0).ToList();
-            var contents = await _badgeStoreService.ReadAsync(UserId, GroupId, await TrustedAsync());
-            var awardNames = tiers.ToDictionary(t => t.Id, t => t.Name);
-            var rows = AwardCheckRows.FromStore(contents, members.ToDictionary(m => m.id, Name), awardNames,
-                members.ToDictionary(m => m.id, m => $"{m.last_name} {m.first_name}".Trim()));
-            var byId = members.ToDictionary(m => m.id);
-            foreach (var row in rows)
-            {
-                if (byId.TryGetValue(row.MemberId, out var member))
-                {
-                    row.FirstName = member.first_name;
-                    row.LastName = member.last_name;
-                }
-                if (row.SupersededBy.Length > 0)
-                    row.SupersededByName = awardNames.TryGetValue(row.SupersededBy, out var covered) ? covered : row.SupersededBy;
-            }
-            return rows;
-        }
-
-        public async Task<AwardWriteSummary> FlagAsync(IEnumerable<PlannedAward> planned, ICheckPacing? pacing = null)
-        {
-            var trusted = await TrustedAsync();
-            var summary = new AwardWriteSummary();
-            foreach (var item in planned)
-            {
-                // In the background each record waits for a gap between the leader's own requests
-                if (pacing != null)
-                {
-                    try
-                    {
-                        await pacing.WaitForGapAsync();
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        summary.Stopped = true;
-                        break;
-                    }
-                }
-                var written = await _badgeStoreService.RecordAwardAsync(UserId, GroupId, item.Row.MemberId, item.Row.AwardId, item.Awarded, item.Presented, trusted, item.SupersededBy);
-                Tally(summary, item.Row, written);
-                if (written.Outcome == BadgeStoreWriteOutcome.NoStoreEvent)
-                    break;
-            }
-            return summary;
+            var cache = await LoadCacheAsync();
+            var forUnit = cache.Missing.Where(m => m.UnitId == unitId).ToList();
+            if (forUnit.Count == 0)
+                return new List<AwardRow>();
+            var records = await TerrainRecordsAsync(unitId);
+            return AwardCheckRows.Pending(forUnit, await TiersAsync(), records);
         }
 
         public async Task<AwardWriteSummary> PresentAsync(IEnumerable<AwardRow> rows, DateTime presented)
         {
-            var trusted = await TrustedAsync();
             var summary = new AwardWriteSummary();
-            var current = await _badgeStoreService.ReadAsync(UserId, GroupId, trusted);
-            foreach (var row in rows)
+            var tiers = await TiersAsync();
+            foreach (var unit in rows.GroupBy(r => r.UnitId))
             {
-                var written = await _badgeStoreService.RecordAwardAsync(UserId, GroupId, row.MemberId, row.AwardId, row.Earned ?? presented, presented, trusted);
-                Tally(summary, row, written);
-                if (written.Outcome == BadgeStoreWriteOutcome.NoStoreEvent)
-                    break;
-                if (!written.Succeeded)
+                // Read fresh just before writing: Terrain adds a record every time, so anything it already has is left alone
+                var records = await TerrainRecordsAsync(unit.Key);
+                var pending = AwardCheckRows.Pending((await LoadCacheAsync()).Missing.Where(m => m.UnitId == unit.Key), tiers, records);
+                var items = new List<(string memberId, string awardId, DateTime awarded)>();
+                var written = new List<AwardRow>();
+                foreach (var row in unit)
+                    // The levels this one covers were not the badge handed over, so they are recorded the same day
+                    foreach (var level in new[] { row }.Concat(AwardCheckRows.CoveredBy(row, pending)))
+                    {
+                        if (records.Contains(level.Key) || items.Any(i => i.memberId == level.MemberId && i.awardId == level.AwardId))
+                        {
+                            summary.Skipped++;
+                            continue;
+                        }
+                        items.Add((level.MemberId, level.AwardId, presented.Date));
+                        written.Add(level);
+                    }
+                if (items.Count == 0)
                     continue;
-                // The lower levels this one covered were not the badge handed over, so they are presented the same day
-                foreach (var lower in current.Records.Where(r => r.MemberId == row.MemberId && r.SupersededBy == row.AwardId && !r.Presented.HasValue))
+                var result = await _terrainAPIService.RecordAdditionalAwardsAsync(unit.Key, items);
+                if (!result.Success)
                 {
-                    var covered = await _badgeStoreService.RecordAwardAsync(UserId, GroupId, lower.MemberId, lower.AwardId, lower.Awarded, presented, trusted, lower.SupersededBy);
-                    if (!covered.Succeeded)
-                        summary.Failures.Add($"{row.MemberName}: {lower.AwardId}: {covered.Message}");
+                    summary.Failures.Add($"{(_storageService.Units.TryGetValue(unit.Key, out var unitName) ? unitName : "The unit")}: Terrain did not record them (status {result.StatusCode}). {Trim(result.Body)}".Trim());
+                    continue;
                 }
+                summary.Done += items.Count;
+                // They are in Terrain now, so no longer found by the last scan
+                var cache = await LoadCacheAsync();
+                cache.Missing.RemoveAll(m => written.Any(w => w.Key == m.MemberId + "|" + m.AwardId));
+                await _localStorage.SetItemAsync(CacheKey, cache);
             }
             return summary;
         }
 
-        public async Task<BadgeStoreWriteResult> CreateStoreAsync(ICheckPacing? pacing = null)
-        {
-            if (pacing != null)
-                await pacing.WaitForGapAsync();
-            return await _badgeStoreService.CreateStoreEventAsync(UserId, _storageService.MemberName ?? "", GroupId);
-        }
+        private static string Trim(string body) => body.Length > 160 ? body.Substring(0, 160) : body;
 
-        private static void Tally(AwardWriteSummary summary, AwardRow row, BadgeStoreWriteResult written)
-        {
-            switch (written.Outcome)
-            {
-                case BadgeStoreWriteOutcome.Written:
-                    summary.Done++;
-                    break;
-                case BadgeStoreWriteOutcome.AlreadyRecorded:
-                    summary.Skipped++;
-                    break;
-                case BadgeStoreWriteOutcome.NoStoreEvent:
-                    summary.NoStoreEvent = true;
-                    break;
-                default:
-                    summary.Failures.Add($"{row.MemberName}: {row.AwardName}: {written.Message}");
-                    break;
-            }
-        }
+        // Terrain's own additional award records for a unit, as member|award
+        private async Task<HashSet<string>> TerrainRecordsAsync(string unitId) =>
+            (await _terrainAPIService.GetUnitAdditionalAwardAchievements(unitId)).results
+                .Select(r => r.member_id + "|" + r.achievement_meta.additional_award_id).ToHashSet();
 
         // Reads every logbook entry of the Scout whose profile is taken on, reduced to what counts toward the two awards
         private async Task<List<LogbookAwardEntry>> ReadEntriesAsync(string memberId, ICheckPacing? pacing = null)
@@ -332,23 +301,6 @@ namespace Topo.Services
             }
             return CamperWalkaboutRules.Tiers(specifications.Select(a => (a.id, a.name)));
         }
-
-        // Only adult leaders' comments count in the store, and at group level that means any unit's leaders
-        private async Task<Func<string, bool>> TrustedAsync()
-        {
-            var leaders = new HashSet<string> { UserId };
-            foreach (var unit in _storageService.Units.Keys)
-                foreach (var member in await _membersService.GetMembersAsync(unit))
-                    if (member.isAdultLeader == 1)
-                        leaders.Add(member.id);
-            return id => leaders.Contains(id);
-        }
-
-        // The day Terrain's own record says the award was given: the imported date, or when the record last changed
-        private static DateTime TerrainRecordDay(Topo.Model.AdditionalAwards.Result record) =>
-            DateTime.TryParseExact(record.imported?.date_awarded, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var day)
-                ? day
-                : record.status_updated.ToLocalTime().Date;
 
         private static string Name(MemberListModel m) => $"{m.first_name} {m.last_name}".Trim();
     }

@@ -1,22 +1,17 @@
 using Topo.Model.Approvals;
-using Topo.Model.BadgeStore;
 
 namespace Topo.Model.AdditionalAwards
 {
     public enum AwardRowStatus
     {
-        // Earned by the logbook, but nothing records it yet
-        NotFlagged,
-        // The store says it was earned and has not been presented
+        // The logbook says it was earned, Terrain has no record of it, and it is the badge to hand over
         ToBePresented,
-        // The store says a higher level is the one to hand over, so this one has nothing to present of its own
-        NotHighest,
-        // The store says it was presented
-        Presented,
-        // Terrain already has an award record for it, which Topo treats as done
-        InTerrain
+        // Earned and not in Terrain, but a higher level (also not in Terrain) is the badge to hand over, so this one has nothing to present of its own
+        NotHighest
     }
 
+    // A Camper or Walkabout Award a Scout has earned that Terrain has no record of. Terrain counts the nights and km but never records the
+    // award, so Topo works it out from the logbook. A record only exists in Terrain once it has been presented.
     public class AwardRow
     {
         public string MemberId { get; set; } = "";
@@ -25,23 +20,17 @@ namespace Topo.Model.AdditionalAwards
         public string SortName { get; set; } = "";
         public string FirstName { get; set; } = "";
         public string LastName { get; set; } = "";
-        // The unit they were found in, when more than one unit is checked
+        // The unit they were found in
+        public string UnitId { get; set; } = "";
         public string Unit { get; set; } = "";
         public string AwardId { get; set; } = "";
         public string AwardName { get; set; } = "";
         public AwardRowStatus Status { get; set; }
-        // The day it was earned: from the store's record, or worked out from the logbook. Null when the logbook cannot say.
+        // The day it was earned, worked out from the logbook. Null when the logbook cannot say.
         public DateTime? Earned { get; set; }
-        public DateTime? Presented { get; set; }
-        // The day the store record was written, which is when an award that is not yet presented joined the list of those to present
-        public DateTime? FlaggedOn { get; set; }
-        // The higher level that covers this one (NotHighest), by its award id
+        // The higher level that covers this one (NotHighest), by its award id and name
         public string SupersededBy { get; set; } = "";
-        // The name of that higher level, for a screen to show
         public string SupersededByName { get; set; } = "";
-        // For a record in the store
-        public string EventId { get; set; } = "";
-        public string CommentId { get; set; } = "";
         public string Key => MemberId + "|" + AwardId;
     }
 
@@ -53,38 +42,90 @@ namespace Topo.Model.AdditionalAwards
         public double Kilometres { get; set; }
     }
 
+    // One Camper or Walkabout level a Scout has earned that Terrain has no record of, as the last logbook check found it. This is what is
+    // kept between visits; what to hand over is worked out from it each time, against Terrain's records as they are then.
+    public class MissingAward
+    {
+        public string MemberId { get; set; } = "";
+        public string MemberName { get; set; } = "";
+        public string SortName { get; set; } = "";
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string UnitId { get; set; } = "";
+        public string Unit { get; set; } = "";
+        public string AwardId { get; set; } = "";
+        public string AwardName { get; set; } = "";
+        public DateTime? Earned { get; set; }
+    }
+
     public static class AwardCheckRows
     {
-        // The awards the store says were earned for these members, split by whether they have been presented. Names come from the
-        // lists passed in; a member not in the list (another unit's) is left out.
-        public static List<AwardRow> FromStore(BadgeStoreContents contents, IReadOnlyDictionary<string, string> memberNames, IReadOnlyDictionary<string, string> awardNames,
-            IReadOnlyDictionary<string, string>? sortNames = null) =>
-            contents.Records
-                .Where(r => memberNames.ContainsKey(r.MemberId))
-                .Select(r => new AwardRow
+        // The Camper and Walkabout levels each member's logbook totals reach that Terrain has no record of and that are still to be handed over.
+        // A level below one Terrain does hold is left out: that higher badge was presented, so nothing is left to hand over for it.
+        public static List<(MemberTotals member, AwardTier tier)> Missing(IEnumerable<MemberTotals> members, IEnumerable<AwardTier> tiers, ISet<string> terrainRecords)
+        {
+            var tierList = tiers.ToList();
+            var missing = new List<(MemberTotals, AwardTier)>();
+            foreach (var member in members)
+                foreach (var tier in CamperWalkaboutRules.Reached(tierList, member.Nights, member.Kilometres))
                 {
-                    MemberId = r.MemberId,
-                    MemberName = memberNames[r.MemberId],
-                    SortName = sortNames != null && sortNames.TryGetValue(r.MemberId, out var sortName) ? sortName : memberNames[r.MemberId],
-                    AwardId = r.AwardId,
-                    AwardName = awardNames.TryGetValue(r.AwardId, out var name) ? name : r.AwardId,
-                    Status = r.Presented.HasValue ? AwardRowStatus.Presented : r.SupersededBy.Length > 0 ? AwardRowStatus.NotHighest : AwardRowStatus.ToBePresented,
-                    SupersededBy = r.SupersededBy,
-                    Earned = r.Awarded,
-                    Presented = r.Presented,
-                    FlaggedOn = (r.RecordedAt.Kind == DateTimeKind.Utc ? r.RecordedAt.ToLocalTime() : r.RecordedAt).Date,
-                    EventId = r.EventId,
-                    CommentId = r.CommentId
-                })
-                .OrderBy(r => r.SortName, StringComparer.CurrentCultureIgnoreCase).ThenBy(r => r.AwardId, StringComparer.Ordinal)
-                .ToList();
+                    var highestHeld = tierList.Where(t => t.Family == tier.Family && terrainRecords.Contains(member.MemberId + "|" + t.Id)).Select(t => t.Threshold).DefaultIfEmpty(0).Max();
+                    if (tier.Threshold > highestHeld && !terrainRecords.Contains(member.MemberId + "|" + tier.Id))
+                        missing.Add((member, tier));
+                }
+            return missing;
+        }
 
-        // The awards the store holds, as rows for the Approvals list, which has filters of its own. A level still to be presented has no presented
-        // date (so "To be presented" lists it); one the store says is presented has one. The "to award" column says which to hand over.
+        // What to hand over. Only the highest badge of each kind is handed over, so for each member and kind:
+        //  - a missing level with a level above it that Terrain holds is taken as done: that higher badge was presented, so nothing is left
+        //    to hand over for it and it is not listed;
+        //  - of the rest, the highest is the badge to hand over, and the others are listed as not the highest.
+        // terrainRecords holds Terrain's own records (member|award).
+        public static List<AwardRow> Pending(IEnumerable<MissingAward> missing, IEnumerable<AwardTier> tiers, ISet<string> terrainRecords)
+        {
+            var tierById = tiers.ToDictionary(t => t.Id);
+            var rows = new List<AwardRow>();
+            foreach (var member in missing.Where(m => tierById.ContainsKey(m.AwardId) && !terrainRecords.Contains(m.MemberId + "|" + m.AwardId)).GroupBy(m => m.MemberId))
+                foreach (var family in member.GroupBy(m => tierById[m.AwardId].Family))
+                {
+                    var highestHeld = tiers.Where(t => t.Family == family.Key && terrainRecords.Contains(member.Key + "|" + t.Id)).Select(t => t.Threshold).DefaultIfEmpty(0).Max();
+                    var open = family.Where(m => tierById[m.AwardId].Threshold > highestHeld).OrderBy(m => tierById[m.AwardId].Threshold).ToList();
+                    if (open.Count == 0)
+                        continue;
+                    var highest = open[^1];
+                    foreach (var m in open)
+                        rows.Add(new AwardRow
+                        {
+                            MemberId = m.MemberId,
+                            MemberName = m.MemberName,
+                            SortName = m.SortName,
+                            FirstName = m.FirstName,
+                            LastName = m.LastName,
+                            UnitId = m.UnitId,
+                            Unit = m.Unit,
+                            AwardId = m.AwardId,
+                            AwardName = m.AwardName,
+                            Earned = m.Earned,
+                            Status = m == highest ? AwardRowStatus.ToBePresented : AwardRowStatus.NotHighest,
+                            SupersededBy = m == highest ? "" : highest.AwardId,
+                            SupersededByName = m == highest ? "" : highest.AwardName
+                        });
+                }
+            return rows
+                .OrderBy(r => string.IsNullOrEmpty(r.SortName) ? r.MemberName : r.SortName, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(r => r.MemberId, StringComparer.Ordinal).ThenBy(r => r.AwardId, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        // The lower levels a presented one covers: presenting the badge to hand over records them too, so Terrain's record is complete
+        public static List<AwardRow> CoveredBy(AwardRow row, IEnumerable<AwardRow> pending) =>
+            pending.Where(r => r.MemberId == row.MemberId && r.Status == AwardRowStatus.NotHighest && r.SupersededBy == row.AwardId).ToList();
+
+        // The awards to hand over, as rows for the Approvals list, which has filters of its own. They have no presented date (so "To be
+        // presented" lists them). The "to award" column says which to hand over.
         public static List<ApprovalsListModel> ToApprovalRows(IEnumerable<AwardRow> rows) =>
             rows.Select(r =>
             {
-                var presented = r.Status == AwardRowStatus.Presented;
                 var name = r.MemberName.Trim();
                 var split = name.LastIndexOf(' ');
                 return new ApprovalsListModel
@@ -92,79 +133,20 @@ namespace Topo.Model.AdditionalAwards
                     member_id = r.MemberId,
                     member_first_name = r.FirstName.Length > 0 || r.LastName.Length > 0 ? r.FirstName : (split > 0 ? name.Substring(0, split) : name),
                     member_last_name = r.FirstName.Length > 0 || r.LastName.Length > 0 ? r.LastName : (split > 0 ? name.Substring(split + 1) : ""),
-                    achievement_id = PendingApprovalItem.StoreIdPrefix + r.Key,
+                    achievement_id = PendingApprovalItem.TopoIdPrefix + r.Key,
                     achievement_type = "additional_award",
                     achievement_name = r.AwardName,
-                    submission_status = presented ? "Awarded" : "Pending",
-                    submission_outcome = presented ? "Awarded" : "",
+                    submission_status = "Pending",
+                    submission_outcome = "",
                     submission_type = "Award",
-                    // Where the list's date range looks: the day it was presented, otherwise the day it was flagged as to be presented
-                    // (like a pending award in Terrain, it is dated from when it joined the list, not from when it was earned)
-                    submission_date = (r.Presented ?? r.FlaggedOn ?? r.Earned ?? DateTime.Today).Date,
+                    // Where the list's date range looks: the day it was earned
+                    submission_date = (r.Earned ?? DateTime.Today).Date,
                     awarded_date = r.Earned,
-                    presented_date = r.Presented,
-                    to_award = r.Status switch
-                    {
-                        AwardRowStatus.ToBePresented => "Award",
-                        AwardRowStatus.NotHighest => $"Not the highest - award {(r.SupersededByName.Length > 0 ? r.SupersededByName : r.SupersededBy)}",
-                        _ => ""
-                    }
+                    presented_date = null,
+                    to_award = r.Status == AwardRowStatus.ToBePresented
+                        ? "Award"
+                        : $"Not the highest - award {(r.SupersededByName.Length > 0 ? r.SupersededByName : r.SupersededBy)}"
                 };
             }).ToList();
-
-        // For each member, the Camper and Walkabout tiers their logbook totals reach that nothing records yet: not in Terrain's own
-        // additional award records and not in the store. These are what to flag as to be presented.
-        public static List<(MemberTotals member, AwardTier tier)> Missing(IEnumerable<MemberTotals> members, IEnumerable<AwardTier> tiers,
-            ISet<string> terrainRecords, BadgeStoreContents store)
-        {
-            var inStore = store.Records.Select(r => r.MemberId + "|" + r.AwardId).ToHashSet();
-            var missing = new List<(MemberTotals, AwardTier)>();
-            foreach (var member in members)
-                foreach (var tier in CamperWalkaboutRules.Reached(tiers, member.Nights, member.Kilometres))
-                {
-                    var key = member.MemberId + "|" + tier.Id;
-                    if (!terrainRecords.Contains(key) && !inStore.Contains(key))
-                        missing.Add((member, tier));
-                }
-            return missing;
-        }
-
-        // Rows for the check page: what is missing (to flag), with the day each was earned when the logbook can say
-        public static List<AwardRow> ForFlagging(IEnumerable<(MemberTotals member, AwardTier tier)> missing, IReadOnlyDictionary<string, Dictionary<string, DateTime?>> earnedDates) =>
-            missing.Select(m => new AwardRow
-            {
-                MemberId = m.member.MemberId,
-                MemberName = m.member.Name,
-                AwardId = m.tier.Id,
-                AwardName = m.tier.Name,
-                Status = AwardRowStatus.NotFlagged,
-                Earned = earnedDates.TryGetValue(m.member.MemberId, out var dates) && dates.TryGetValue(m.tier.Id, out var day) ? day : null
-            })
-            .OrderBy(r => r.MemberName, StringComparer.CurrentCultureIgnoreCase).ThenBy(r => r.AwardId, StringComparer.Ordinal)
-            .ToList();
-    }
-}
-
-namespace Topo.Model.AdditionalAwards
-{
-    public static class AwardRecordSummaries
-    {
-        // One member's Camper and Walkabout Awards from the Topo records, lowest level first
-        public static List<Model.Progress.AwardRecordSummary> ForMember(IEnumerable<AwardRow> rows, string memberId) =>
-            rows.Where(r => r.MemberId == memberId)
-                .OrderBy(r => r.AwardId, StringComparer.Ordinal)
-                .Select(r => new Model.Progress.AwardRecordSummary
-                {
-                    Name = r.AwardName,
-                    Awarded = r.Earned,
-                    Presented = r.Presented,
-                    Status = r.Status switch
-                    {
-                        AwardRowStatus.Presented => "Presented",
-                        AwardRowStatus.NotHighest => $"Not the highest - award {(r.SupersededByName.Length > 0 ? r.SupersededByName : r.SupersededBy)}",
-                        _ => "To be presented"
-                    }
-                })
-                .ToList();
     }
 }

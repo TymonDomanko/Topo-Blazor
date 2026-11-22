@@ -238,9 +238,6 @@ namespace Topo.Services
                     {
                         cell.DateTime = x.AwardDate.Value;
                         cell.CellStyle.Color = Color.Orange;
-                        // Covered by a higher level that is the badge to hand over (from the Topo records)
-                        if (x.NotHighest)
-                            cell.CellStyle.Color = Color.Khaki;
                         if (x.PresentedDate.HasValue)
                         {
                             cell.DateTime = x.PresentedDate.Value;
@@ -285,16 +282,6 @@ namespace Topo.Services
             sheet.Range[rowNumber, 2].BorderAround();
             sheet.Range[rowNumber, 2].CellStyle.Color = Color.LightGreen;
 
-            // Only when a level is covered by a higher one is the legend needed
-            if (sortedAdditionalAwardsList.Any(x => x.NotHighest))
-            {
-                rowNumber++;
-                sheet.Range[rowNumber, 1].Text = "Not the highest";
-                sheet.Range[rowNumber, 1].BorderAround();
-                sheet.Range[rowNumber, 1].CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
-                sheet.Range[rowNumber, 2].BorderAround();
-                sheet.Range[rowNumber, 2].CellStyle.Color = Color.Khaki;
-            }
 
             sheet.UsedRange.AutofitColumns();
 
@@ -1720,7 +1707,7 @@ namespace Topo.Services
                 sheet.Range[rowNumber, 32, rowNumber, 37].CellStyle.Borders[ExcelBordersIndex.EdgeRight].LineStyle = ExcelLineStyle.Thin;
                 sheet.Range[rowNumber, 38, rowNumber, 41].CellStyle.Borders[ExcelBordersIndex.EdgeLeft].LineStyle = ExcelLineStyle.Thin;
                 sheet.Range[rowNumber, 38, rowNumber, 41].CellStyle.Borders[ExcelBordersIndex.EdgeRight].LineStyle = ExcelLineStyle.Thin;
-                sheet.Range[rowNumber, 42].Text = "ADDITIONAL AWARDS";
+                sheet.Range[rowNumber, 42].Text = "AWARDS";
                 sheet.Range[rowNumber, 42, rowNumber, 43].Merge();
                 sheet.Range[rowNumber, 42, rowNumber, 43].CellStyle.WrapText = true;
                 sheet.Range[rowNumber, 42, rowNumber, 43].CellStyle.Borders[ExcelBordersIndex.EdgeLeft].LineStyle = ExcelLineStyle.Thin;
@@ -1884,8 +1871,9 @@ namespace Topo.Services
                     sheet.Range[rowNumber, 6].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignRight;
                     sheet.Range[rowNumber, 7].Text = "Presented";
                     sheet.Range[rowNumber, 7].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignRight;
+                    sheet.Range[rowNumber, 8].Text = "To award";
                 }
-                sheet.Range[rowNumber, 1, rowNumber, 7].CellStyle.Font.Bold = true;
+                sheet.Range[rowNumber, 1, rowNumber, 8].CellStyle.Font.Bold = true;
 
                 sheet.SetRowHeight(rowNumber, 20);
 
@@ -1900,10 +1888,15 @@ namespace Topo.Services
                         sheet.Range[rowNumber, 6].DateTime = approval.awarded_date.Value;
                     if (approval.presented_date.HasValue)
                         sheet.Range[rowNumber, 7].DateTime = approval.presented_date.Value;
+                    sheet.Range[rowNumber, 8].Text = approval.to_award;
+                    // A Camper or Walkabout Award that is earned and not yet in Terrain is red. A lower level that is not the highest is not
+                    // handed over, so it is left unshaded.
+                    if (approval.achievement_type == "additional_award" && approval.to_award == "Award")
+                        sheet.Range[rowNumber, 2, rowNumber, 8].CellStyle.Color = Color.Red;
                 }
             }
 
-            sheet.Range[4, 2, rowNumber, 7].AutofitColumns();
+            sheet.Range[4, 2, rowNumber, 8].AutofitColumns();
 
             sheet.PageSetup.PaperSize = ExcelPaperSize.PaperA4;
             sheet.PageSetup.Orientation = ExcelPageOrientation.Portrait;

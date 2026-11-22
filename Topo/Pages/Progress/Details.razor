@@ -310,20 +310,6 @@
                     <span>@model.Stats.NightsCampedInSection</span>
                 </div>
             </div>
-            @if (model.Stats.AdditionalAwards.Count > 0)
-            {
-                <div class="row mt-2" id="additional-awards">
-                    <div class="col-sm-12">
-                        <strong>Camper and Walkabout Awards</strong>
-                        <ul class="mb-0">
-                            @foreach (var award in model.Stats.AdditionalAwards)
-                            {
-                                <li>@award.Name: @award.Status@(award.Presented.HasValue ? $" {award.Presented.Value:dd/MM/yyyy}" : award.Awarded.HasValue ? $" (earned {award.Awarded.Value:dd/MM/yyyy})" : "")</li>
-                            }
-                        </ul>
-                    </div>
-                </div>
-            }
         </div>
     </div>
 
