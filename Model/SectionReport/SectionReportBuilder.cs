@@ -391,13 +391,15 @@ namespace Topo.Model.SectionReport
                 model.Badges.PeakAwards += badges.Peak.results.Count(r => r.status == "awarded" && InSection(r.section) && InPeriod(r.date_awarded, null, r.status_updated));
             }
 
-            var awards = new SortedDictionary<string, int>();
+            var awards = new Dictionary<string, int>();
+            var awardIds = new Dictionary<string, string>();
             foreach (var r in input.AdditionalAwards.results.Where(r => r.status == "awarded" && youthIds.Contains(r.member_id) && InSection(r.section) && InPeriod(r.date_awarded, r.imported?.date_awarded, r.status_updated)))
             {
                 var name = input.AwardNames.TryGetValue(r.achievement_meta.additional_award_id, out var title)
                     ? title
                     : ScoutingHistoryBuilder.Title(r.achievement_meta.additional_award_id);
                 awards[name] = awards.GetValueOrDefault(name) + 1;
+                awardIds[name] = r.achievement_meta.additional_award_id;
             }
 
             model.Badges.OasProgressions = oasProgressions;
@@ -405,7 +407,7 @@ namespace Topo.Model.SectionReport
             model.Badges.Milestones = milestones.Select(m => new UnitBadgeCount { Name = $"Milestone {m.Key}", Count = m.Value }).ToList();
             model.Badges.OasStages = oas.Select(o => new OasStageCount { Stream = o.Key.stream, Stage = o.Key.stage, Count = o.Value }).ToList();
             model.Badges.SiaCategories = sia.Select(s => new UnitBadgeCount { Name = s.Key, Count = s.Value }).ToList();
-            model.Badges.AdditionalAwards = awards.Select(a => new UnitBadgeCount { Name = a.Key, Count = a.Value }).ToList();
+            model.Badges.AdditionalAwards = AdditionalAwardCounts.Sorted(awards, awardIds);
         }
 
         // Events once each (the same event can come back from two calendars), not cancelled

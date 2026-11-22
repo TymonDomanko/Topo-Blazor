@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using System.Globalization;
+using Topo.Model.Approvals;
 using Topo.Model.Program;
 using System;
 using Topo.Model.Members;
@@ -14,6 +15,8 @@ namespace Topo.Services
         public Task SetCalendar(string[] calendarIds);
         public Task ResetCalendar();
         public Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate);
+        public Task<List<AwardEventChoice>> GetEventChoices(DateTime fromDate, DateTime toDate, string unitId);
+        public Task<HashSet<string>> GetAttendedMemberIds(string eventId);
         public Task<EventListModel> GetAttendanceForEvent(string eventId);
         public Task<AttendanceReportModel> GenerateAttendanceReportData(DateTime fromDate, DateTime toDate, string[] selectedCalendars);
         public Task<List<MemberListModel>> GetInviteesForEvent(string eventId, SignInSheetOptions? options = null);
@@ -165,6 +168,18 @@ namespace Topo.Services
                 return eventList;
             }
             return new List<EventListModel>();
+        }
+
+        // The unit's events between two days, as Terrain returns them for the calendars currently selected on the account
+        public async Task<List<AwardEventChoice>> GetEventChoices(DateTime fromDate, DateTime toDate, string unitId)
+        {
+            var events = await _terrainAPIService.GetEventsAsync(GetUser(), fromDate.Date.AddDays(-1), toDate.Date.AddDays(1));
+            return AwardEventChoice.ForUnit(events?.results ?? new Event[0], unitId);
+        }
+
+        public async Task<HashSet<string>> GetAttendedMemberIds(string eventId)
+        {
+            return AwardEventChoice.Attended(await _terrainAPIService.GetEventAsync(eventId));
         }
 
         // Unit-wide and group-wide events both build their roster from whichever units the options

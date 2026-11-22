@@ -177,19 +177,21 @@ namespace Topo.Model.UnitReport
                 model.Badges.PeakAwards += badges.Peak.results.Count(r => r.status == "awarded" && InUnit(r.section) && InRange(r.date_awarded, null, r.status_updated));
             }
 
-            var awards = new SortedDictionary<string, int>();
+            var awards = new Dictionary<string, int>();
+            var awardIds = new Dictionary<string, string>();
             foreach (var r in input.AdditionalAwards.results.Where(r => r.status == "awarded" && youthIds.Contains(r.member_id) && InUnit(r.section) && InRange(r.date_awarded, r.imported?.date_awarded, r.status_updated)))
             {
                 var name = input.AwardNames.TryGetValue(r.achievement_meta.additional_award_id, out var title)
                     ? title
                     : ScoutingHistoryBuilder.Title(r.achievement_meta.additional_award_id);
                 awards[name] = awards.GetValueOrDefault(name) + 1;
+                awardIds[name] = r.achievement_meta.additional_award_id;
             }
 
             model.Badges.Milestones = milestones.Select(m => new UnitBadgeCount { Name = $"Milestone {m.Key}", Count = m.Value }).ToList();
             model.Badges.OasStreams = oas.Select(o => new UnitBadgeCount { Name = o.Key, Count = o.Value }).ToList();
             model.Badges.SiaCategories = sia.Select(s => new UnitBadgeCount { Name = s.Key, Count = s.Value }).ToList();
-            model.Badges.AdditionalAwards = awards.Select(a => new UnitBadgeCount { Name = a.Key, Count = a.Value }).ToList();
+            model.Badges.AdditionalAwards = AdditionalAwardCounts.Sorted(awards, awardIds);
         }
 
         // Adult leaders only. A unit leader (UL) is a youth member, who chairs the unit council, so counts with the youth.

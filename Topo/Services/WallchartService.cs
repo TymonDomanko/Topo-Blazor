@@ -73,6 +73,10 @@ namespace Topo.Services
             var peakAwardByMember = (await _terrainAPIService.GetUnitAchievementsOfType<GetPeakAwardsResultsModel>(selectedUnitId, "peak_award")).results.ToLookup(r => r.member_id);
 
             var wallchartItems = new List<WallchartItemModel>();
+            // The Camper and Walkabout Awards Terrain holds, for each member's highest level
+            var terrainAwards = (await _terrainAPIService.GetUnitAdditionalAwardAchievements(selectedUnitId)).results
+                .GroupBy(r => r.member_id).ToDictionary(g => g.Key, g => g.Select(r => r.achievement_meta.additional_award_id).ToList());
+
             foreach (var member in youth)
             {
                 progress?.Invoke($"{member.first_name} {member.last_name} ({youth.IndexOf(member) + 1} of {youth.Count})");
@@ -194,6 +198,9 @@ namespace Topo.Services
                 wallchartItem.NightsCamped = (int)totalNightsCamped;
                 wallchartItem.NightsCampedInSection = (int)totalNightsCampedInSection;
                 wallchartItem.KMsHiked = (int)totalKmsHiked;
+                var levels = Topo.Model.AdditionalAwards.HighestAwardLevels.For(terrainAwards.GetValueOrDefault(member.id) ?? new List<string>());
+                wallchartItem.CamperAward = levels.camper;
+                wallchartItem.WalkaboutAward = levels.walkabout;
                 // SIA
                 var awardedSIAProjects = siaByMember[member.id].Where(r => r.section == section && r.status == "awarded");
                 var awardedSIAProjectsByArea = awardedSIAProjects.GroupBy(p => p.answers.special_interest_area_selection);

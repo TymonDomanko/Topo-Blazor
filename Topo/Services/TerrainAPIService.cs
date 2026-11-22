@@ -29,6 +29,9 @@ namespace Topo.Services
         public Task PutCalendarsAsync(string userId, GetCalendarsResultModel putCalendarsResultModel);
         public Task<GetEventsResultModel?> GetEventsAsync(string userId, DateTime fromDate, DateTime toDate);
         public Task<GetEventResultModel?> GetEventAsync(string eventId);
+        // Records additional awards (Camper, Walkabout and so on) in Terrain, the way its Record Achievements page does. Each item is a member, an award id
+        // and the day awarded. Terrain adds a record each time and cannot be asked to remove one, so the caller checks for existing records first.
+        public Task<TerrainCallResult> RecordAdditionalAwardsAsync(string unitId, IEnumerable<(string memberId, string awardId, DateTime awarded)> items);
         public Task<List<ProposedActivityModel>?> GetProposedActivitiesAsync(string unitId);
         public Task<GetOASTreeResultsModel?> GetOASTreeAsync(string stream);
         public Task<GetOASTemplateResultModel?> GetOASTemplateAsync(string stream);
@@ -47,6 +50,9 @@ namespace Topo.Services
         public Task<GetAdditionalAwardsSpecificationsResultModel> GetAdditionalAwardSpecifications();
         public Task<GetUnitAchievementsResultModel> GetUnitAdditionalAwardAchievements(string unitId);
         public Task<GetApprovalsResultModel> GetUnitApprovals(string unitId, string status);
+        public Task<string?> PostSubmissionAssessment(string submissionId, ApprovalAction action);
+        public Task<string> GetMemberAchievementJson(string memberId, string achievementId, string achievementType);
+        public Task<string> GetTemplateJson(string path);
         public Task<GetMemberAchievementResultModel> GetMemberAchievementResult(string member_id, string achievement_id, string achievement_type);
         public Task<GetMilestoneResultModel> GetMilestoneResultsForMember(string memberId);
         public Task<GetIntroductionResultsModel> GetIntroductionToScoutingResultsForMember(string memberId);
@@ -237,6 +243,23 @@ namespace Topo.Services
             var getEventsResultModel = DeserializeObject<GetEventsResultModel>(result);
 
             return getEventsResultModel;
+        }
+
+        // The comments on an event, newest first. Topo keeps its badge records as comments on one event (see Model/BadgeStore).
+        public async Task<TerrainCallResult> RecordAdditionalAwardsAsync(string unitId, IEnumerable<(string memberId, string awardId, DateTime awarded)> items)
+        {
+            await RefreshTokenAsync();
+            var body = JsonConvert.SerializeObject(new
+            {
+                items = items.Select(i => new
+                {
+                    member_id = i.memberId,
+                    achievement_type = "additional_award",
+                    achievement_meta = new { additional_award_id = i.awardId },
+                    date_awarded = i.awarded.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+                })
+            });
+            return await SendWriteRequest(HttpMethod.Put, $"{achievementsAddress}units/{unitId}/achievements?type=additional_award", body);
         }
 
         public async Task<GetEventResultModel?> GetEventAsync(string eventId)
@@ -463,6 +486,60 @@ namespace Topo.Services
             return getApprovalsResult ?? new GetApprovalsResultModel();
         }
 
+        // Approves or sends back a pending submission, as the buttons on Terrain's own Approvals page do.
+        // Terrain answers 204 with no body when it worked. Returns null then, otherwise what went wrong in words for the
+        // leader. Unlike SendRequest this looks at the status, because a write that did not happen must not be taken as done.
+        // The request and response bodies are left out of the log: the comment is the leader's own words about a member.
+        public async Task<string?> PostSubmissionAssessment(string submissionId, ApprovalAction action)
+        {
+            await RefreshTokenAsync();
+
+            var requestUri = $"{achievementsAddress}submissions/{Uri.EscapeDataString(submissionId)}/assessments";
+            try
+            {
+                var httpRequest = new HttpRequestMessage(HttpMethod.Post, requestUri)
+                {
+                    Content = new StringContent(JsonConvert.SerializeObject(action.ToRequestBody()), Encoding.UTF8, "application/json")
+                };
+                httpRequest.Headers.Add("authorization", _storageService?.AuthenticationResult?.IdToken);
+                httpRequest.Headers.Add("accept", "application/json, text/plain, */*");
+
+                var response = await _httpClient.SendAsync(httpRequest);
+                _logger.LogInformation($"Version: {_storageService.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; Request: POST {requestUri} ({action.Outcome}); StatusCode: {(int)response.StatusCode}");
+                if (response.IsSuccessStatusCode)
+                    return null;
+                return (int)response.StatusCode switch
+                {
+                    401 => "Terrain did not accept your sign in. Sign in again and retry.",
+                    403 => "Terrain says you do not have permission to do this.",
+                    404 => "Terrain could not find this request. It may already have been dealt with.",
+                    _ => $"Terrain did not accept it (status {(int)response.StatusCode})."
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogInformation($"Version: {_storageService.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; Request: POST {requestUri} ({action.Outcome}); Exception: {ex.Message}");
+                return "Could not reach Terrain. Check your connection and try again.";
+            }
+        }
+
+        // The achievement record as Terrain sends it (answers and uploads included), for the submission details
+        public async Task<string> GetMemberAchievementJson(string memberId, string achievementId, string achievementType)
+        {
+            await RefreshTokenAsync();
+
+            var requestUri = $"{achievementsAddress}members/{Uri.EscapeDataString(memberId)}/achievements/{Uri.EscapeDataString(achievementId)}?type={Uri.EscapeDataString(achievementType)}";
+            return await SendRequest(HttpMethod.Get, requestUri);
+        }
+
+        // A template file such as sia/scout/plan/2.json; a path that does not exist comes back as something that is not JSON
+        public async Task<string> GetTemplateJson(string path)
+        {
+            await RefreshTokenAsync();
+
+            return await SendRequest(HttpMethod.Get, $"{templatesAddress}{path}");
+        }
+
         public async Task<GetMemberAchievementResultModel> GetMemberAchievementResult(string member_id, string achievement_id, string achievement_type)
         {
             await RefreshTokenAsync();
@@ -622,6 +699,29 @@ namespace Topo.Services
             var getPeakAwardResultsModel = DeserializeObject<GetPeakAwardsResultsModel>(result);
 
             return getPeakAwardResultsModel ?? new GetPeakAwardsResultsModel();
+        }
+
+        // A call that changes Terrain, sent as JSON, that reports what came back instead of only the body. A rejection from the
+        // events host can carry no CORS header, so the browser reports it as no reply at all; that comes back as status 0.
+        private async Task<TerrainCallResult> SendWriteRequest(HttpMethod httpMethod, string requestUri, string jsonBody)
+        {
+            var httpRequest = new HttpRequestMessage(httpMethod, requestUri);
+            if (!string.IsNullOrEmpty(jsonBody))
+                httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+            httpRequest.Headers.Add("authorization", _storageService?.AuthenticationResult?.IdToken);
+            httpRequest.Headers.Add("accept", "application/json, text/plain, */*");
+            try
+            {
+                var response = await _httpClient.SendAsync(httpRequest);
+                var body = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation($"Version: {_storageService.Version}; Request: {httpMethod} {requestUri}; StatusCode: {(int)response.StatusCode}");
+                return new TerrainCallResult { Success = response.IsSuccessStatusCode, StatusCode = (int)response.StatusCode, Body = body };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogInformation($"Version: {_storageService.Version}; Request: {httpMethod} {requestUri}; Exception: {ex.Message}");
+                return new TerrainCallResult { Success = false, StatusCode = 0, Body = ex.Message };
+            }
         }
 
         private async Task<string> SendRequest(HttpMethod httpMethod, string requestUri, string content = "", string xAmzTargetHeader = "")
