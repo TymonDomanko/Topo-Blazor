@@ -63,7 +63,9 @@ namespace Topo.Controller
         {
             try
             {
-                return AwardCheckRows.ToApprovalRows(await _additionalAwards.PendingAsync(unitId));
+                // Those to hand over, then those Terrain already holds (listed as presented)
+                return AwardCheckRows.ToApprovalRows(await _additionalAwards.PendingAsync(unitId))
+                    .Concat(AwardCheckRows.ToRecordedRows(await _additionalAwards.RecordedAsync(unitId))).ToList();
             }
             catch (Exception)
             {

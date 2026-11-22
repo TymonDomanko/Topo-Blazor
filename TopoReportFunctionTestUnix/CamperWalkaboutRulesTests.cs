@@ -618,6 +618,43 @@ namespace TopoReportFunctionTest
             Assert.AreEqual(0, ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 11, 1), new DateTime(2026, 11, 30), false, false, true).Count(r => r.achievement_type != "additional_award"));
         }
 
+        private static List<ApprovalsListModel> WithRecorded() => Mixed().Concat(AwardCheckRows.ToRecordedRows(new[]
+        {
+            new RecordedAward { MemberId = "m2", FirstName = "Bo", LastName = "Bee", AwardId = "camper_award_10", AwardName = "Camper Award - 10 Nights", Day = new DateTime(2026, 9, 5) }
+        })).ToList();
+
+        [TestMethod]
+        public void AnAwardTerrainHoldsIsAPresentedRowDatedTheDayItIsRecorded()
+        {
+            var row = WithRecorded().Single(r => r.member_id == "m2");
+            Assert.AreEqual(new DateTime(2026, 9, 5), row.presented_date);
+            Assert.AreEqual(new DateTime(2026, 9, 5), row.submission_date);
+            Assert.IsNull(row.awarded_date);
+            Assert.AreEqual("Awarded", row.submission_outcome);
+            Assert.AreEqual("", row.to_award);
+            StringAssert.StartsWith(row.achievement_id, "terrain:");
+        }
+
+        [TestMethod]
+        public void HasBeenPresentedListsTheAwardsTerrainHolds()
+        {
+            var rows = ApprovalsFilter.Apply(WithRecorded(), new DateTime(2026, 6, 1), new DateTime(2026, 10, 31), false, true, true);
+            Assert.AreEqual(1, rows.Count(r => r.achievement_type == "additional_award"));
+            Assert.AreEqual("m2", rows.Single(r => r.achievement_type == "additional_award").member_id);
+        }
+
+        [TestMethod]
+        public void ToBePresentedLeavesOutTheAwardsTerrainHolds()
+        {
+            Assert.IsFalse(ApprovalsFilter.Apply(WithRecorded(), new DateTime(2026, 6, 1), new DateTime(2026, 10, 31), true, false, true).Any(r => r.member_id == "m2"));
+        }
+
+        [TestMethod]
+        public void AnAwardTerrainHoldsStillFollowsTheDateRange()
+        {
+            Assert.IsFalse(ApprovalsFilter.Apply(WithRecorded(), new DateTime(2026, 10, 1), new DateTime(2026, 10, 31), false, true, true).Any(r => r.member_id == "m2"));
+        }
+
         [TestMethod]
         public void ToBePresentedListsTheBadgesToHandOverIncludingThoseNotTheHighest()
         {
@@ -628,7 +665,7 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
-        public void HasBeenPresentedListsNoneOfThemBecauseTerrainOnlyHoldsPresentedOnes()
+        public void HasBeenPresentedLeavesOutTheBadgesStillToHandOver()
         {
             var rows = ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 6, 1), new DateTime(2026, 10, 31), false, true, true);
             Assert.AreEqual(0, rows.Count(r => r.achievement_type == "additional_award"));
