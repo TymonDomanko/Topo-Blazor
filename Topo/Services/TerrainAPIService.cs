@@ -14,6 +14,8 @@ using Topo.Model.Approvals;
 using Topo.Model.Progress;
 using Topo.Model.Wallchart;
 using Topo.Model.History;
+using ProgramWriteResult = Topo.Model.ProgramBuilder.TerrainWriteResult;
+using PatrolWriteResult = Topo.Model.PatrolPlanner.TerrainWriteResult;
 using Newtonsoft.Json.Linq;
 
 namespace Topo.Services
@@ -36,13 +38,13 @@ namespace Topo.Services
         public Task<TerrainCallResult> RecordAdditionalAwardsAsync(string unitId, IEnumerable<(string memberId, string awardId, DateTime awarded)> items);
         public Task<List<ProposedActivityModel>?> GetProposedActivitiesAsync(string unitId);
         // Adds an activity to the unit's calendar; what Terrain answered, as it did not need to be understood
-        public Task<TerrainWriteResult> CreateUnitEventAsync(string unitId, object body);
+        public Task<ProgramWriteResult> CreateUnitEventAsync(string unitId, object body);
         // An activity as Terrain gives it, unread, to be sent back with changes; blank when it could not be read
         public Task<string> GetEventRawAsync(string eventId);
         // Changes an activity in Terrain to the whole of what the text says
-        public Task<TerrainWriteResult> UpdateEventAsync(string eventId, string eventJson);
+        public Task<ProgramWriteResult> UpdateEventAsync(string eventId, string eventJson);
         // Cancels an activity: Terrain removes it from the calendars
-        public Task<TerrainWriteResult> DeleteEventAsync(string eventId);
+        public Task<ProgramWriteResult> DeleteEventAsync(string eventId);
         public Task<GetOASTreeResultsModel?> GetOASTreeAsync(string stream);
         public Task<GetOASTemplateResultModel?> GetOASTemplateAsync(string stream);
         public Task<GetUnitAchievementsResultsModel> GetUnitOASAchievements(string unit, string stream, string branch, int stage);
@@ -76,10 +78,10 @@ namespace Topo.Services
         public Task<GetMemberAchievementsResultModel> GetAllAchievementsForMember(string memberId);
         public Task<List<GroupUnit>> GetGroupUnitsAsync(string groupId);
         public Task<UnitPatrolModel[]?> GetUnitPatrolsAsync(string unitId);
-        public Task<(TerrainWriteResult result, string patrolId)> CreatePatrolAsync(string groupId, string unitId, string patrolName);
-        public Task<TerrainWriteResult> PutPatrolMemberAsync(string groupId, string patrolId, string memberId, string duty);
-        public Task<TerrainWriteResult> DeletePatrolMemberAsync(string groupId, string patrolId, string memberId);
-        public Task<TerrainWriteResult> PutUnitMemberAsync(string groupId, string unitId, string memberId, string duty, bool unitCouncil);
+        public Task<(PatrolWriteResult result, string patrolId)> CreatePatrolAsync(string groupId, string unitId, string patrolName);
+        public Task<PatrolWriteResult> PutPatrolMemberAsync(string groupId, string patrolId, string memberId, string duty);
+        public Task<PatrolWriteResult> DeletePatrolMemberAsync(string groupId, string patrolId, string memberId);
+        public Task<PatrolWriteResult> PutUnitMemberAsync(string groupId, string unitId, string memberId, string duty, bool unitCouncil);
         public Task<string> GetUnitAchievementsJsonAsync(string unitId, string type);
         public Task<string> GetTemplateJsonAsync(string templatePath);
     }
@@ -298,8 +300,8 @@ namespace Topo.Services
             return ProposedActivities.Parse(result);
         }
 
-        public Task<TerrainWriteResult> CreateUnitEventAsync(string unitId, object body)
-            => SendWrite(HttpMethod.Post, $"{eventsAddress}units/{unitId}/events", body);
+        public Task<ProgramWriteResult> CreateUnitEventAsync(string unitId, object body)
+            => SendProgramWrite(HttpMethod.Post, $"{eventsAddress}units/{unitId}/events", body);
 
         public async Task<string> GetEventRawAsync(string eventId)
         {
@@ -307,14 +309,14 @@ namespace Topo.Services
             return await SendRequest(HttpMethod.Get, $"{eventsAddress}events/{eventId}");
         }
 
-        public Task<TerrainWriteResult> UpdateEventAsync(string eventId, string eventJson)
-            => SendWrite(HttpMethod.Patch, $"{eventsAddress}events/{eventId}", eventJson);
+        public Task<ProgramWriteResult> UpdateEventAsync(string eventId, string eventJson)
+            => SendProgramWrite(HttpMethod.Patch, $"{eventsAddress}events/{eventId}", eventJson);
 
-        public Task<TerrainWriteResult> DeleteEventAsync(string eventId)
-            => SendWrite(HttpMethod.Delete, $"{eventsAddress}events/{eventId}");
+        public Task<ProgramWriteResult> DeleteEventAsync(string eventId)
+            => SendProgramWrite(HttpMethod.Delete, $"{eventsAddress}events/{eventId}");
 
         // A write, which unlike the reads says what Terrain answered: a refused one must not look like a success
-        private async Task<TerrainWriteResult> SendWrite(HttpMethod httpMethod, string requestUri, object? body = null)
+        private async Task<ProgramWriteResult> SendProgramWrite(HttpMethod httpMethod, string requestUri, object? body = null)
         {
             await RefreshTokenAsync();
 
@@ -328,12 +330,12 @@ namespace Topo.Services
                 var response = await _httpClient.SendAsync(httpRequest);
                 var responseContent = await response.Content.ReadAsStringAsync();
                 _logger.LogInformation($"Version: {_storageService?.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; Write: {httpMethod} {requestUri}; StatusCode: {(int)response.StatusCode}");
-                return new TerrainWriteResult { StatusCode = (int)response.StatusCode, Body = responseContent };
+                return new ProgramWriteResult { StatusCode = (int)response.StatusCode, Body = responseContent };
             }
             catch (Exception ex)
             {
                 _logger.LogInformation($"Version: {_storageService?.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; Write: {httpMethod} {requestUri}; Exception: {ex}");
-                return new TerrainWriteResult { StatusCode = 0, Body = ex.Message };
+                return new ProgramWriteResult { StatusCode = 0, Body = ex.Message };
             }
         }
 
@@ -718,7 +720,7 @@ namespace Topo.Services
         }
 
         // Terrain answers a new patrol with 200 and { id, unit_id, name }
-        public async Task<(TerrainWriteResult result, string patrolId)> CreatePatrolAsync(string groupId, string unitId, string patrolName)
+        public async Task<(PatrolWriteResult result, string patrolId)> CreatePatrolAsync(string groupId, string unitId, string patrolName)
         {
             var result = await SendWrite(HttpMethod.Post, $"{membersAddress}groups/{groupId}/patrols", new { name = patrolName, unit_id = unitId });
             var created = result.Success ? DeserializeObject<UnitPatrolModel>(result.Body) : null;
@@ -726,18 +728,18 @@ namespace Topo.Services
         }
 
         // Adds the member to the patrol, or changes their duty in it (204). It does not take them out of any other patrol.
-        public Task<TerrainWriteResult> PutPatrolMemberAsync(string groupId, string patrolId, string memberId, string duty)
+        public Task<PatrolWriteResult> PutPatrolMemberAsync(string groupId, string patrolId, string memberId, string duty)
             => SendWrite(HttpMethod.Put, $"{membersAddress}groups/{groupId}/patrols/{patrolId}/members/{memberId}", new { duty });
 
-        public Task<TerrainWriteResult> DeletePatrolMemberAsync(string groupId, string patrolId, string memberId)
+        public Task<PatrolWriteResult> DeletePatrolMemberAsync(string groupId, string patrolId, string memberId)
             => SendWrite(HttpMethod.Delete, $"{membersAddress}groups/{groupId}/patrols/{patrolId}/members/{memberId}");
 
         // Sets the member's unit duty and whether they are on the unit council. Terrain wants both every time.
-        public Task<TerrainWriteResult> PutUnitMemberAsync(string groupId, string unitId, string memberId, string duty, bool unitCouncil)
+        public Task<PatrolWriteResult> PutUnitMemberAsync(string groupId, string unitId, string memberId, string duty, bool unitCouncil)
             => SendWrite(HttpMethod.Put, $"{membersAddress}groups/{groupId}/units/{unitId}/members/{memberId}", new { duty, unit_council = unitCouncil });
 
         // Unlike SendRequest, which hides a failed call by returning an empty string, a write has to say whether it worked.
-        private async Task<TerrainWriteResult> SendWrite(HttpMethod httpMethod, string requestUri, object? body = null)
+        private async Task<PatrolWriteResult> SendWrite(HttpMethod httpMethod, string requestUri, object? body = null)
         {
             await RefreshTokenAsync();
 
@@ -751,12 +753,12 @@ namespace Topo.Services
                 var response = await _httpClient.SendAsync(httpRequest);
                 var responseContent = await response.Content.ReadAsStringAsync();
                 _logger.LogInformation($"Version: {_storageService?.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; Write: {httpMethod} {requestUri}; StatusCode: {(int)response.StatusCode}");
-                return new TerrainWriteResult { StatusCode = (int)response.StatusCode, Body = responseContent };
+                return new PatrolWriteResult { StatusCode = (int)response.StatusCode, Body = responseContent };
             }
             catch (Exception ex)
             {
                 _logger.LogInformation($"Version: {_storageService?.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; Write: {httpMethod} {requestUri}; Exception: {ex}");
-                return new TerrainWriteResult { StatusCode = 0, Body = ex.Message };
+                return new PatrolWriteResult { StatusCode = 0, Body = ex.Message };
             }
         }
 
