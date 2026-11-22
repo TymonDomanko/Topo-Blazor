@@ -91,7 +91,6 @@ namespace Topo.Services
         private async Task<List<GetMemberLogbookDetailResultModel>> GetLogbook(string memberId)
         {
             var entries = new List<GetMemberLogbookDetailResultModel>();
-            await _terrainAPIService.RevokeAssumedProfiles();
             await _terrainAPIService.AssumeProfile(memberId);
             try
             {

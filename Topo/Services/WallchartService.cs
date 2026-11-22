@@ -272,11 +272,12 @@ namespace Topo.Services
                     progress?.Invoke($"{member.first_name} {member.last_name} ({i + 1} of {youth.Count})");
                     await _terrainAPIService.AssumeProfile(member.id);
                     var metrics = await _terrainAPIService.GetMemberLogbookMetrics(member.id);
-                    await _terrainAPIService.RevokeAssumedProfiles();
                     var nights = metrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
                     var kms = (metrics.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;
                     totals[member.id] = (nights, kms);
                 }
+                // assuming each Scout replaced the one before, so the last is revoked here instead of after every Scout
+                await _terrainAPIService.RevokeAssumedProfiles();
             }
             catch
             {

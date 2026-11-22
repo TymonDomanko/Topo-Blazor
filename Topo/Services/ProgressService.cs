@@ -39,7 +39,6 @@ namespace Topo.Services
             progressDetailsPageViewModel.IntroToSectionDate = introToSectionDate?.ToString("dd/MM/yyyy") ?? "";
             progressDetailsPageViewModel.Milestones = await GetMilestoneSummaries(memberId);
             progressDetailsPageViewModel.OASSummaries = await GetOASSummaries(memberId);
-            await _terrainAPIService.RevokeAssumedProfiles();
             await _terrainAPIService.AssumeProfile(memberId);
             progressDetailsPageViewModel.Stats = await GetStats(memberId, introToSectionDate ?? new DateTime());
             await _terrainAPIService.RevokeAssumedProfiles();

@@ -54,7 +54,7 @@ namespace Topo.Services
 
         private async Task<MemberLogbook> ReadLogbookAsync(string memberId, string memberName)
         {
-            await _terrainAPIService.RevokeAssumedProfiles();
+            // assuming this Scout replaces the one before, so there is no revoke between Scouts (ReadLogbooksAsync revokes at the end)
             await _terrainAPIService.AssumeProfile(memberId);
             var getMemberLogbookMetrics = await _terrainAPIService.GetMemberLogbookMetrics(memberId);
             var totalNightsCamped = getMemberLogbookMetrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;

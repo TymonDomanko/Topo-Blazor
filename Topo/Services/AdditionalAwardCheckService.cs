@@ -172,7 +172,6 @@ namespace Topo.Services
                             await pacing.WaitForGapAsync();
                         try
                         {
-                            await _terrainAPIService.RevokeAssumedProfiles();
                             await _terrainAPIService.AssumeProfile(member.id);
                             pacing?.ProfileTakenOn();
                             pacing?.ThrowIfPageNeedsTerrain();
@@ -368,7 +367,6 @@ namespace Topo.Services
                 {
                     if (pacing != null)
                         await pacing.WaitForGapAsync();
-                    await _terrainAPIService.RevokeAssumedProfiles();
                     await _terrainAPIService.AssumeProfile(member.id);
                     pacing?.ProfileTakenOn();
                     pacing?.ThrowIfPageNeedsTerrain();

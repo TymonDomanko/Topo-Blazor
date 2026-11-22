@@ -56,7 +56,7 @@ namespace Topo.Services
                 var memberKVP = new KeyValuePair<string, string>(member.id, $"{member.first_name} {member.last_name}");
                 var firstEntry = additionalAwardsList.Count;
                 progress?.Invoke($"{(shortNames.TryGetValue(member.id, out var shortName) ? shortName : memberKVP.Value)} ({selectedMembers.IndexOf(member) + 1} of {selectedMembers.Count})");
-                await _terrainAPIService.RevokeAssumedProfiles();
+                // assuming the next Scout replaces the one before, so no revoke between Scouts; the last one is revoked after the loop
                 await _terrainAPIService.AssumeProfile(memberKVP.Key);
                 var getMemberLogbookMetrics = await _terrainAPIService.GetMemberLogbookMetrics(memberKVP.Key);
                 var totalNightsCamped = getMemberLogbookMetrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
