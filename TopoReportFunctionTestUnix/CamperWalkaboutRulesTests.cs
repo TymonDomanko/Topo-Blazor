@@ -610,10 +610,12 @@ namespace TopoReportFunctionTest
         }).ToList();
 
         [TestMethod]
-        public void TheDateRangeFilterAppliesToTheBadgesToo()
+        public void TheDateRangeDoesNotHideBadgesStillToHandOverButStillFiltersTerrainsApprovals()
         {
-            var rows = ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 10, 1), new DateTime(2026, 10, 31), false, false, true);
-            Assert.AreEqual(4, rows.Count, "the badge earned in June is outside the range");
+            var rows = ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 10, 3), new DateTime(2026, 10, 31), false, false, true);
+            Assert.AreEqual(3, rows.Count(r => r.achievement_type == "additional_award"), "earned in June and October, all still to hand over");
+            Assert.AreEqual(2, rows.Count(r => r.achievement_type != "additional_award"));
+            Assert.AreEqual(0, ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 11, 1), new DateTime(2026, 11, 30), false, false, true).Count(r => r.achievement_type != "additional_award"));
         }
 
         [TestMethod]

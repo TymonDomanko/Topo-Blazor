@@ -88,6 +88,7 @@ namespace Topo.Shared
             }),
             new("Settings", NavAudience.SignedIn, new NavItem[]
             {
+                new("Settings", "settings", "oi-cog", NavAudience.Leader),
                 new("Logout", "logout", "oi-lock-locked"),
                 new("Help", HelpUrl, "oi-info"),
                 new("Enable Logging", "logging", "oi-document", NavAudience.Leader,

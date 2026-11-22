@@ -67,32 +67,8 @@
         </div>
     </div>
 
-    <div class="mb-3" id="auto">
-        <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="auto-on" checked="@AutoEnabled" @onchange="AutoToggle" />
-            <label class="form-check-label" for="auto-on">Keep the list of Camper and Walkabout awards to hand over up to date automatically</label>
-        </div>
-        <div class="form-text">
-            While Topo is open, about once a day, when you have not been using it for a moment, Topo checks every Scout's logbook for Camper and
-            Walkabout Awards they have earned that Terrain has no record of, and lists them below. An award goes into Terrain when you present it on
-            the Mass awarding page. The one thing Topo records by itself is the lower levels of a kind when a higher level is already in Terrain
-            (a Scout holding Camper 50 gets Camper 10 and 25), dated the day their logbook says each was earned, or the day of the higher level if that is earlier or the logbook cannot say. Your own pages always go first.
-        </div>
-        @if (_autoAwards.IsRunning)
-        {
-            <div class="form-text" id="auto-running">Checking logbooks now...</div>
-        }
-        else if (!string.IsNullOrEmpty(_autoAwards.Settings.LastSummary) || _autoAwards.Settings.LastRunUtc.HasValue)
-        {
-            <div class="form-text" id="auto-status">
-                Last automatic check: @(_autoAwards.Settings.LastRunUtc.HasValue ? _autoAwards.Settings.LastRunUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "not finished yet").
-                @_autoAwards.Settings.LastSummary
-            </div>
-        }
-        @if (!string.IsNullOrEmpty(_autoAwards.Settings.LastError))
-        {
-            <div class="form-text text-danger" id="auto-error">@_autoAwards.Settings.LastError</div>
-        }
+    <div class="form-text mb-3" id="auto-note">
+        Camper and Walkabout Awards to hand over come from a check of each Scout's logbook that runs in the background; see <a href="settings">Settings</a>.
     </div>
 
     <div class="mt-3 mb-3 row">
