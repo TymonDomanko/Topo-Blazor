@@ -10,11 +10,13 @@ namespace Topo.Services
         Task<List<Event>> FindStoreEventsAsync(string userId, string groupId);
         // Every record in the group's store, from comments written by someone isTrustedAuthor accepts
         Task<BadgeStoreContents> ReadAsync(string userId, string groupId, Func<string, bool> isTrustedAuthor);
+        // The records and whether the group has a store event at all, from one switch of the group calendar
+        Task<BadgeStoreSnapshot> SnapshotAsync(string userId, string groupId, Func<string, bool> isTrustedAuthor);
 
         // Creates the group's store event. Only call this once the leader has agreed: it adds an event everyone in the group can see.
         Task<BadgeStoreWriteResult> CreateStoreEventAsync(string userId, string userName, string groupId);
         // Records that a member was awarded (and optionally presented) an additional award
-        Task<BadgeStoreWriteResult> RecordAwardAsync(string userId, string groupId, string memberId, string awardId, DateTime awarded, DateTime? presented, Func<string, bool> isTrustedAuthor);
+        Task<BadgeStoreWriteResult> RecordAwardAsync(string userId, string groupId, string memberId, string awardId, DateTime awarded, DateTime? presented, Func<string, bool> isTrustedAuthor, string supersededBy = "");
         // Takes a record back
         Task<BadgeStoreWriteResult> RevokeAsync(string userId, string groupId, string memberId, string awardId, Func<string, bool> isTrustedAuthor);
         // Deletes one comment, for undoing a record the signed-in leader wrote
@@ -62,10 +64,13 @@ namespace Topo.Services
             }
         }
 
-        public async Task<BadgeStoreContents> ReadAsync(string userId, string groupId, Func<string, bool> isTrustedAuthor)
+        public async Task<BadgeStoreContents> ReadAsync(string userId, string groupId, Func<string, bool> isTrustedAuthor) =>
+            (await SnapshotAsync(userId, groupId, isTrustedAuthor)).Contents;
+
+        public async Task<BadgeStoreSnapshot> SnapshotAsync(string userId, string groupId, Func<string, bool> isTrustedAuthor)
         {
             var events = await FindStoreEventsAsync(userId, groupId);
-            return await ReadEventsAsync(events, isTrustedAuthor);
+            return new BadgeStoreSnapshot { StoreEvents = events, Contents = await ReadEventsAsync(events, isTrustedAuthor) };
         }
 
         private async Task<BadgeStoreContents> ReadEventsAsync(IEnumerable<Event> storeEvents, Func<string, bool> isTrustedAuthor)
@@ -105,7 +110,7 @@ namespace Topo.Services
             return Failed("Terrain accepted the store event but it could not be found afterwards. Look for it in your organised events before trying again.");
         }
 
-        public async Task<BadgeStoreWriteResult> RecordAwardAsync(string userId, string groupId, string memberId, string awardId, DateTime awarded, DateTime? presented, Func<string, bool> isTrustedAuthor)
+        public async Task<BadgeStoreWriteResult> RecordAwardAsync(string userId, string groupId, string memberId, string awardId, DateTime awarded, DateTime? presented, Func<string, bool> isTrustedAuthor, string supersededBy = "")
         {
             if (string.IsNullOrWhiteSpace(memberId) || string.IsNullOrWhiteSpace(awardId))
                 return Failed("A member and an award are needed.");
@@ -116,10 +121,10 @@ namespace Topo.Services
                 return new BadgeStoreWriteResult { Outcome = BadgeStoreWriteOutcome.NoStoreEvent, Message = "The group has no store event yet." };
 
             var current = await ReadEventsAsync(events, isTrustedAuthor);
-            if (BadgeStoreWrites.IsAlreadyRecorded(current, memberId, awardId, awarded, presented))
+            if (BadgeStoreWrites.IsAlreadyRecorded(current, memberId, awardId, awarded, presented, supersededBy))
                 return new BadgeStoreWriteResult { Outcome = BadgeStoreWriteOutcome.AlreadyRecorded, EventId = storeEvent.id, Message = "The store already says this." };
 
-            return await PostAndConfirmAsync(userId, storeEvent.id, BadgeStoreReader.AwardText(memberId, awardId, awarded, presented));
+            return await PostAndConfirmAsync(userId, storeEvent.id, BadgeStoreReader.AwardText(memberId, awardId, awarded, presented, supersededBy));
         }
 
         public async Task<BadgeStoreWriteResult> RevokeAsync(string userId, string groupId, string memberId, string awardId, Func<string, bool> isTrustedAuthor)

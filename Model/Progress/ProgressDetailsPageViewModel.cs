@@ -59,6 +59,17 @@ namespace Topo.Model.Progress
         public int KmsHiked { get; set; }
         public int NightsCamped { get; set; }
         public int NightsCampedInSection { get; set; }
+        // The Camper and Walkabout Awards the Topo records hold for the member
+        public List<AwardRecordSummary> AdditionalAwards { get; set; } = new List<AwardRecordSummary>();
+    }
+
+    public class AwardRecordSummary
+    {
+        public string Name { get; set; } = string.Empty;
+        public DateTime? Awarded { get; set; }
+        public DateTime? Presented { get; set; }
+        // "Presented", "To be presented" or "Not the highest - award ..."
+        public string Status { get; set; } = string.Empty;
     }
 
     public class SIASummary

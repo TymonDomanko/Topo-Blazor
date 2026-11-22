@@ -17,10 +17,12 @@ namespace Topo.Services
         private readonly ITerrainAPIService _terrainAPIService;
         private readonly IApprovalsService _approvalService;
         private readonly IMembersService _membersService;
+        private readonly IAdditionalAwardCheckService _awardRecords;
         private List<ApprovalsListModel> approvals = new List<ApprovalsListModel>();
 
-        public WallchartService(StorageService storageService, ITerrainAPIService terrainAPIService, IApprovalsService approvalService, IMembersService membersService)
+        public WallchartService(StorageService storageService, ITerrainAPIService terrainAPIService, IApprovalsService approvalService, IMembersService membersService, IAdditionalAwardCheckService awardRecords)
         {
+            _awardRecords = awardRecords;
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
             _approvalService = approvalService;
@@ -73,6 +75,19 @@ namespace Topo.Services
             var peakAwardByMember = (await _terrainAPIService.GetUnitAchievementsOfType<GetPeakAwardsResultsModel>(selectedUnitId, "peak_award")).results.ToLookup(r => r.member_id);
 
             var wallchartItems = new List<WallchartItemModel>();
+            // The Camper and Walkabout Awards: Terrain's own records and the Topo records. The Wallchart is still made without the Topo records
+            // if they cannot be read.
+            var terrainAwards = (await _terrainAPIService.GetUnitAdditionalAwardAchievements(selectedUnitId)).results
+                .GroupBy(r => r.member_id).ToDictionary(g => g.Key, g => g.Select(r => r.achievement_meta.additional_award_id).ToList());
+            var storedAwards = new List<Topo.Model.AdditionalAwards.AwardRow>();
+            try
+            {
+                storedAwards = await _awardRecords.StoredAsync(selectedUnitId);
+            }
+            catch (Exception)
+            {
+            }
+
             foreach (var member in youth)
             {
                 progress?.Invoke($"{member.first_name} {member.last_name} ({youth.IndexOf(member) + 1} of {youth.Count})");
@@ -194,6 +209,11 @@ namespace Topo.Services
                 wallchartItem.NightsCamped = (int)totalNightsCamped;
                 wallchartItem.NightsCampedInSection = (int)totalNightsCampedInSection;
                 wallchartItem.KMsHiked = (int)totalKmsHiked;
+                var levels = Topo.Model.AdditionalAwards.HighestAwardLevels.For(member.id, terrainAwards.GetValueOrDefault(member.id) ?? new List<string>(), storedAwards);
+                wallchartItem.CamperAward = levels.camper;
+                wallchartItem.CamperAwardPresented = levels.camperPresented;
+                wallchartItem.WalkaboutAward = levels.walkabout;
+                wallchartItem.WalkaboutAwardPresented = levels.walkaboutPresented;
                 // SIA
                 var awardedSIAProjects = siaByMember[member.id].Where(r => r.section == section && r.status == "awarded");
                 var awardedSIAProjectsByArea = awardedSIAProjects.GroupBy(p => p.answers.special_interest_area_selection);

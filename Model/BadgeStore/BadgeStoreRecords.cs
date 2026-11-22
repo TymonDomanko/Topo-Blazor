@@ -11,6 +11,9 @@ namespace Topo.Model.BadgeStore
         public string AwardId { get; set; } = "";
         public DateTime Awarded { get; set; }
         public DateTime? Presented { get; set; }
+        // The id of a higher award that covers this one: only the highest badge is handed over, so this one has nothing to present of its own.
+        // Empty for an award that stands alone.
+        public string SupersededBy { get; set; } = "";
         // Who wrote the record, and when
         public string RecordedById { get; set; } = "";
         public DateTime RecordedAt { get; set; }
@@ -30,7 +33,7 @@ namespace Topo.Model.BadgeStore
     // Turns the comments on the store event into records.
     //
     // Each comment is one JSON object:
-    //   {"v":1,"t":"award","m":"<member id>","a":"<award id>","d":"yyyy-MM-dd","p":"yyyy-MM-dd"}   p is optional
+    //   {"v":1,"t":"award","m":"<member id>","a":"<award id>","d":"yyyy-MM-dd","p":"yyyy-MM-dd","x":"<higher award id>"}   p and x are optional
     //   {"v":1,"t":"revoke","m":"<member id>","a":"<award id>"}
     // For one member and award the latest comment wins: an award sets the record and a revoke removes it.
     // Only comments written by someone the caller trusts (an adult leader) are used, because at group level everyone in the
@@ -49,7 +52,7 @@ namespace Topo.Model.BadgeStore
                 .Where(c => !string.Equals(c.status, "deleted", StringComparison.OrdinalIgnoreCase))
                 .OrderBy(c => c.created_datetime).ThenBy(c => c.id, StringComparer.Ordinal))
             {
-                if (!TryParse(comment.text, out var kind, out var version, out var member, out var award, out var awarded, out var presented))
+                if (!TryParse(comment.text, out var kind, out var version, out var member, out var award, out var awarded, out var presented, out var supersededBy))
                 {
                     // A well formed record of a newer version is counted apart from a comment that is not a record at all
                     if (version > BadgeStoreSpec.SchemaVersion)
@@ -75,6 +78,7 @@ namespace Topo.Model.BadgeStore
                     AwardId = award,
                     Awarded = awarded,
                     Presented = presented,
+                    SupersededBy = supersededBy,
                     RecordedById = comment.member.id,
                     RecordedAt = comment.created_datetime,
                     CommentId = comment.id,
@@ -88,11 +92,13 @@ namespace Topo.Model.BadgeStore
         }
 
         // The text of the comment for an award or a revoke, in the format above (used when writing, and by the tests)
-        public static string AwardText(string memberId, string awardId, DateTime awarded, DateTime? presented)
+        public static string AwardText(string memberId, string awardId, DateTime awarded, DateTime? presented, string supersededBy = "")
         {
             var text = $"{{\"v\":{BadgeStoreSpec.SchemaVersion},\"t\":\"award\",\"m\":{Quote(memberId)},\"a\":{Quote(awardId)},\"d\":\"{awarded.ToString(DateFormat, CultureInfo.InvariantCulture)}\"";
             if (presented.HasValue)
                 text += $",\"p\":\"{presented.Value.ToString(DateFormat, CultureInfo.InvariantCulture)}\"";
+            if (supersededBy.Length > 0)
+                text += $",\"x\":{Quote(supersededBy)}";
             return text + "}";
         }
 
@@ -101,9 +107,9 @@ namespace Topo.Model.BadgeStore
 
         private static string Quote(string value) => JsonSerializer.Serialize(value);
 
-        private static bool TryParse(string text, out string kind, out int version, out string member, out string award, out DateTime awarded, out DateTime? presented)
+        private static bool TryParse(string text, out string kind, out int version, out string member, out string award, out DateTime awarded, out DateTime? presented, out string supersededBy)
         {
-            kind = member = award = "";
+            kind = member = award = supersededBy = "";
             version = 0;
             awarded = default;
             presented = null;
@@ -134,6 +140,7 @@ namespace Topo.Model.BadgeStore
                         return false;
                     presented = presentedDate;
                 }
+                supersededBy = Text(root, "x");
                 return true;
             }
             catch (JsonException)

@@ -182,6 +182,11 @@ namespace Topo.Services
                     approvalItem.achievement_type = item.achievement.type;
                     approvalItem.achievement_id = item.achievement.id;
                     approvalItem.achievement_name = ApprovalNames.AchievementName(item.achievement.type, item.achievement.achievement_meta);
+                    if (item.achievement.type == "outdoor_adventure_skill")
+                    {
+                        approvalItem.oas_line = $"{item.achievement.achievement_meta.stream}|{item.achievement.achievement_meta.branch}";
+                        approvalItem.oas_stage = item.achievement.achievement_meta.stage;
+                    }
                     TextInfo myTI = new CultureInfo("en-AU", false).TextInfo;
 
                     approvalItem.member_id = item.member.id;

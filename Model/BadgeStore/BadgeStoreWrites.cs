@@ -29,6 +29,13 @@ namespace Topo.Model.BadgeStore
         public bool Succeeded => Outcome != BadgeStoreWriteOutcome.Failed && Outcome != BadgeStoreWriteOutcome.NoStoreEvent;
     }
 
+    public class BadgeStoreSnapshot
+    {
+        public List<Event> StoreEvents { get; set; } = new List<Event>();
+        public BadgeStoreContents Contents { get; set; } = new BadgeStoreContents();
+        public bool StoreExists => StoreEvents.Count > 0;
+    }
+
     // What a call that changes Terrain came back with. Terrain's rejections can carry no CORS header, so from a browser a
     // failed write can arrive as no readable reply at all (StatusCode 0).
     public class TerrainCallResult
@@ -115,12 +122,12 @@ namespace Topo.Model.BadgeStore
             && e.start_datetime.ToUniversalTime().Date == BadgeStoreSpec.StartUtc.Date
             && !string.Equals(e.status, "cancelled", StringComparison.OrdinalIgnoreCase);
 
-        // Whether an award would only repeat what the store already says. A request with no presented date does not count
-        // as different from a record that has one, because posting it would take the presented date away.
-        public static bool IsAlreadyRecorded(BadgeStoreContents contents, string memberId, string awardId, DateTime awarded, DateTime? presented)
+        // Whether an award would only repeat what the store already says (same days, and the same higher award covering it). A request with
+        // no presented date does not count as different from a record that has one, because posting it would take the presented date away.
+        public static bool IsAlreadyRecorded(BadgeStoreContents contents, string memberId, string awardId, DateTime awarded, DateTime? presented, string supersededBy = "")
         {
             var existing = contents.Records.FirstOrDefault(r => r.MemberId == memberId && r.AwardId == awardId);
-            if (existing == null || existing.Awarded.Date != awarded.Date)
+            if (existing == null || existing.Awarded.Date != awarded.Date || existing.SupersededBy != supersededBy)
                 return false;
             return presented == null || existing.Presented?.Date == presented.Value.Date;
         }

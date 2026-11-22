@@ -1,5 +1,8 @@
 ﻿@inherits LayoutComponentBase
 @inject Topo.Services.StorageService _storageService
+@inject Topo.Services.IAutoAwardService _autoAwards
+@inject Topo.Model.BadgeStore.ActivityMonitor _activity
+@inject NavigationManager _navigation
 @implements IDisposable
 
 <div class="page">
@@ -22,10 +25,22 @@
     protected override void OnInitialized()
     {
         _storageService.OnChange += StateHasChanged;
+        // Going to another page is the leader using Topo, which the automatic Camper and Walkabout check keeps out of the way of
+        _navigation.LocationChanged += OnLocationChanged;
     }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        // Opening Topo is all it needs: this watches for a quiet moment and does its work then
+        if (firstRender)
+            _autoAwards.Start();
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => _activity.UserActivity();
 
     public void Dispose()
     {
         _storageService.OnChange -= StateHasChanged;
+        _navigation.LocationChanged -= OnLocationChanged;
     }
 }

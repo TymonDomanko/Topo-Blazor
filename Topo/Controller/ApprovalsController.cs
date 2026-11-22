@@ -13,7 +13,7 @@ using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class ApprovalsController : ComponentBase
+    public class ApprovalsController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -26,6 +26,12 @@ namespace Topo.Controller
 
         [Inject]
         public IApprovalsService _approvalsService { get; set; }
+
+        [Inject]
+        public IAdditionalAwardCheckService _additionalAwards { get; set; }
+
+        [Inject]
+        public IAutoAwardService _autoAwards { get; set; }
 
         [Inject]
         public NavigationManager NavigationManager { get; set; }
@@ -43,6 +49,8 @@ namespace Topo.Controller
             if (!_storageService.IsAuthenticated)
                 NavigationManager.NavigateTo("index");
 
+            // The automatic Camper and Walkabout check keeps its records up to date; this page shows them and its status
+            _autoAwards.Changed += OnAutoChanged;
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             model.ApprovalSearchFromDate = DateTime.Now.AddMonths(-2);
@@ -51,6 +59,28 @@ namespace Topo.Controller
             {
                 model.UnitId = _storageService.UnitId;
                 model.UnitName = _storageService.UnitName;
+            }
+        }
+
+        private void OnAutoChanged() => InvokeAsync(StateHasChanged);
+
+        public void Dispose() => _autoAwards.Changed -= OnAutoChanged;
+
+        public bool AutoEnabled => _autoAwards.Settings.Enabled;
+
+        internal async Task AutoToggle(ChangeEventArgs e) => await _autoAwards.SetEnabledAsync(e.Value is true);
+
+        // The Camper and Walkabout Awards the Topo records hold for the unit, as rows like the others. If the records cannot be read the
+        // list is still shown without them.
+        private async Task<List<ApprovalsListModel>> AdditionalAwardRowsAsync(string unitId)
+        {
+            try
+            {
+                return AwardCheckRows.ToApprovalRows(await _additionalAwards.StoredAsync(unitId));
+            }
+            catch (Exception)
+            {
+                return new List<ApprovalsListModel>();
             }
         }
 
@@ -68,13 +98,10 @@ namespace Topo.Controller
             if (!string.IsNullOrEmpty(model.UnitName))
             {
                 model.Approvals = await _approvalsService.GetApprovalListItems(_storageService.UnitId);
-                model.Approvals = model.Approvals?.Where(a => a.submission_date >= model.ApprovalSearchFromDate && a.submission_date <= model.ApprovalSearchToDate.AddDays(1)).ToList() ?? new List<ApprovalsListModel>();
-                if (model.ToBePresented)
-                    model.Approvals = model.Approvals.Where(a => a.submission_type == "Award" && !a.presented_date.HasValue).ToList();
-                if (model.IsPresented)
-                    model.Approvals = model.Approvals.Where(a => a.presented_date.HasValue && a.presented_date != a.awarded_date).ToList();
-                if (!model.ShowRejected)
-                    model.Approvals = model.Approvals.Where(a => a.submission_outcome.ToLower() != "rejected").ToList();
+                model.Approvals = (model.Approvals ?? new List<ApprovalsListModel>()).Concat(await AdditionalAwardRowsAsync(_storageService.UnitId)).ToList();
+                // Worked out over everything, before the filters, so a stage is not called the highest just because a higher one is out of the date range
+                ApprovalsToAward.ApplyOas(model.Approvals);
+                model.Approvals = ApprovalsFilter.Apply(model.Approvals, model.ApprovalSearchFromDate, model.ApprovalSearchToDate, model.ToBePresented, model.IsPresented, model.ShowRejected);
             }
         }
 

@@ -13,12 +13,15 @@ namespace Topo.Services
         private readonly StorageService _storageService;
         private readonly ITerrainAPIService _terrainAPIService;
         private readonly IReportService _reportService;
+        private readonly IAdditionalAwardCheckService _awardRecords;
         //private readonly IApprovalsService _approvalsService;
 
         public AdditionalAwardService(ITerrainAPIService terrainAPIService,
             StorageService storageService,
-            IReportService reportService) //, IApprovalsService approvalsService)
+            IReportService reportService, //, IApprovalsService approvalsService)
+            IAdditionalAwardCheckService awardRecords)
         {
+            _awardRecords = awardRecords;
             _terrainAPIService = terrainAPIService;
             _storageService = storageService;
             _reportService = reportService;
@@ -45,6 +48,15 @@ namespace Topo.Services
             var unitAchievementsResult = await _terrainAPIService.GetUnitAdditionalAwardAchievements(selectedUnitId ?? "");
             var approvedAwards = new List<ApprovalsListModel>(); // await _approvalsService.GetApprovalListItems(selectedUnitId ?? "");
             var additionalAwardsList = new List<AdditionalAwardListModel>();
+            // The Topo records are an extra source: if they cannot be read the report is made from Terrain's records alone
+            var storedAwards = new List<AwardRow>();
+            try
+            {
+                storedAwards = await _awardRecords.StoredAsync(selectedUnitId ?? "");
+            }
+            catch (Exception)
+            {
+            }
             var lastMemberProcessed = "";
             var memberName = "";
             foreach (var memberKVP in selectedMembers)
@@ -99,6 +111,13 @@ namespace Topo.Services
                         AwardUnits = awardSpecification?.additionalAwardValue ?? 0
                     });
                 }
+
+                // Camper and Walkabout Awards the Topo records hold that Terrain has no record of: flagged to be presented (orange), presented
+                // (green) or covered by a higher level. They go in before the next level is worked out, so that is the one after them.
+                var terrainKeys = unitAchievementsResult.results.Where(r => r.member_id == memberKVP.Key).Select(r => r.member_id + "|" + r.achievement_meta.additional_award_id).ToHashSet();
+                additionalAwardsList.AddRange(AdditionalAwardReportRows.FromStore(
+                    storedAwards.Where(r => r.MemberId == memberKVP.Key), terrainKeys, awardSpecificationsList.ToDictionary(a => a.id),
+                    new Dictionary<string, (string name, int nights, int kms)> { [memberKVP.Key] = (memberKVP.Value, (int)totalNightsCamped, (int)totalKmsHiked) }));
 
                 // Get Next Camper/Walkabout Award
                 var highestCamperAward = additionalAwardsList.Where(a => a.MemberName == memberKVP.Value && a.AwardId.StartsWith("camper"))

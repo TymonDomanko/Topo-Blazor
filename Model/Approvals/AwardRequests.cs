@@ -1,3 +1,5 @@
+using Topo.Model.AdditionalAwards;
+
 namespace Topo.Model.Approvals
 {
     // One pending award request, and whether the signed in leader can act on it. Terrain disables the Award button on a
@@ -8,6 +10,8 @@ namespace Topo.Model.Approvals
         public PendingApprovalItem Item { get; init; } = new();
         public bool CanAward { get; init; }
         public string Reason { get; init; } = string.Empty;
+        // A Camper or Walkabout Award flagged in the Topo records, which has no award request in Terrain
+        public bool IsStoreAward => Item.SubmissionId.StartsWith(PendingApprovalItem.StoreIdPrefix, StringComparison.Ordinal);
     }
 
     // All of one person's pending awards
@@ -15,6 +19,8 @@ namespace Topo.Model.Approvals
     {
         public string MemberId { get; init; } = string.Empty;
         public string Name { get; init; } = string.Empty;
+        // "Last First", which the list is in order of
+        public string SortName { get; init; } = string.Empty;
         public List<AwardRequest> Awards { get; init; } = new();
     }
 
@@ -33,6 +39,53 @@ namespace Topo.Model.Approvals
         // Only the people whose member id is in the set (for example those who attended an event), in the same order
         public AwardRequestList OnlyMembers(ISet<string> memberIds) =>
             new() { People = People.Where(p => memberIds.Contains(p.MemberId)).ToList() };
+
+        // The Camper and Walkabout awards flagged as to be presented, listed with the pending awards as one more kind of badge.
+        // They have no award request in Terrain, so each gets an id that starts with PendingApprovalItem.StoreIdPrefix.
+        public AwardRequestList WithAdditionalAwards(IEnumerable<AwardRow> toBePresented)
+        {
+            var rows = toBePresented.Where(r => r.Status == AwardRowStatus.ToBePresented).ToList();
+            if (rows.Count == 0)
+                return this;
+
+            var people = People.ToDictionary(p => p.MemberId, p => new AwardPerson { MemberId = p.MemberId, Name = p.Name, SortName = p.SortName, Awards = p.Awards.ToList() });
+            foreach (var row in rows)
+            {
+                if (!people.TryGetValue(row.MemberId, out var person))
+                {
+                    person = new AwardPerson { MemberId = row.MemberId, Name = row.MemberName, SortName = row.SortName.Length > 0 ? row.SortName : row.MemberName };
+                    people[row.MemberId] = person;
+                }
+                person.Awards.Add(new AwardRequest
+                {
+                    CanAward = true,
+                    Item = new PendingApprovalItem
+                    {
+                        SubmissionId = PendingApprovalItem.StoreIdPrefix + row.Key,
+                        SubmissionType = "award",
+                        SubmissionDate = row.Earned ?? DateTime.Today,
+                        MemberId = row.MemberId,
+                        MemberName = row.MemberName,
+                        AchievementId = row.AwardId,
+                        AchievementType = "additional_award",
+                        AchievementName = row.AwardName
+                    }
+                });
+            }
+            foreach (var person in people.Values)
+                person.Awards.Sort((a, b) =>
+                {
+                    var byName = string.Compare(a.Item.AchievementName, b.Item.AchievementName, StringComparison.CurrentCultureIgnoreCase);
+                    if (byName != 0) return byName;
+                    var byDate = a.Item.SubmissionDate.CompareTo(b.Item.SubmissionDate);
+                    return byDate != 0 ? byDate : string.CompareOrdinal(a.Item.SubmissionId, b.Item.SubmissionId);
+                });
+            return new AwardRequestList
+            {
+                People = people.Values.OrderBy(p => p.SortName, StringComparer.CurrentCultureIgnoreCase).ThenBy(p => p.MemberId, StringComparer.Ordinal).ToList(),
+                Hidden = Hidden
+            };
+        }
 
         // People are in alphabetical order by last name then first name, and a person's awards by achievement then by
         // when they were submitted. A request that already has an "awarded" response recorded, or that the leader has
@@ -60,6 +113,7 @@ namespace Topo.Model.Approvals
                         {
                             MemberId = g.Key,
                             Name = $"{first.first_name} {first.last_name}".Trim(),
+                            SortName = $"{first.last_name} {first.first_name}".Trim(),
                             Awards = g.Select(r => ToAwardRequest(r, currentMemberId))
                                 .OrderBy(a => a.Item.AchievementName, StringComparer.CurrentCultureIgnoreCase)
                                 .ThenBy(a => a.Item.SubmissionDate)

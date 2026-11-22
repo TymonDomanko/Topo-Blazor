@@ -32,6 +32,10 @@
 {
     <p>Reading the pending awards from Terrain...</p>
 }
+@if (!string.IsNullOrEmpty(StoreNote))
+{
+    <div class="alert alert-warning" id="store-note" role="alert">@StoreNote</div>
+}
 else if (!string.IsNullOrEmpty(LoadError))
 {
     <div class="alert alert-danger" role="alert">@LoadError</div>
@@ -120,6 +124,10 @@ else
                 </ul>
                 <p class="mb-1">Please make sure these achievements have been awarded in a Scouts ceremony first.</p>
                 <p class="text-danger mb-2">This sends each award to Terrain and cannot be undone from Topo.</p>
+                @if (chosen.Any(a => a.IsStoreAward))
+                {
+                    <p class="mb-2" id="store-note-confirm">Camper and Walkabout awards have no award request in Terrain. Each is recorded as presented on that date in the Topo records event in Terrain, where everyone in the group can see it (ids and dates only).</p>
+                }
                 <button type="button" class="btn btn-warning" id="confirm-yes" @onclick="ConfirmAwardClick">Confirm award</button>
                 <button type="button" class="btn btn-outline-secondary" id="confirm-cancel" @onclick="CancelConfirmClick">Cancel</button>
             </div>
@@ -195,7 +203,7 @@ else
                                    disabled="@(!award.CanAward || IsAwarding)"
                                    @onchange="() => ToggleAward(id)" />
                             <label class="form-check-label" for="award-@id">@award.Item.AchievementName</label>
-                            <span class="text-muted ms-2">submitted @award.Item.SubmissionDate.ToLocalTime().ToString("dd/MM/yyyy")</span>
+                            <span class="text-muted ms-2">@(award.IsStoreAward ? $"earned {award.Item.SubmissionDate:dd/MM/yyyy}" : $"submitted {award.Item.SubmissionDate.ToLocalTime():dd/MM/yyyy}")</span>
                             @if (!award.CanAward)
                             {
                                 <span class="text-muted ms-2">(@award.Reason)</span>

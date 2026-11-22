@@ -4,6 +4,7 @@ using System.Reflection;
 using Topo.Model.Members;
 using Topo.Model.Milestone;
 using Topo.Model.OAS;
+using Topo.Model.AdditionalAwards;
 using Topo.Model.Progress;
 
 namespace Topo.Services
@@ -19,9 +20,11 @@ namespace Topo.Services
         private readonly ITerrainAPIService _terrainAPIService;
         private readonly IMembersService _memberService;
         private int _oasProgressionCount = 0;
+        private readonly IAdditionalAwardCheckService _awardRecords;
 
-        public ProgressService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService memberService)
+        public ProgressService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService memberService, IAdditionalAwardCheckService awardRecords)
         {
+            _awardRecords = awardRecords;
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
             _memberService = memberService;
@@ -317,6 +320,15 @@ namespace Topo.Services
             stats.KmsHiked = (int)totalKmsHiked;
             stats.NightsCamped = (int)totalNightsCamped;
             stats.NightsCampedInSection = (int)totalNightsCampedInSection;
+
+            // The Camper and Walkabout Awards the Topo records hold for this member; the page is still shown without them if they cannot be read
+            try
+            {
+                stats.AdditionalAwards = AwardRecordSummaries.ForMember(await _awardRecords.StoredAsync(_storageService.UnitId), memberId);
+            }
+            catch (Exception)
+            {
+            }
 
             return stats;
         }

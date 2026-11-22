@@ -41,7 +41,7 @@ Each record is **one comment** on the event (`POST events /events/{eventId}/comm
 The text is one JSON object:
 
 ```json
-{"v":1,"t":"award","m":"<member id>","a":"<award id>","d":"2026-08-26","p":"2026-09-02"}
+{"v":1,"t":"award","m":"<member id>","a":"<award id>","d":"2026-08-26","p":"2026-09-02","x":"<higher award id>"}
 {"v":1,"t":"revoke","m":"<member id>","a":"<award id>"}
 ```
 
@@ -53,6 +53,7 @@ The text is one JSON object:
 | `a` | The Terrain additional award id, for example `camper_award_10`, `walkabout_50`, `first_aid` (the list is `GET templates /additional-awards/specifications.json`) |
 | `d` | Date awarded, `yyyy-MM-dd` (required for `award`) |
 | `p` | Date presented, `yyyy-MM-dd` (optional) |
+| `x` | Optional. The award id of a higher level of the same kind that covers this one. Only the highest badge is handed over, so an award with an `x` and no `p` has nothing of its own to present. A reader that does not know `x` simply shows it as to be presented |
 
 Rules for reading:
 
@@ -64,6 +65,7 @@ Rules for reading:
 - A comment that is not valid JSON, is missing a field, or has an unparseable date is ignored and counted.
 - A record with a `v` **higher than the reader understands** is left alone and counted. It is not guessed at.
 - Comments with `status` `deleted` are ignored. Unknown extra fields are ignored.
+- A record with `x` and no `p` is **not the highest**: it is listed apart from the awards to be presented. A record with `p` is presented, whether or not it has `x`.
 - Reading and writing the same record any number of times is safe.
 
 ## Writing
@@ -79,6 +81,12 @@ Topo always shows the leader what will be written first and asks before changing
 - **Record an award:** post an `award` comment. Topo reads the store first and does not post it again if the store already
   says the same (a request with no presented date never takes away a presented date already recorded). It then reads the
   comments back to confirm it is there.
+- **Camper and Walkabout awards (how Topo records a missing level):** the badge is only handed over at the highest level, so a missing
+  level is written by looking at the higher levels of the same kind. If a higher level was already presented (Terrain has a record, or
+  the store says presented), the missing level is written as awarded and presented on the same day as the nearest higher presented
+  level. Otherwise, if a higher level is still to be presented, the highest of those is the one to present and the lower ones are
+  written with `x` pointing at it. Otherwise it is written as to be presented. When the highest is later presented, the levels with
+  `x` pointing at it are written as presented the same day.
 - **Take a record back:** post a `revoke`, or delete the comment you wrote (`DELETE events /events/{eventId}/comments/{commentId}`).
 - **Which event:** if more than one store event exists, writes go to the one with the lowest id, so two leaders never split
   the records; reads merge all of them.
