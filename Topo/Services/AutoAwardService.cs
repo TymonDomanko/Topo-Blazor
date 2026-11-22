@@ -15,8 +15,9 @@ namespace Topo.Services
     }
 
     // Keeps the list of Camper and Walkabout awards to hand over up to date with nobody doing anything but having Topo open: about once
-    // a day, when the leader has not used Topo for a little while, it checks every Scout's logbook for awards Terrain has no record of. It
-    // only reads: nothing goes into Terrain until a leader presents an award.
+    // a day, when the leader has not used Topo for a little while, it checks every Scout's logbook for awards Terrain has no record of. The
+    // badge to hand over is only listed: it goes into Terrain when a leader presents it. The one thing it writes is the lower levels of a
+    // kind when a higher level is already recorded in Terrain, since those were awarded too.
     //
     // Pages come first. It only starts a Scout in a gap between the leader's own requests, and if a page needs Terrain while a Scout's
     // profile is taken on it hands the profile back at once and stops, to try again a few minutes later. It runs only while Topo is open
@@ -129,8 +130,12 @@ namespace Topo.Services
 
                     Settings.LastSummary = $"Checked {result.MembersChecked} Scouts: {result.ToBePresented} awards to hand over" +
                         (result.NotHighest > 0 ? $" and {result.NotHighest} more covered by a higher level" : "") +
+                        (result.LowerLevelsRecorded > 0 ? $"; recorded {result.LowerLevelsRecorded} lower levels in Terrain" : "") +
                         (result.MembersNotRead.Count > 0 ? $"; could not read {result.MembersNotRead.Count} Scouts" : "") + ".";
-                    Settings.LastRunUtc = DateTime.UtcNow;
+                    if (result.Failures.Count > 0)
+                        Settings.LastError = $"{result.Failures.Count} could not be recorded: {result.Failures[0]}";
+                    else
+                        Settings.LastRunUtc = DateTime.UtcNow;
                 }
             }
             catch (Exception ex)

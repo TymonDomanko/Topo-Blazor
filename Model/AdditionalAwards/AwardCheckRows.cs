@@ -117,6 +117,30 @@ namespace Topo.Model.AdditionalAwards
                 .ToList();
         }
 
+        // The levels below one Terrain holds that Terrain has no record of. A higher badge being awarded means the lower ones were too, so each is
+        // recorded as awarded on the same day as the nearest higher level Terrain holds. terrainRecordDates holds Terrain's own records
+        // (member|award -> the day awarded); only the members asked for are looked at.
+        public static List<(string memberId, AwardTier tier, DateTime day)> LowerLevels(IEnumerable<AwardTier> tiers, IReadOnlyDictionary<string, DateTime> terrainRecordDates, IEnumerable<string> memberIds)
+        {
+            var tierList = tiers.ToList();
+            var lower = new List<(string, AwardTier, DateTime)>();
+            foreach (var memberId in memberIds.Distinct())
+                foreach (var family in tierList.GroupBy(t => t.Family))
+                {
+                    var ordered = family.OrderBy(t => t.Threshold).ToList();
+                    for (var i = 0; i < ordered.Count; i++)
+                    {
+                        if (terrainRecordDates.ContainsKey(memberId + "|" + ordered[i].Id))
+                            continue;
+                        // the nearest level above that Terrain holds gives the day
+                        var above = ordered.Skip(i + 1).FirstOrDefault(t => terrainRecordDates.ContainsKey(memberId + "|" + t.Id));
+                        if (above != null)
+                            lower.Add((memberId, ordered[i], terrainRecordDates[memberId + "|" + above.Id]));
+                    }
+                }
+            return lower;
+        }
+
         // The lower levels a presented one covers: presenting the badge to hand over records them too, so Terrain's record is complete
         public static List<AwardRow> CoveredBy(AwardRow row, IEnumerable<AwardRow> pending) =>
             pending.Where(r => r.MemberId == row.MemberId && r.Status == AwardRowStatus.NotHighest && r.SupersededBy == row.AwardId).ToList();
