@@ -114,12 +114,16 @@ namespace Topo.Controller
 
         private async Task ReadAsync(List<KeyValuePair<string, string>> unread, int version, CancellationToken cancellationToken)
         {
+            var failed = new List<string>();
             try
             {
                 await _LogbookService.ReadLogbooksAsync(unread,
                     logbook => { if (version == _loadVersion) { _logbooks[logbook.MemberId] = logbook; InvokeAsync(StateHasChanged); } },
                     step => { if (version == _loadVersion) { Progress = step; InvokeAsync(StateHasChanged); } },
-                    cancellationToken);
+                    cancellationToken,
+                    name => failed.Add(name));
+                if (version == _loadVersion && failed.Count > 0)
+                    ErrorMessage = $"Couldn't read the logbook of {string.Join(", ", failed)}; Terrain would not give it.";
             }
             catch (OperationCanceledException)
             {

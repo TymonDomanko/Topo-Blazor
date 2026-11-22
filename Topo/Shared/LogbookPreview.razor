@@ -71,14 +71,14 @@
     // "personal_growth" as "personal growth"
     private static string Words(string text) => text.Replace('_', ' ');
 
-    // The rest of what the Scout wrote about it, on a line under the activity
+    // The rest of what the Scout wrote about it, on a line under the activity. Terrain's "N/A" for a question not answered is left out.
     private static string More(MemberLogbookReportViewModel entry) =>
         string.Join(" · ", new[]
         {
             entry.Location,
             string.IsNullOrWhiteSpace(entry.ActivityLead) ? "" : "led by " + entry.ActivityLead,
             string.IsNullOrWhiteSpace(entry.VerifierName) ? "" : "verified by " + entry.VerifierName,
-            string.IsNullOrWhiteSpace(entry.Weather) ? "" : entry.Weather,
-            string.IsNullOrWhiteSpace(entry.Grade) ? "" : entry.Grade
-        }.Where(t => !string.IsNullOrWhiteSpace(t)));
+            entry.Weather,
+            entry.Grade
+        }.Where(t => !string.IsNullOrWhiteSpace(t) && !t.Trim().Equals("N/A", StringComparison.OrdinalIgnoreCase)));
 }

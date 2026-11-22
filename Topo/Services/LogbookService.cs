@@ -8,9 +8,10 @@ namespace Topo.Services
     {
         public Task<List<MemberLogbookReportViewModel>> GenerateLogbookData(List<KeyValuePair<string, string>> selectedMembers);
         // Each Scout's totals and entries, read one Scout at a time (a logbook is only readable with that Scout's profile taken on).
-        // onRead is told about each Scout as soon as they are read, so a page can show them while the rest are still coming.
+        // onRead is told about each Scout as soon as they are read, so a page can show them while the rest are still coming. A Scout whose
+        // logbook Terrain will not give (or that cannot be read) is passed to onFailed by name and the others carry on.
         public Task<List<MemberLogbook>> ReadLogbooksAsync(IReadOnlyList<KeyValuePair<string, string>> members, Action<MemberLogbook>? onRead = null,
-            Action<string>? progress = null, CancellationToken cancellationToken = default);
+            Action<string>? progress = null, CancellationToken cancellationToken = default, Action<string>? onFailed = null);
     }
     public class LogbookService : ILogbookService
     {
@@ -25,7 +26,7 @@ namespace Topo.Services
             MemberLogbook.ReportRows(await ReadLogbooksAsync(selectedMembers));
 
         public async Task<List<MemberLogbook>> ReadLogbooksAsync(IReadOnlyList<KeyValuePair<string, string>> members, Action<MemberLogbook>? onRead = null,
-            Action<string>? progress = null, CancellationToken cancellationToken = default)
+            Action<string>? progress = null, CancellationToken cancellationToken = default, Action<string>? onFailed = null)
         {
             var logbooks = new List<MemberLogbook>();
             try
@@ -34,7 +35,16 @@ namespace Topo.Services
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     progress?.Invoke($"{members[i].Value} ({i + 1} of {members.Count})");
-                    var logbook = await ReadLogbookAsync(members[i].Key, members[i].Value);
+                    MemberLogbook logbook;
+                    try
+                    {
+                        logbook = await ReadLogbookAsync(members[i].Key, members[i].Value);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        onFailed?.Invoke(members[i].Value);
+                        continue;
+                    }
                     logbooks.Add(logbook);
                     onRead?.Invoke(logbook);
                 }
