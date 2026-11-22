@@ -19,22 +19,17 @@ namespace Topo
             if (_activityMonitor.InBackground)
                 return await base.SendAsync(request, cancellationToken);
 
+            _spinnerService.Show();
             try
             {
-                _spinnerService.Show();
                 // A page's request goes first: if background work has a Scout's profile taken on, this waits only for it to be handed back
                 await _activityMonitor.PageRequestStartingAsync();
-                //  await Task.Delay(1000);
-                var response = await base.SendAsync(request, cancellationToken);
-                _activityMonitor.RequestEnded();
-                _spinnerService.Hide();
-                return response;
+                return await base.SendAsync(request, cancellationToken);
             }
-            catch (Exception ex)
+            finally
             {
                 _activityMonitor.RequestEnded();
                 _spinnerService.Hide();
-                throw;
             }
         }
     }
