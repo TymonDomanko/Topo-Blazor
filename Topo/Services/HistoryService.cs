@@ -1,3 +1,4 @@
+using Topo.Model;
 using Topo.Model.History;
 using Topo.Model.Logbook;
 
@@ -29,21 +30,29 @@ namespace Topo.Services
                 CurrentSection = SafeSection()
             };
 
-            progress?.Invoke($"{memberName}: milestones");
-            input.Milestones = await _terrainAPIService.GetMilestoneResultsForMember(memberId);
-            progress?.Invoke($"{memberName}: Outdoor Adventure Skills");
-            input.Oas = await _terrainAPIService.GetOASResultsForMember(memberId);
-            progress?.Invoke($"{memberName}: Special Interest Areas");
-            input.Sia = await _terrainAPIService.GetSIAResultsForMember(memberId);
-            progress?.Invoke($"{memberName}: additional awards");
-            input.AdditionalAwards = await _terrainAPIService.GetAdditionalAwardResultsForMember(memberId);
-            progress?.Invoke($"{memberName}: introductions");
-            input.IntroToScouting = await _terrainAPIService.GetIntroductionToScoutingResultsForMember(memberId);
-            input.IntroToSection = await _terrainAPIService.GetIntroductionToSectionResultsForMember(memberId);
-            progress?.Invoke($"{memberName}: all achievements");
-            input.AllAchievements = await _terrainAPIService.GetAllAchievementsForMember(memberId);
-            input.UnitNames = await GetUnitNames();
-            input.AwardNames = await AdditionalAwardNames.Get(_terrainAPIService);
+            progress?.Invoke($"{memberName}: milestones, skills, awards and the rest");
+            // None of these depends on another, and none needs the member's profile taken on, so they are all asked for at
+            // once instead of one after another.
+            var milestones = _terrainAPIService.GetMilestoneResultsForMember(memberId);
+            var oas = _terrainAPIService.GetOASResultsForMember(memberId);
+            var sia = _terrainAPIService.GetSIAResultsForMember(memberId);
+            var additionalAwards = _terrainAPIService.GetAdditionalAwardResultsForMember(memberId);
+            var introToScouting = _terrainAPIService.GetIntroductionToScoutingResultsForMember(memberId);
+            var introToSection = _terrainAPIService.GetIntroductionToSectionResultsForMember(memberId);
+            var allAchievements = _terrainAPIService.GetAllAchievementsForMember(memberId);
+            var unitNames = GetUnitNames();
+            var awardNames = AdditionalAwardNames.Get(_terrainAPIService);
+            await Task.WhenAll(milestones, oas, sia, additionalAwards, introToScouting, introToSection, allAchievements, unitNames, awardNames);
+            input.Milestones = milestones.Result;
+            input.Oas = oas.Result;
+            input.Sia = sia.Result;
+            input.AdditionalAwards = additionalAwards.Result;
+            input.IntroToScouting = introToScouting.Result;
+            input.IntroToSection = introToSection.Result;
+            input.AllAchievements = allAchievements.Result;
+            input.UnitNames = unitNames.Result;
+            input.AwardNames = awardNames.Result;
+            // the logbook needs the member's profile taken on, so it comes after
             progress?.Invoke($"{memberName}: logbook");
             input.Logbook = await GetLogbook(memberId);
 
@@ -89,9 +98,10 @@ namespace Topo.Services
                 var summary = await _terrainAPIService.GetMemberLogbookSummary(memberId);
                 if (summary != null)
                 {
-                    foreach (var item in summary.results)
+                    // each entry's detail is a request of its own: read a few at a time, kept in the order listed
+                    var details = await ReadsAtOnce.SelectAsync(summary.results, item => _terrainAPIService.GetMemberLogbookDetail(memberId, item.id));
+                    foreach (var detail in details)
                     {
-                        var detail = await _terrainAPIService.GetMemberLogbookDetail(memberId, item.id);
                         if (detail != null)
                             entries.Add(detail);
                     }
