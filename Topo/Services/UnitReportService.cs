@@ -11,7 +11,9 @@ namespace Topo.Services
     {
         public Task<UnitReportModel> GetUnitReport(string unitId, DateTime from, DateTime to, string[] calendarIds, Action<string>? progress = null, CancellationToken cancellationToken = default);
         // Every event in the range from the chosen calendars, in full (attendance, logbook data) with its scope
-        public Task<List<UnitEventInput>> GetEventsForCalendars(DateTime from, DateTime to, string[] calendarIds, CancellationToken cancellationToken = default, Action<string>? progress = null);
+        // eventsRead, when given, remembers each event read (by id) so a later read for the same page load does not read it again
+        public Task<List<UnitEventInput>> GetEventsForCalendars(DateTime from, DateTime to, string[] calendarIds, CancellationToken cancellationToken = default, Action<string>? progress = null,
+            IDictionary<string, Topo.Model.Program.GetEventResultModel>? eventsRead = null);
     }
 
     public class UnitReportService : IUnitReportService
@@ -81,7 +83,8 @@ namespace Topo.Services
 
         // Terrain only shows the calendars the user has switched on, so they are switched to the chosen ones and back. The switch back is made
         // as soon as the events are listed, while their details are being read, as the details do not depend on which calendars are on.
-        public async Task<List<UnitEventInput>> GetEventsForCalendars(DateTime from, DateTime to, string[] calendarIds, CancellationToken cancellationToken = default, Action<string>? progress = null)
+        public async Task<List<UnitEventInput>> GetEventsForCalendars(DateTime from, DateTime to, string[] calendarIds, CancellationToken cancellationToken = default, Action<string>? progress = null,
+            IDictionary<string, Topo.Model.Program.GetEventResultModel>? eventsRead = null)
         {
             // one read at a time switches the calendars, whatever page asked for it
             using var calendarLock = await _programService.LockCalendarsAsync(cancellationToken);
@@ -100,7 +103,7 @@ namespace Topo.Services
             var reset = _programService.ResetCalendar();
             try
             {
-                return await ReadEventDetails(summaries, cancellationToken, progress);
+                return await ReadEventDetails(summaries, cancellationToken, progress, eventsRead);
             }
             finally
             {
@@ -127,16 +130,17 @@ namespace Topo.Services
 
         // Each event in full (attendance, logbook data) with its scope: a request of its own, as the list has no attendance. They are read a few at a
         // time, in the order they were listed, instead of one after another.
-        private async Task<List<UnitEventInput>> ReadEventDetails(List<(Topo.Model.Program.Event Summary, string Scope)> summaries, CancellationToken cancellationToken, Action<string>? progress)
+        private async Task<List<UnitEventInput>> ReadEventDetails(List<(Topo.Model.Program.Event Summary, string Scope)> summaries, CancellationToken cancellationToken, Action<string>? progress,
+            IDictionary<string, Topo.Model.Program.GetEventResultModel>? eventsRead)
         {
-            var done = 0;
-            var details = await ReadsAtOnce.SelectAsync(summaries, async item =>
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var detail = await _terrainAPIService.GetEventAsync(item.Summary.id);
-                progress?.Invoke($"events: {Interlocked.Increment(ref done)} of {summaries.Count}");
-                return detail;
-            });
+            // an event already read for this page load (by an earlier, overlapping period) is reused, not read again
+            var details = await ReadOnce.SelectAsync(summaries, item => item.Summary.id, eventsRead,
+                async item =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return await _terrainAPIService.GetEventAsync(item.Summary.id);
+                },
+                (done, total) => progress?.Invoke($"events: {done} of {total}"));
 
             return summaries.Zip(details, (item, detail) => (item, detail))
                 .Where(x => x.detail != null)
