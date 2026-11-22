@@ -12,5 +12,7 @@ namespace Topo.Model.AdditionalAwards
         public bool BreakByPatrol { get; set; }
         // Names are shortened (first name and as much of the surname as tells Scouts apart) unless this is ticked
         public bool UseFullNames { get; set; }
+        // A column for every additional award open to the unit's section, not only those someone in the unit holds
+        public bool IncludeAllAwards { get; set; }
     }
 }
