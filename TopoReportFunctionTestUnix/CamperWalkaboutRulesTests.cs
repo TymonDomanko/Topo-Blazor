@@ -229,6 +229,29 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public void ALowerLevelTakesTheDayTheLogbookSaysItWasEarnedButNeverLaterThanTheHigherLevel()
+        {
+            var dates = new Dictionary<string, DateTime> { ["m1|camper_award_50"] = new DateTime(2026, 4, 3) };
+            var earned = new Dictionary<string, DateTime>
+            {
+                ["m1|camper_award_10"] = new DateTime(2024, 2, 11),
+                // after the higher level: the higher level's day is used instead
+                ["m1|camper_award_25"] = new DateTime(2026, 6, 1)
+            };
+            var lower = AwardCheckRows.LowerLevels(Tiers, dates, new[] { "m1" }, earned);
+            Assert.AreEqual(new DateTime(2024, 2, 11), lower.Single(l => l.tier.Id == "camper_award_10").day);
+            Assert.AreEqual(new DateTime(2026, 4, 3), lower.Single(l => l.tier.Id == "camper_award_25").day);
+        }
+
+        [TestMethod]
+        public void ALowerLevelWithNoLogbookDayTakesTheHigherLevelsDay()
+        {
+            var dates = new Dictionary<string, DateTime> { ["m1|camper_award_50"] = new DateTime(2026, 4, 3) };
+            var lower = AwardCheckRows.LowerLevels(Tiers, dates, new[] { "m1" }, new Dictionary<string, DateTime> { ["m2|camper_award_10"] = new DateTime(2020, 1, 1) });
+            Assert.IsTrue(lower.All(l => l.day == new DateTime(2026, 4, 3)));
+        }
+
+        [TestMethod]
         public void NothingIsRecordedBelowTheHighestLevelAMemberHasNorAboveIt()
         {
             var dates = new Dictionary<string, DateTime> { ["m1|camper_award_25"] = new DateTime(2026, 4, 3), ["m1|camper_award_10"] = new DateTime(2026, 1, 1) };

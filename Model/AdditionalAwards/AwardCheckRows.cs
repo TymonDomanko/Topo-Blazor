@@ -118,9 +118,11 @@ namespace Topo.Model.AdditionalAwards
         }
 
         // The levels below one Terrain holds that Terrain has no record of. A higher badge being awarded means the lower ones were too, so each is
-        // recorded as awarded on the same day as the nearest higher level Terrain holds. terrainRecordDates holds Terrain's own records
+        // recorded as awarded on the day the logbook says it was earned (earned: member|award -> the day), but never later than the nearest higher
+        // level Terrain holds; with no earned day it takes that higher level's day. terrainRecordDates holds Terrain's own records
         // (member|award -> the day awarded); only the members asked for are looked at.
-        public static List<(string memberId, AwardTier tier, DateTime day)> LowerLevels(IEnumerable<AwardTier> tiers, IReadOnlyDictionary<string, DateTime> terrainRecordDates, IEnumerable<string> memberIds)
+        public static List<(string memberId, AwardTier tier, DateTime day)> LowerLevels(IEnumerable<AwardTier> tiers, IReadOnlyDictionary<string, DateTime> terrainRecordDates, IEnumerable<string> memberIds,
+            IReadOnlyDictionary<string, DateTime>? earned = null)
         {
             var tierList = tiers.ToList();
             var lower = new List<(string, AwardTier, DateTime)>();
@@ -134,8 +136,12 @@ namespace Topo.Model.AdditionalAwards
                             continue;
                         // the nearest level above that Terrain holds gives the day
                         var above = ordered.Skip(i + 1).FirstOrDefault(t => terrainRecordDates.ContainsKey(memberId + "|" + t.Id));
-                        if (above != null)
-                            lower.Add((memberId, ordered[i], terrainRecordDates[memberId + "|" + above.Id]));
+                        if (above == null)
+                            continue;
+                        var day = terrainRecordDates[memberId + "|" + above.Id];
+                        if (earned != null && earned.TryGetValue(memberId + "|" + ordered[i].Id, out var earnedDay) && earnedDay.Date < day)
+                            day = earnedDay.Date;
+                        lower.Add((memberId, ordered[i], day));
                     }
                 }
             return lower;
