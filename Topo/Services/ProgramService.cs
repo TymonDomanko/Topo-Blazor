@@ -15,7 +15,7 @@ namespace Topo.Services
         public Task SetCalendar(string calendarId);
         public Task SetCalendar(string[] calendarIds);
         public Task ResetCalendar();
-        public Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate);
+        public Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate, CancellationToken cancellationToken = default, Action<string>? progress = null);
         public Task<List<AwardEventChoice>> GetEventChoices(DateTime fromDate, DateTime toDate, string unitId);
         public Task<HashSet<string>> GetAttendedMemberIds(string eventId);
         public Task<EventListModel> GetAttendanceForEvent(string eventId);
@@ -109,7 +109,7 @@ namespace Topo.Services
             await _terrainAPIService.PutCalendarsAsync(GetUser(), _getCalendarsResultModel);
         }
 
-        public async Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate)
+        public async Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate, CancellationToken cancellationToken = default, Action<string>? progress = null)
         {
             TextInfo myTI = new CultureInfo("en-AU", false).TextInfo;
             var getEventsResultModel = await _terrainAPIService.GetEventsAsync(GetUser(), fromDate.AddDays(-1), toDate);
@@ -118,7 +118,14 @@ namespace Topo.Services
                 var eventList = new List<EventListModel>();
                 // The list has no organisers, leads or assists, so each event is read for those. They are read a few at a time
                 // instead of one after another, and come back in the order the events are listed.
-                var eventDetails = await ReadsAtOnce.SelectAsync(getEventsResultModel.results, e => _terrainAPIService.GetEventAsync(e.id));
+                var eventsRead = 0;
+                var eventDetails = await ReadsAtOnce.SelectAsync(getEventsResultModel.results, async e =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var detail = await _terrainAPIService.GetEventAsync(e.id);
+                    progress?.Invoke($"{e.title} ({Interlocked.Increment(ref eventsRead)} of {getEventsResultModel.results.Length})");
+                    return detail;
+                });
                 foreach (var (eventResult, getEventResultModel) in getEventsResultModel.results.Zip(eventDetails))
                 {
                     var leads = getEventResultModel.attendance.leader_members.Select(a => string.Concat(a.first_name, " ", a.last_name.AsSpan(0, 1)));

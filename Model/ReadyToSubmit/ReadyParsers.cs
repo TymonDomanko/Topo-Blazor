@@ -30,7 +30,7 @@ namespace Topo.Model.ReadyToSubmit
                         Meta = Flatten(item, "achievement_meta")
                     };
                     if (DateTime.TryParse(Text(item, "status_updated"), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var updated))
-                        record.StatusUpdated = updated.ToLocalTime();
+                        record.StatusUpdated = ReportDate.ForReport(updated);
                     records.Add(record);
                 }
             }

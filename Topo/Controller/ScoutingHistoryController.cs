@@ -32,6 +32,8 @@ namespace Topo.Controller
 
         // Picking another member while one is still loading must not let the older answer overwrite the newer
         private int _loadRequest;
+        public bool Loading;
+        public string Progress = "";
 
         protected override async Task OnInitializedAsync()
         {
@@ -58,6 +60,8 @@ namespace Topo.Controller
             model.History = null;
             model.ErrorMessage = "";
             _loadRequest++;
+            Loading = false;
+            Progress = "";
             await PopulateMembers();
         }
 
@@ -76,14 +80,20 @@ namespace Topo.Controller
             model.ErrorMessage = "";
             var request = ++_loadRequest;
             if (string.IsNullOrEmpty(model.MemberId))
+            {
+                Loading = false;
+                Progress = "";
                 return;
+            }
 
             var member = model.Members.FirstOrDefault(m => m.id == model.MemberId);
             ScoutingHistoryModel? history = null;
             var failed = false;
+            Loading = true;
             try
             {
-                history = await _historyService.GetScoutingHistory(model.MemberId, $"{member?.first_name} {member?.last_name}".Trim(), member?.patrol_duty ?? "");
+                history = await _historyService.GetScoutingHistory(model.MemberId, $"{member?.first_name} {member?.last_name}".Trim(), member?.patrol_duty ?? "",
+                    step => { if (request == _loadRequest) { Progress = step; InvokeAsync(StateHasChanged); } });
             }
             catch (Exception)
             {
@@ -92,6 +102,8 @@ namespace Topo.Controller
 
             if (request != _loadRequest)
                 return;
+            Loading = false;
+            Progress = "";
             model.History = history;
             if (failed)
                 model.ErrorMessage = "Couldn't load that member's history.";

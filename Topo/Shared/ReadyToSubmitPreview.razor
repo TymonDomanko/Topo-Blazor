@@ -5,7 +5,7 @@
 @if (Report.Items.Count == 0)
 {
     <div class="text-muted">
-        @(Report.Categories.Count == 0 ? "Tick at least one kind of badge." : $"Nothing is waiting to be sent, from the {Report.MembersChecked} Scouts checked.")
+        @(Report.Categories.Count == 0 ? "Tick at least one kind of badge." : "No badges to show.")
     </div>
 }
 
@@ -43,7 +43,7 @@
     <div class="mt-4 mb-2"><strong>Only the Scout's logbook tick left</strong> (@Report.LogbookOnly.Count)</div>
     @if (Report.LogbookOnly.Count == 0)
     {
-        <div class="text-muted">None.</div>
+        <div class="text-muted">No badges to show.</div>
     }
     else
     {
@@ -70,7 +70,7 @@
     </div>
     @if (badges.Count == 0)
     {
-        <div class="text-muted">None.</div>
+        <div class="text-muted">No badges to show.</div>
     }
     @foreach (var badge in badges)
     {

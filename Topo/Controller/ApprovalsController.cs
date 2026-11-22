@@ -7,13 +7,14 @@ using System.Net.NetworkInformation;
 using System.Reflection;
 using Topo.Model.AdditionalAwards;
 using Topo.Model.Approvals;
+using Topo.Model.Common;
 using Topo.Model.ReportGeneration;
 using Topo.Services;
 
 
 namespace Topo.Controller
 {
-    public class ApprovalsController : ComponentBase
+    public class ApprovalsController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -41,7 +42,17 @@ namespace Topo.Controller
         };
 
         public SfGrid<ApprovalsListModel> GridInstance { get; set; }
-        protected override void OnInitialized()
+
+        public bool Loading;
+        public string Progress = "";
+        public string ErrorMessage = "";
+        // Everything Terrain has for the unit; the dates and tick boxes then only narrow it down, without reading Terrain again
+        private List<ApprovalsListModel> _all = new List<ApprovalsListModel>();
+        private readonly AutoRun _auto = new AutoRun();
+
+        public void Dispose() => _auto.Dispose();
+
+        protected override async Task OnInitializedAsync()
         {
             if (!_storageService.IsAuthenticated)
                 NavigationManager.NavigateTo("index");
@@ -54,6 +65,7 @@ namespace Topo.Controller
             {
                 model.UnitId = _storageService.UnitId;
                 model.UnitName = _storageService.UnitName;
+                await _auto.RunAsync(Load);
             }
         }
 
@@ -79,19 +91,58 @@ namespace Topo.Controller
             model.UnitId = unitId;
             _storageService.UnitId = model.UnitId;
             model.UnitName = _storageService.UnitName;
-            await RefreshApprovalsClick();
+            _all = new List<ApprovalsListModel>();
+            model.Approvals = new List<ApprovalsListModel>();
+            await _auto.RunAsync(Load);
         }
 
-        internal async Task RefreshApprovalsClick()
+        // Reads the unit's approvals from Terrain. A read that has been overtaken by a newer change is dropped.
+        private async Task Load(CancellationToken cancellationToken)
         {
-            if (!string.IsNullOrEmpty(model.UnitName))
+            ErrorMessage = "";
+            if (string.IsNullOrEmpty(model.UnitId))
             {
-                model.Approvals = await _approvalsService.GetApprovalListItems(_storageService.UnitId);
-                model.Approvals = (model.Approvals ?? new List<ApprovalsListModel>()).Concat(await AdditionalAwardRowsAsync(_storageService.UnitId)).ToList();
-                // Worked out over everything, before the filters, so a stage is not called the highest just because a higher one is out of the date range
-                ApprovalsToAward.ApplyOas(model.Approvals);
-                model.Approvals = ApprovalsFilter.Apply(model.Approvals, model.ApprovalSearchFromDate, model.ApprovalSearchToDate, model.ToBePresented, model.IsPresented, model.ShowRejected);
+                Loading = false;
+                return;
             }
+
+            Loading = true;
+            try
+            {
+                var approvals = await _approvalsService.GetApprovalListItems(model.UnitId,
+                    step => { if (!cancellationToken.IsCancellationRequested) { Progress = step; InvokeAsync(StateHasChanged); } });
+                cancellationToken.ThrowIfCancellationRequested();
+                _all = (approvals ?? new List<ApprovalsListModel>()).Concat(await AdditionalAwardRowsAsync(model.UnitId)).ToList();
+                // Worked out over everything, before the filters, so a stage is not called the highest just because a higher one is out of the date range
+                ApprovalsToAward.ApplyOas(_all);
+                ApplyFilters();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                ErrorMessage = "Couldn't read the approvals from Terrain.";
+            }
+            finally
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    Loading = false;
+                    Progress = "";
+                }
+            }
+        }
+
+        // The dates and tick boxes narrow down what was read, so the list follows them as they change
+        internal void ApplyFilters()
+        {
+            model.DateErrorMessage = "";
+            if (model.ApprovalSearchToDate < model.ApprovalSearchFromDate)
+            {
+                model.DateErrorMessage = "The search to date must be after the search from date.";
+                model.Approvals = new List<ApprovalsListModel>();
+                return;
+            }
+
+            model.Approvals = ApprovalsFilter.Apply(_all, model.ApprovalSearchFromDate, model.ApprovalSearchToDate, model.ToBePresented, model.IsPresented, model.ShowRejected);
         }
 
         public async void ActionBeginHandler(ActionEventArgs<ApprovalsListModel> Args)
