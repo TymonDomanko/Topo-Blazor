@@ -36,10 +36,11 @@ namespace Topo.Services
             if (cachedWallchartItems != null)
             {
                 // Update cache member name
+                var cachedNames = await _membersService.GetDisplayNamesAsync(selectedUnitId);
                 foreach (var item in cachedWallchartItems)
                 {
-                    var member = members.Where(m => m.id == item.MemberId).FirstOrDefault();
-                    item.MemberName = $"{member?.first_name} {_membersService.GetMemberLastName(selectedUnitId, item.MemberId).Result}";
+                    if (cachedNames.TryGetValue(item.MemberId, out var cachedName))
+                        item.MemberName = cachedName;
                 }
                 return cachedWallchartItems;
             }
@@ -97,6 +98,7 @@ namespace Topo.Services
             var wallchartItems = new List<WallchartItemModel>();
             // the Reading line names each Scout the short way, as the reports do
             var shortNames = SignInSheetLayout.GetDisplayNames(youth, false);
+            var names = await _membersService.GetDisplayNamesAsync(selectedUnitId);
             foreach (var member in youth)
             {
                 progress?.Invoke($"{(shortNames.TryGetValue(member.id, out var shortName) ? shortName : member.first_name)} ({youth.IndexOf(member) + 1} of {youth.Count})");
@@ -198,7 +200,7 @@ namespace Topo.Services
                 wallchartItem.OASStageProgressions = AchievementSelection.OasProgressions(oasResults, _storageService.Section, includeApproved: false);
                 // Member
                 wallchartItem.MemberId = member.id;
-                wallchartItem.MemberName = $"{member.first_name} {_membersService.GetMemberLastName(selectedUnitId, member.id).Result}";
+                wallchartItem.MemberName = names.TryGetValue(member.id, out var memberName) ? memberName : member.first_name;
                 wallchartItem.MemberPatrol = member.patrol_name;
                 wallchartItem.IntroToScouting = IntroDate(AchievementSelection.LatestAwardedIntro(introScoutingByMember[member.id]));
                 wallchartItem.IntroToSection = IntroDate(AchievementSelection.LatestAwardedIntro(introSectionByMember[member.id], _storageService.Section));

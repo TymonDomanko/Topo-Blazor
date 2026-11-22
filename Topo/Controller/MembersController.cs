@@ -76,6 +76,13 @@ namespace Topo.Controller
         private List<MemberListModel> MemberListMembers => MemberReportLayouts.MemberListMembers(_allMembers, model.Sort, model.UseFullNames);
         private List<MemberListModel> PatrolSheetMembers => MemberReportLayouts.PatrolSheetMembers(_allMembers, model.UseFullNames);
 
+        // Nothing to put in the report that is showing
+        public bool ReportEmpty => model.View switch
+        {
+            MemberReportView.MemberList => MemberListMembers.Count == 0,
+            MemberReportView.PatrolList => PatrolListMembers.Count == 0,
+            _ => PatrolSheetMembers.Count == 0
+        };
         public PatrolListLayout PatrolList => MemberReportLayouts.PatrolList(PatrolListMembers, model.IncludeLeaders);
         public List<MemberListRow> MemberList => MemberReportLayouts.MemberList(MemberListMembers, Section);
         public List<PatrolGroup> PatrolSheets => MemberReportLayouts.Patrols(PatrolSheetMembers);
@@ -112,12 +119,6 @@ namespace Topo.Controller
 
             // Send the data to JS to actually download the file
             await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, contentType, report);
-        }
-
-        internal async Task MemberRefreshClick()
-        {
-            _membersService.ClearMemberCache(_storageService.UnitId);
-            await UnitChange(_storageService.UnitId);
         }
     }
 }
