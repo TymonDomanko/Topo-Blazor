@@ -38,7 +38,8 @@ namespace Topo.Services
     {
         // Reads each Scout's logbook in the units (one profile at a time) and works out which Camper and Walkabout awards they have earned that
         // Terrain has no record of, with the day each was earned. The one thing it writes is the lower levels of a kind when a higher level is
-        // already recorded in Terrain (those were awarded too), dated the same day as that higher level. A Scout in more than one unit is checked once.
+        // already recorded in Terrain (those were awarded too), dated the day the logbook says it was earned but never later than that higher
+        // level (that level's day when the logbook cannot say). A Scout in more than one unit is checked once.
         // With pacing (the background run) it waits for a gap before each Scout and stops at once if a page needs Terrain.
         Task<AwardScanResult> ScanAsync(IReadOnlyList<string> unitIds, Action<string>? progress, ICheckPacing? pacing = null);
         // What to hand over for the unit's Scouts: the last scan's findings, against Terrain's records as they are now (so one that has been
@@ -106,20 +107,23 @@ namespace Topo.Services
                 terrainRecords.UnionWith(recordDates[unitId].Keys);
             }
 
-            // A higher badge being awarded means the lower ones were too, so record them (the same day) before looking at what is left
+            // A higher badge being awarded means the lower ones were too, so record them before looking at what is left. Each is dated the day the
+            // logbook says it was earned, but never later than the higher level; with no logbook day it takes the higher level's day.
             foreach (var unitId in unitIds)
             {
                 var scouts = youth.Where(m => unitOf[m.id].id == unitId).Select(m => m.id).ToList();
-                if (AwardCheckRows.LowerLevels(tiers, recordDates[unitId], scouts).Count == 0)
+                var lowerLevels = AwardCheckRows.LowerLevels(tiers, recordDates[unitId], scouts);
+                if (lowerLevels.Count == 0)
                     continue;
                 progress?.Invoke($"Recording lower levels for {unitOf.Values.First(u => u.id == unitId).name}");
                 try
                 {
+                    var earned = await EarnedDaysAsync(lowerLevels, tiers, youth, progress, pacing);
                     if (pacing != null)
                         await pacing.WaitForGapAsync();
                     // Read again just before writing: Terrain adds a record every time, so only what is still missing now is written
                     var fresh = RecordDays((await _terrainAPIService.GetUnitAdditionalAwardAchievements(unitId)).results);
-                    var items = AwardCheckRows.LowerLevels(tiers, fresh, scouts).Select(l => (l.memberId, l.tier.Id, l.day)).ToList();
+                    var items = AwardCheckRows.LowerLevels(tiers, fresh, scouts, earned).Select(l => (l.memberId, l.tier.Id, l.day)).ToList();
                     if (items.Count == 0)
                         continue;
                     var written = await _terrainAPIService.RecordAdditionalAwardsAsync(unitId, items);
@@ -316,6 +320,50 @@ namespace Topo.Services
                     days[key] = day;
             }
             return days;
+        }
+
+        // The day the logbook says each lower level was earned (member|award -> day), for the Scouts who have one to record. One profile at a
+        // time, handed back straight away. A Scout whose logbook cannot be read, or cannot say, is left out and takes the higher level's day.
+        private async Task<Dictionary<string, DateTime>> EarnedDaysAsync(List<(string memberId, AwardTier tier, DateTime day)> lowerLevels, IReadOnlyList<AwardTier> tiers,
+            IReadOnlyList<MemberListModel> youth, Action<string>? progress, ICheckPacing? pacing)
+        {
+            var earned = new Dictionary<string, DateTime>();
+            foreach (var scout in lowerLevels.GroupBy(l => l.memberId))
+            {
+                var member = youth.First(m => m.id == scout.Key);
+                progress?.Invoke($"{Name(member)}'s logbook, for the day each lower level was earned");
+                try
+                {
+                    if (pacing != null)
+                        await pacing.WaitForGapAsync();
+                    await _terrainAPIService.RevokeAssumedProfiles();
+                    await _terrainAPIService.AssumeProfile(member.id);
+                    pacing?.ProfileTakenOn();
+                    pacing?.ThrowIfPageNeedsTerrain();
+                    var metrics = await _terrainAPIService.GetMemberLogbookMetrics(member.id);
+                    var nights = metrics.results.FirstOrDefault(r => r.name == "total_nights_camped")?.value ?? 0;
+                    var kilometres = (metrics.results.FirstOrDefault(r => r.name == "total_distance_hiked")?.value ?? 0) / 1000.0;
+                    var entries = await ReadEntriesAsync(member.id, pacing);
+                    var days = CamperWalkaboutRules.EarnedDates(scout.Select(l => l.tier), entries, nights, kilometres);
+                    foreach (var (tierId, day) in days)
+                        if (day != null)
+                            earned[scout.Key + "|" + tierId] = day.Value;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception)
+                {
+                    // Not readable now: the higher level's day is used
+                }
+                finally
+                {
+                    await _terrainAPIService.RevokeAssumedProfiles();
+                    pacing?.ProfileReturned();
+                }
+            }
+            return earned;
         }
 
         private static string Trim(string body) => body.Length > 160 ? body.Substring(0, 160) : body;
