@@ -48,7 +48,7 @@ namespace Topo.Controller
 
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
-            model.ApprovalSearchFromDate = DateTime.Now.AddMonths(-2);
+            model.ApprovalSearchFromDate = DateTime.Today;
             model.ApprovalSearchToDate = DateTime.Now;
             if (!string.IsNullOrEmpty(_storageService.UnitId))
             {
