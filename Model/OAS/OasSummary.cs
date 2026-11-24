@@ -142,10 +142,14 @@ namespace Topo.Model.OAS
                 var keys = new List<(string key, string title)> { (stream.Key, "Main") };
                 foreach (var branch in listed.Where(b => Same(b.Stream, stream.Key)))
                     if (!keys.Any(k => Same(k.key, branch.Key)))
+                    {
                         keys.Add((branch.Key, branch.Title));
+                    }
                 foreach (var seen in records.Where(r => Same(r.achievement_meta.stream, stream.Key)).Select(r => r.achievement_meta.branch).Where(b => b != "").Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(b => b, StringComparer.Ordinal))
                     if (!keys.Any(k => Same(k.key, seen)))
+                    {
                         keys.Add((seen, Title(seen)));
+                    }
                 columns.AddRange(keys.Select(k => ColumnOf(stream, k.key, k.title)));
             }
             return columns;
@@ -171,9 +175,13 @@ namespace Topo.Model.OAS
             foreach (var column in columns)
             {
                 if (last != null && key(column) == last)
+                {
                     runs[^1] = (runs[^1].Heading, runs[^1].Colour, runs[^1].Span + 1);
+                }
                 else
+                {
                     runs.Add((heading(column), colour(column), 1));
+                }
                 last = key(column);
             }
             return runs;
@@ -247,8 +255,10 @@ namespace Topo.Model.OAS
                 .Where(i => !hideEmptyBranches || IsMain(columns[i]) || sheets.Any(sheet => sheet.Rows.Any(r => IsStarted(r.Cells[i]))))
                 .ToList();
             if (kept.Count != columns.Count)
+            {
                 foreach (var row in sheets.SelectMany(sheet => sheet.Rows))
                     row.Cells = kept.Select(i => row.Cells[i]).ToList();
+            }
 
             return new OasSummaryReport { Columns = kept.Select(i => columns[i]).ToList(), Sheets = sheets };
         }

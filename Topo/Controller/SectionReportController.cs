@@ -77,21 +77,29 @@ namespace Topo.Controller
         {
             model.UnitId = unitId;
             if (unitId == SectionReportPageViewModel.WholeGroup || unitId == "")
+            {
                 return;
+            }
 
             _storageService.UnitId = unitId;
             // use the calendar named after the unit when there is one
             var match = CalendarMatcher.FindForUnit(model.Calendars, _storageService.UnitName);
             if (match != null)
+            {
                 model.SelectedCalendars = new HashSet<string> { match };
+            }
         }
 
         internal async Task ToggleCalendar(string calendarId, bool selected)
         {
             if (selected)
+            {
                 model.SelectedCalendars.Add(calendarId);
+            }
             else
+            {
                 model.SelectedCalendars.Remove(calendarId);
+            }
             await _auto.RunAsync(Generate, OptionDelayMilliseconds);
         }
 
@@ -145,7 +153,9 @@ namespace Topo.Controller
                 return;
             }
             if (model.To < model.From)
+            {
                 model.ErrorMessage = "The to date must be after the from date.";
+            }
             if (model.ErrorMessage != "")
             {
                 Result = null;
@@ -170,7 +180,9 @@ namespace Topo.Controller
                 request.CalendarIdsByUnit[unitId] = calendars;
                 var saved = await ReadRoster(unitId);
                 if (saved != null)
+                {
                     request.PreviousRosters[unitId] = saved;
+                }
             }
 
             Busy = true;
@@ -212,7 +224,9 @@ namespace Topo.Controller
         internal async Task DownloadClick(OutputType outputType)
         {
             if (Result == null)
+            {
                 return;
+            }
 
             var report = Result.Report;
             var first = report.Sections.FirstOrDefault();
