@@ -124,9 +124,13 @@ else
                 </ul>
                 <p class="mb-1">Please make sure these achievements have been awarded in a Scouts ceremony first.</p>
                 <p class="text-danger mb-2">This sends each award to Terrain and cannot be undone from Topo.</p>
-                @if (chosen.Any(a => a.IsTopoAward))
+                @if (chosen.Any(a => a.IsAdditionalAward))
                 {
-                    <p class="mb-2" id="topo-note-confirm">Camper and Walkabout awards have no award request in Terrain. Each is recorded in Terrain's additional awards on that date, along with the lower levels it covers. Terrain offers no way to remove a record, so this cannot be undone.</p>
+                    <p class="mb-2" id="topo-note-confirm">Camper and Walkabout awards have no award request in Terrain. Each is recorded in Terrain's additional awards on the date above, together with the lower levels it covers. Terrain offers no way to remove an additional award record, so this cannot be undone.</p>
+                }
+                @if (chosen.Any(a => a.IsYearsOfServiceAward))
+                {
+                    <p class="mb-2" id="yos-note-confirm">Years of Service badges are not Terrain awards. Each is recorded as a comment on the "Topo records" event in Terrain on the date above, together with the lower years it covers. Topo reads those records for its lists and reports; Terrain does not show them as awards.</p>
                 }
                 <button type="button" class="btn btn-warning" id="confirm-yes" @onclick="ConfirmAwardClick">Confirm award</button>
                 <button type="button" class="btn btn-outline-secondary" id="confirm-cancel" @onclick="CancelConfirmClick">Cancel</button>

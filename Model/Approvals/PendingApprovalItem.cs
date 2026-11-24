@@ -3,7 +3,7 @@ namespace Topo.Model.Approvals
     // What the Pending Approvals page shows for one pending submission
     public class PendingApprovalItem
     {
-        // Starts the id of a Camper or Walkabout Award Topo worked out from the logbook, which has no submission in Terrain
+        // Starts the id of a Camper, Walkabout or Years of Service award Topo worked out itself, which has no submission in Terrain
         public const string TopoIdPrefix = "topo:";
 
         public string SubmissionId { get; init; } = string.Empty;

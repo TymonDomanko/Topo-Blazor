@@ -191,5 +191,21 @@ namespace TopoReportFunctionTest
             Assert.AreEqual("yos_scout_3", rows[0].AwardId);
             Assert.AreEqual(1, back.Store!.StoreEvents);
         }
+
+        [TestMethod]
+        public void AYearsOfServiceBadgeInTheMassAwardListIsToldApartFromACamperAward()
+        {
+            AwardRow Row(string award, string name) => new AwardRow { MemberId = "a", MemberName = "Sam Smith", SortName = "Smith Sam", AwardId = award, AwardName = name, Status = AwardRowStatus.ToBePresented, Earned = new DateTime(2026, 5, 1) };
+            var list = new Topo.Model.Approvals.AwardRequestList().WithAdditionalAwards(new[] { Row("yos_scout_3", "Scout 3 Years of Service"), Row("camper_award_10", "Camper Award - 10 Nights") });
+            var awards = list.People.Single().Awards;
+            var years = awards.Single(a => a.Item.AchievementId == "yos_scout_3");
+            var camper = awards.Single(a => a.Item.AchievementId == "camper_award_10");
+            Assert.IsTrue(years.IsTopoAward);
+            Assert.IsTrue(years.IsYearsOfServiceAward);
+            Assert.IsFalse(years.IsAdditionalAward);
+            Assert.IsTrue(camper.IsTopoAward);
+            Assert.IsFalse(camper.IsYearsOfServiceAward);
+            Assert.IsTrue(camper.IsAdditionalAward);
+        }
     }
 }

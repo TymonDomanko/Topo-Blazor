@@ -62,8 +62,9 @@ namespace Topo.Controller
         public int AttendedCount => _attended?.Count ?? 0;
         public bool IsLoading;
         public string? LoadError;
-        // The Camper and Walkabout awards to hand over are listed with the pending awards, as one more badge. They have no award request in
-        // Terrain, so awarding one records it in Terrain's additional awards instead. By the id they are listed under.
+        // The Camper, Walkabout and Years of Service awards to hand over are listed with the pending awards, as one more badge. They have no
+        // award request in Terrain, so awarding one records it instead: a Camper or Walkabout Award in Terrain's additional awards, a Years of
+        // Service badge in Topo's records event (comments on an event in Terrain). By the id they are listed under.
         private Dictionary<string, AwardRow> _topoAwards = new();
         public string? TopoNote;
 
@@ -401,7 +402,7 @@ namespace Topo.Controller
             }
         }
 
-        // Adds the Camper and Walkabout awards to hand over to the pending awards. If they cannot be worked out the pending awards are still
+        // Adds the Camper, Walkabout and Years of Service awards to hand over to the pending awards. If they cannot be worked out the pending awards are still
         // shown, with a note.
         private async Task<AwardRequestList> WithTopoAwardsAsync(string unitId, AwardRequestList awards)
         {

@@ -10,8 +10,12 @@ namespace Topo.Model.Approvals
         public PendingApprovalItem Item { get; init; } = new();
         public bool CanAward { get; init; }
         public string Reason { get; init; } = string.Empty;
-        // A Camper or Walkabout Award Topo worked out from the logbook, which has no award request in Terrain
+        // A Camper, Walkabout or Years of Service badge Topo worked out itself, which has no award request in Terrain
         public bool IsTopoAward => Item.SubmissionId.StartsWith(PendingApprovalItem.TopoIdPrefix, StringComparison.Ordinal);
+        // A Years of Service badge: recorded in Topo's records event in Terrain, not in Terrain's additional awards
+        public bool IsYearsOfServiceAward => IsTopoAward && Topo.Model.YearsOfService.YearsOfServiceAwards.IsYearsOfService(Item.AchievementId);
+        // A Camper or Walkabout Award: recorded in Terrain's additional awards
+        public bool IsAdditionalAward => IsTopoAward && !IsYearsOfServiceAward;
     }
 
     // All of one person's pending awards
@@ -40,7 +44,7 @@ namespace Topo.Model.Approvals
         public AwardRequestList OnlyMembers(ISet<string> memberIds) =>
             new() { People = People.Where(p => memberIds.Contains(p.MemberId)).ToList() };
 
-        // The Camper and Walkabout awards to hand over, listed with the pending awards as one more kind of badge.
+        // The Camper, Walkabout and Years of Service badges to hand over, listed with the pending awards as one more kind of badge.
         // They have no award request in Terrain, so each gets an id that starts with PendingApprovalItem.TopoIdPrefix.
         public AwardRequestList WithAdditionalAwards(IEnumerable<AwardRow> toBePresented)
         {
