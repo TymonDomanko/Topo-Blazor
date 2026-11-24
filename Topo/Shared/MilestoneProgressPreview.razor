@@ -56,33 +56,36 @@
             </details>
         }
 
-        <div class="review mt-2">
-            @if (scout.Form.Count == 0)
-            {
-                <div class="text-muted">The review form could not be read from Terrain.</div>
-            }
-            @foreach (var entry in scout.Form)
-            {
-                <div class="question">@entry.Question</div>
-                @if (entry.IsChoice)
+        <details class="mt-2" open>
+            <summary>Review form (@scout.Form.Count(entry => !entry.Blank) of @scout.Form.Count answered)</summary>
+            <div class="review">
+                @if (scout.Form.Count == 0)
                 {
-                    <div class="choices">
-                        @foreach (var choice in entry.Choices)
-                        {
-                            <span class="choice @(choice.Chosen ? "chosen" : "")">@(choice.Chosen ? "[x]" : "[ ]") @choice.Title</span>
-                        }
-                    </div>
+                    <div class="text-muted">The review form could not be read from Terrain.</div>
                 }
-                else if (entry.Blank)
+                @foreach (var entry in scout.Form)
                 {
-                    <div class="answer blank">To be filled in</div>
+                    <div class="question">@entry.Question</div>
+                    @if (entry.IsChoice)
+                    {
+                        <div class="choices">
+                            @foreach (var choice in entry.Choices)
+                            {
+                                <span class="choice @(choice.Chosen ? "chosen" : "")">@(choice.Chosen ? "[x]" : "[ ]") @choice.Title</span>
+                            }
+                        </div>
+                    }
+                    else if (entry.Blank)
+                    {
+                        <div class="answer blank">To be filled in</div>
+                    }
+                    else
+                    {
+                        <div class="answer">@entry.Answer</div>
+                    }
                 }
-                else
-                {
-                    <div class="answer">@entry.Answer</div>
-                }
-            }
-        </div>
+            </div>
+        </details>
 
         @if (scout.EventReviews.Count > 0)
         {
