@@ -16,7 +16,9 @@ namespace Topo.Model.ProgramBuilder
             var byId = inTerrain.Where(e => e.id != "").GroupBy(e => e.id).ToDictionary(g => g.Key, g => g.First());
             foreach (var row in draft.NightEdits.Values.Concat(draft.Extras).Where(r => r.TerrainEventId != "" && r.ScoutMethod.Count == 0))
                 if (byId.TryGetValue(row.TerrainEventId, out var source) && source.review?.scout_method_elements?.Length > 0)
+                {
                     row.ScoutMethod = source.review.scout_method_elements.ToList();
+                }
 
             var known = draft.NightEdits.Values.Concat(draft.Extras).Select(r => r.TerrainEventId).Where(id => id != "").ToHashSet();
             var nights = ProgramPlanner.Nights(draft).Where(n => !n.Skipped).Select(n => n.Date.Date).ToHashSet();
@@ -26,7 +28,9 @@ namespace Topo.Model.ProgramBuilder
             foreach (var evt in InProgram(draft, inTerrain))
             {
                 if (evt.id == "" || known.Contains(evt.id))
+                {
                     continue;
+                }
                 var start = Local(evt.start_datetime);
                 var end = Local(evt.end_datetime);
                 var singleDay = end.Date <= start.Date;
@@ -38,7 +42,9 @@ namespace Topo.Model.ProgramBuilder
                 {
                     var hasContent = draft.NightEdits.TryGetValue(key, out var edited) && (edited.Activity != "" || edited.TerrainEventId != "");
                     if (hasContent && !filledNow.Contains(key))
+                    {
                         continue;
+                    }
                     if (!hasContent)
                     {
                         var row = edited ?? new ProgramRow();
@@ -71,7 +77,9 @@ namespace Topo.Model.ProgramBuilder
             {
                 var match = events.FirstOrDefault(e => ProgramPlanner.NightKey(Local(e.start_datetime)) == night.Key && string.Equals(e.title.Trim(), night.Value.Activity.Trim(), StringComparison.OrdinalIgnoreCase));
                 if (match == null)
+                {
                     continue;
+                }
                 night.Value.TerrainEventId = match.id;
                 events.Remove(match);
             }
@@ -79,7 +87,9 @@ namespace Topo.Model.ProgramBuilder
             {
                 var match = events.FirstOrDefault(e => Local(e.start_datetime).Date == extra.Date.Date && string.Equals(e.title.Trim(), extra.Activity.Trim(), StringComparison.OrdinalIgnoreCase));
                 if (match == null)
+                {
                     continue;
+                }
                 extra.TerrainEventId = match.id;
                 events.Remove(match);
             }
@@ -98,7 +108,9 @@ namespace Topo.Model.ProgramBuilder
             {
                 var night = ProgramPlanner.Nights(draft).FirstOrDefault(n => ProgramPlanner.NightKey(n.Date) == key);
                 if (night == null || night.Skipped || string.Equals(night.Duty, duty, StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
                 draft.NightEdits[key].DutyPatrol = draft.DutyPatrols.FirstOrDefault(p => string.Equals(p, duty, StringComparison.OrdinalIgnoreCase)) ?? duty;
             }
         }
@@ -111,11 +123,15 @@ namespace Topo.Model.ProgramBuilder
             foreach (var leader in leaders)
             {
                 if (leader.Id == "" || draft.TakenLeaders.Contains(leader.Id))
+                {
                     continue;
+                }
                 draft.TakenLeaders.Add(leader.Id);
                 var name = $"{leader.FirstName} {leader.LastName}".Trim();
                 if (name == "" || draft.Contacts.Any(c => string.Equals(c.Name.Trim(), name, StringComparison.OrdinalIgnoreCase)))
+                {
                     continue;
+                }
                 draft.Contacts.Add(new ProgramContact { Name = name, MemberId = leader.Id });
                 added++;
             }
@@ -138,7 +154,9 @@ namespace Topo.Model.ProgramBuilder
             foreach (var name in rows.Select(r => (r.Location ?? "").Trim()).Where(n => n != ""))
             {
                 if (draft.Locations.Any(l => string.Equals(l.Name.Trim(), name, StringComparison.OrdinalIgnoreCase)))
+                {
                     continue;
+                }
                 draft.Locations.Add(new ProgramLocation { Name = name });
                 added++;
             }
@@ -163,9 +181,13 @@ namespace Topo.Model.ProgramBuilder
         private static ProgramRowKind KindOf(GetEventResultModel evt, DateTime start, DateTime end)
         {
             if (end.Date > start.Date)
+            {
                 return ProgramRowKind.Camp;
+            }
             if ((evt.achievement_pathway_logbook_data?.categories ?? new object[0]).Any(c => string.Equals(c?.ToString(), "walking_hike", StringComparison.OrdinalIgnoreCase)))
+            {
                 return ProgramRowKind.Hike;
+            }
             return start.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday ? ProgramRowKind.Weekend : ProgramRowKind.Other;
         }
 

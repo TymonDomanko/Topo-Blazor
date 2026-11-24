@@ -22,9 +22,13 @@ namespace Topo.Model.ProgramBuilder
             var others = Lines(description).Where(l => !GameLine.IsMatch(l) && !DutyLine.IsMatch(l)).ToList();
             var lines = new List<string>();
             if (game.Trim() != "")
+            {
                 lines.Add($"Game: {game.Trim()}");
+            }
             if (duty.Trim() != "")
+            {
                 lines.Add($"Duty patrol: {duty.Trim()}");
+            }
             lines.AddRange(others);
             return string.Join("\n", lines);
         }
@@ -35,7 +39,9 @@ namespace Topo.Model.ProgramBuilder
             {
                 var m = line.Match(l);
                 if (m.Success)
+                {
                     return m.Groups[1].Value;
+                }
             }
             return "";
         }

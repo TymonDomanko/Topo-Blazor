@@ -8,7 +8,9 @@ namespace Topo.Model.ProgramBuilder
         public static string Rename(string leaders, IEnumerable<string> oldNames, string newName)
         {
             if (leaders.Trim() == "")
+            {
                 return leaders;
+            }
             var olds = oldNames.Select(n => n.Trim()).Where(n => n != "").ToList();
             var parts = leaders.Split('/').Select(p => p.Trim()).Select(p => olds.Any(o => string.Equals(o, p, StringComparison.OrdinalIgnoreCase)) ? newName : p);
             return string.Join("/", parts.Distinct(StringComparer.OrdinalIgnoreCase));

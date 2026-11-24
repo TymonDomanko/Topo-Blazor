@@ -22,14 +22,18 @@ namespace Topo.Model.ProgramBuilder
                 .Select(e => (Start: e.start_datetime, Duty: Known(ProgramDescription.Duty(e.description), patrols)))
                 .Where(x => x.Duty != "").OrderByDescending(x => x.Start).Select(x => x.Duty).ToList();
             if (seen.Count == 0)
+            {
                 return null;
+            }
 
             // newest first, until a patrol comes round again: that is one go of the cycle
             var run = new List<string>();
             foreach (var duty in seen)
             {
                 if (run.Contains(duty))
+                {
                     break;
+                }
                 run.Add(duty);
             }
             run.Reverse();

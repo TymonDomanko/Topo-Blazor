@@ -75,15 +75,21 @@ namespace Topo.Controller
             // use the calendar named after the unit when there is one
             var match = CalendarMatcher.FindForUnit(model.Calendars, _storageService.UnitName);
             if (match != null)
+            {
                 model.SelectedCalendars = new HashSet<string> { match };
+            }
         }
 
         internal async Task ToggleCalendar(string calendarId, bool selected)
         {
             if (selected)
+            {
                 model.SelectedCalendars.Add(calendarId);
+            }
             else
+            {
                 model.SelectedCalendars.Remove(calendarId);
+            }
             await _auto.RunAsync(Generate, OptionDelayMilliseconds);
         }
 
@@ -142,9 +148,13 @@ namespace Topo.Controller
                 return;
             }
             if (model.SelectedCalendars.Count == 0)
+            {
                 model.ErrorMessage = "Please select at least one calendar.";
+            }
             else if (model.To < model.From)
+            {
                 model.ErrorMessage = "The to date must be after the from date.";
+            }
             if (model.ErrorMessage != "")
             {
                 Busy = false;
@@ -177,7 +187,9 @@ namespace Topo.Controller
         internal async Task DownloadClick(OutputType outputType)
         {
             if (Report == null)
+            {
                 return;
+            }
 
             var report = await _reportService.GetAttendanceAnalysisReport(_storageService.GroupName ?? "Group Name", Report.Section, Report.UnitName, outputType, JsonConvert.SerializeObject(Report));
             var isPdf = outputType == OutputType.PDF;

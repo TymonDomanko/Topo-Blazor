@@ -57,7 +57,9 @@ namespace Topo.Services
                 }
                 foreach (var member in youth)
                     if (_investedOn.TryGetValue($"{section}/{member.id}", out var date) && date != null)
+                    {
                         invested[member.id] = date.Value;
+                    }
             }
 
             return AttendanceBuilder.Analyse(new AttendanceInput

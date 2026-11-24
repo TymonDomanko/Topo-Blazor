@@ -59,7 +59,9 @@ namespace Topo.Services
             using var calendarLock = await _programService.LockCalendarsAsync();
             var calendar = await CalendarFor(unitId);
             if (calendar == null)
+            {
                 return null;
+            }
 
             await _programService.SetCalendar(new[] { calendar });
             try
@@ -77,7 +79,9 @@ namespace Topo.Services
         {
             var calendar = await CalendarFor(unitId);
             if (calendar == null)
+            {
                 return null;
+            }
 
             var events = await _unitReportService.GetEventsForCalendars(from, to, new[] { calendar }, cancellationToken, progress);
             // what is for the whole unit or group, not a patrol or a member's project
@@ -93,7 +97,9 @@ namespace Topo.Services
             progress?.Invoke("Reading Terrain");
             var events = await GetTerrainEvents(context.UnitId, draft.Start, draft.End, progress, cancellationToken);
             if (events == null)
+            {
                 return new ProgramPushPlan { Error = "There is no calendar named after this unit in Terrain, so there is nothing to add the program to." };
+            }
             var plan = ProgramPush.Build(draft, events, context, DateTime.Now);
 
             // what is to be changed in Terrain is read in full, so that the change can be sent as the whole of the activity with only that different

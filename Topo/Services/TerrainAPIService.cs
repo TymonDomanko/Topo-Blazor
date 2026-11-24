@@ -293,7 +293,9 @@ namespace Topo.Services
             httpRequest.Headers.Add("authorization", _storageService?.AuthenticationResult?.IdToken);
             httpRequest.Headers.Add("accept", "application/json, text/plain, */*");
             if (body != null)
+            {
                 httpRequest.Content = new StringContent(body is string text ? text : JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
+            }
             try
             {
                 var response = await _httpClient.SendAsync(httpRequest);

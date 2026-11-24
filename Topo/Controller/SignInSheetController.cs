@@ -142,7 +142,9 @@ namespace Topo.Controller
         private string? FindCalendarForUnit(string? unitName)
         {
             if (string.IsNullOrWhiteSpace(unitName))
+            {
                 return null;
+            }
 
             var name = unitName.Trim();
             var calendars = model.Calendars.Select(c => (id: c.Key, title: c.Value.Trim())).ToList();
@@ -247,7 +249,9 @@ namespace Topo.Controller
 
             // ignore the answer if the user has picked something else in the meantime
             if (request != _previewRequest)
+            {
                 return;
+            }
             PreviewMembers = members;
             PreviewFailed = members == null;
         }
@@ -255,7 +259,9 @@ namespace Topo.Controller
         internal async Task SectionsScopeChange(ChangeEventArgs e)
         {
             if (Enum.TryParse<SignInSectionsScope>(e.Value?.ToString(), out var scope))
+            {
                 model.Options.SectionsScope = scope;
+            }
             await SaveOptions();
             await RefreshPreview();
         }
@@ -265,7 +271,9 @@ namespace Topo.Controller
             var sections = model.Options.SelectedSections.ToList();
             sections.RemoveAll(s => string.Equals(s, sectionName, StringComparison.OrdinalIgnoreCase));
             if (selected)
+            {
                 sections.Add(sectionName);
+            }
             model.Options.SelectedSections = sections.ToArray();
             await SaveOptions();
             await RefreshPreview();
@@ -304,7 +312,9 @@ namespace Topo.Controller
         internal async Task DownloadClick(OutputType outputType)
         {
             if (PreviewMembers == null)
+            {
                 return;
+            }
 
             // no event chosen: the sheet has no event name
             var eventName = string.IsNullOrEmpty(EventId)
