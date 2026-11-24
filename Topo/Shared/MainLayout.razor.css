@@ -4,6 +4,11 @@
     flex-direction: column;
 }
 
+article {
+    /* The help icon is placed against the top right corner of the content */
+    position: relative;
+}
+
 main {
     flex: 1;
     /* May be narrower than its widest content, so that content scrolls or overflows rather than squeezing the sidebar */

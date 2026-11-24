@@ -1,0 +1,31 @@
+@using Topo.Model.Help
+@inject NavigationManager _navigation
+@implements IDisposable
+
+@* The help icon at the top right of a page: opens the wiki page that documents the page being shown. Pages with no wiki page show nothing. *@
+@if (_helpUrl != null)
+{
+    <a class="help-icon" href="@_helpUrl" target="_blank" rel="noopener noreferrer" title="Help for this page" aria-label="Help for this page (opens the Topo wiki)">
+        <span class="oi oi-question-mark" aria-hidden="true"></span>
+    </a>
+}
+
+@code {
+    private string? _helpUrl;
+
+    protected override void OnInitialized()
+    {
+        _navigation.LocationChanged += OnLocationChanged;
+        Update();
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        Update();
+        StateHasChanged();
+    }
+
+    private void Update() => _helpUrl = HelpPages.UrlFor(_navigation.ToBaseRelativePath(_navigation.Uri));
+
+    public void Dispose() => _navigation.LocationChanged -= OnLocationChanged;
+}

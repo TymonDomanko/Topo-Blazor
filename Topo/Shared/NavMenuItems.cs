@@ -44,7 +44,7 @@ namespace Topo.Shared
     // move the line (or move a whole group). Nothing else needs to change.
     public static class NavMenuItems
     {
-        public const string HelpUrl = "https://github.com/NomisNostab/Topo-Blazor/wiki";
+        public const string HelpUrl = Topo.Model.Help.HelpPages.WikiUrl;
 
         public static readonly IReadOnlyList<NavGroup> Groups = new List<NavGroup>
         {
