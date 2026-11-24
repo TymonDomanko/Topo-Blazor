@@ -70,7 +70,9 @@ namespace Topo.Services
         public async Task<BadgeStoreContents> ReadAsync(string userId, string groupId, Func<string, bool> isTrustedAuthor)
         {
             var events = await FindStoreEventsAsync(userId, groupId);
-            return await ReadEventsAsync(events, isTrustedAuthor);
+            var contents = await ReadEventsAsync(events, isTrustedAuthor);
+            contents.StoreEvents = events.Count;
+            return contents;
         }
 
         private async Task<BadgeStoreContents> ReadEventsAsync(IEnumerable<Event> storeEvents, Func<string, bool> isTrustedAuthor)

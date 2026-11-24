@@ -96,3 +96,22 @@ Topo always shows the leader what will be written first and asks before changing
 - This is a workaround for something Terrain does not offer. It can stop working if Terrain changes how events or comments
   behave. Keep a copy of what matters outside Terrain.
 - Everyone in the group can see the event and its comments, so records hold only opaque ids and dates.
+
+## Years of service
+
+Terrain has no record of a Years of Service badge either (there is one for each year in each section), so Topo keeps them in the
+same store. Nothing about the record format changes; two kinds of record use the existing fields:
+
+| Record | `m` | `a` | `d` | `p` |
+|---|---|---|---|---|
+| A year of service handed over | the Scout's member id | `yos_<section>_<years>`, for example `yos_scout_3` | the day the anniversary was reached | the day it was presented |
+| Tracking started | the **group id** (not a member) | `yos_start` | the day tracking counts from | none |
+
+- The list of years to hand over is worked out each time from Terrain's own records (a Scout's first event in the section, or their intro to
+  the section when no event is logged; whole years completed, as on the Wallchart). Only anniversaries on or after the `yos_start` day are
+  listed, so badges handed over before Topo kept track do not appear. Of several unrecorded years only the newest is the badge to hand over;
+  presenting it records the lower years too, on the same day.
+- Until a leader creates the store event and starts tracking, nothing is listed. Each copy of Topo reads the store only when its leader has
+  turned the setting on (Settings, Years of service), because reading it switches the group calendar on for a moment.
+- Only youth members are tracked. A record written by someone who is not an adult leader of one of the reader's units is ignored, as above.
+

@@ -1,3 +1,4 @@
+using Topo.Model.YearsOfService;
 using Blazored.LocalStorage;
 using Topo.Model.AdditionalAwards;
 using Topo.Model.Members;
@@ -61,8 +62,9 @@ namespace Topo.Services
         private readonly IMembersService _membersService;
         private readonly ILocalStorageService _localStorage;
 
-        public AdditionalAwardCheckService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, ILocalStorageService localStorage)
+        public AdditionalAwardCheckService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, ILocalStorageService localStorage, IYearsOfServiceService yearsOfService)
         {
+            _yearsOfService = yearsOfService;
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
             _membersService = membersService;
@@ -74,6 +76,7 @@ namespace Topo.Services
         private string _cacheGroup = "";
 
         // What a background run has read, kept for the rest of this visit so a run that is stopped carries on where it left off
+        private readonly IYearsOfServiceService _yearsOfService;
         private readonly Dictionary<string, (MemberTotals totals, List<LogbookAwardEntry>? entries, DateTime readAt)> _readCache = new();
         private static readonly TimeSpan CacheFor = TimeSpan.FromHours(6);
 
@@ -283,6 +286,14 @@ namespace Topo.Services
 
         public async Task<List<AwardRow>> PendingAsync(string unitId)
         {
+            var rows = await CamperWalkaboutPendingAsync(unitId);
+            // Years of service need no logbook check: they come from when each member's service began, so they are worked out here each time
+            rows.AddRange(await _yearsOfService.PendingAsync(unitId));
+            return rows;
+        }
+
+        private async Task<List<AwardRow>> CamperWalkaboutPendingAsync(string unitId)
+        {
             var cache = await LoadCacheAsync();
             var forUnit = cache.Missing.Where(m => m.UnitId == unitId).ToList();
             if (forUnit.Count == 0)
@@ -294,6 +305,13 @@ namespace Topo.Services
         }
 
         public async Task<List<RecordedAward>> RecordedAsync(string unitId)
+        {
+            var recorded = await TerrainRecordedAsync(unitId);
+            recorded.AddRange(await _yearsOfService.RecordedAsync(unitId));
+            return recorded;
+        }
+
+        private async Task<List<RecordedAward>> TerrainRecordedAsync(string unitId)
         {
             var names = await AwardNamesAsync();
             var members = (await _membersService.GetMembersAsync(unitId)).ToDictionary(m => m.id);
@@ -328,6 +346,22 @@ namespace Topo.Services
         }
 
         public async Task<AwardWriteSummary> PresentAsync(IEnumerable<AwardRow> rows, DateTime presented)
+        {
+            var all = rows.ToList();
+            // Years of service are kept in the group's store; the other awards are recorded in Terrain
+            var yearsOfService = all.Where(r => YearsOfServiceAwards.IsYearsOfService(r.AwardId)).ToList();
+            var summary = await PresentInTerrainAsync(all.Except(yearsOfService), presented);
+            if (yearsOfService.Count > 0)
+            {
+                var stored = await _yearsOfService.PresentAsync(yearsOfService, presented);
+                summary.Done += stored.Done;
+                summary.Skipped += stored.Skipped;
+                summary.Failures.AddRange(stored.Failures);
+            }
+            return summary;
+        }
+
+        private async Task<AwardWriteSummary> PresentInTerrainAsync(IEnumerable<AwardRow> rows, DateTime presented)
         {
             var summary = new AwardWriteSummary();
             var tiers = await TiersAsync();

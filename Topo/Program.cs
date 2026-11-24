@@ -30,6 +30,7 @@ builder.Services.AddScoped<IWallchartService, WallchartService>();
 builder.Services.AddScoped<IAdditionalAwardService, AdditionalAwardService>();
 builder.Services.AddScoped<IAdditionalAwardCheckService, AdditionalAwardCheckService>();
 builder.Services.AddScoped<IBadgeStoreService, BadgeStoreService>();
+builder.Services.AddScoped<IYearsOfServiceService, YearsOfServiceService>();
 builder.Services.AddScoped<IApprovalsService, ApprovalsService>();
 builder.Services.AddScoped<IProgressService, ProgressService>();
 builder.Services.AddScoped<IHistoryService, HistoryService>();

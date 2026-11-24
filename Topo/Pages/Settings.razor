@@ -1,6 +1,7 @@
 @page "/settings"
 @inject Topo.Services.StorageService _storageService
 @inject Topo.Services.IAutoAwardService _autoAwards
+@inject Topo.Services.IYearsOfServiceService _yearsOfService
 @inject NavigationManager NavigationManager
 @implements IDisposable
 
@@ -41,14 +42,141 @@
     }
 </div>
 
+<h4>Years of service</h4>
+
+<div class="mb-3" id="yos">
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="yos-on" checked="@_yosEnabled" @onchange="YosToggle" />
+        <label class="form-check-label" for="yos-on">List Years of Service badges to hand over</label>
+    </div>
+    <div class="form-text">
+        There is a Years of Service badge for each year in each section. Terrain has nowhere to record them, so Topo works out when each Scout
+        passes a year in their section (from their first event in it) and lists the badge to hand over on the Approvals page and the Mass awarding
+        page, where you record it as awarded like any other badge. The records are kept as comments on one event in Terrain that every leader's
+        copy of Topo reads, so they are not lost with a browser. Reading that event briefly switches the group calendar on in Terrain and puts it
+        back, which is why this is off until you turn it on.
+    </div>
+    @if (_yosEnabled)
+    {
+        @if (_yosStatus == null)
+        {
+            <div class="form-text" id="yos-reading">Reading the records from Terrain...</div>
+        }
+        else if (!string.IsNullOrEmpty(_yosStatus.Problem))
+        {
+            <div class="form-text text-danger" id="yos-problem">The records could not be read: @_yosStatus.Problem</div>
+        }
+        else if (!_yosStatus.StoreFound)
+        {
+            <div class="form-text" id="yos-nostore">
+                The group has no records event yet. Creating it adds one event, "Topo records - please do not delete", on 1 February 2100 on the
+                group calendar, which everyone in the group can see. Only a group leader can create it, and it is created once for the whole group.
+            </div>
+            @if (!_yosConfirmCreate)
+            {
+                <button class="btn btn-outline-primary btn-sm mt-2" id="yos-create" @onclick="() => _yosConfirmCreate = true" disabled="@_yosBusy">Create the records event</button>
+            }
+            else
+            {
+                <div class="mt-2">
+                    <button class="btn btn-primary btn-sm" id="yos-create-confirm" @onclick="YosCreate" disabled="@_yosBusy">Yes, create the event in Terrain</button>
+                    <button class="btn btn-link btn-sm" @onclick="() => _yosConfirmCreate = false" disabled="@_yosBusy">Cancel</button>
+                </div>
+            }
+        }
+        else if (!_yosStatus.StartedFrom.HasValue)
+        {
+            <div class="form-text" id="yos-notstarted">
+                Years of service has not been started for the group. Pick the day to count from: only anniversaries on or after it are listed,
+                so badges that were handed over before Topo kept track do not show up.
+            </div>
+            <div class="mt-2 d-flex align-items-center gap-2">
+                <input type="date" class="form-control form-control-sm" style="max-width: 11rem" id="yos-start-date" @bind="_yosStartDate" />
+                <button class="btn btn-primary btn-sm" id="yos-start" @onclick="YosStart" disabled="@_yosBusy">Start from this day</button>
+            </div>
+        }
+        else
+        {
+            <div class="form-text" id="yos-active">
+                Counting from @_yosStatus.StartedFrom.Value.ToString("dd/MM/yyyy"). @_yosStatus.Recorded recorded so far.
+                @if (_yosStatus.IgnoredRecords > 0)
+                {
+                    <span>@_yosStatus.IgnoredRecords record(s) in the event were ignored (not written by an adult leader, or not in a format this version reads).</span>
+                }
+            </div>
+            <button class="btn btn-outline-secondary btn-sm mt-2" id="yos-reread" @onclick="YosReread" disabled="@_yosBusy">Read again</button>
+        }
+        @if (!string.IsNullOrEmpty(_yosMessage))
+        {
+            <div class="form-text @(_yosMessageIsError ? "text-danger" : "")" id="yos-message">@_yosMessage</div>
+        }
+    }
+</div>
+
 @code {
-    protected override void OnInitialized()
+    private bool _yosEnabled;
+    private bool _yosBusy;
+    private bool _yosConfirmCreate;
+    private DateTime _yosStartDate = DateTime.Today;
+    private string _yosMessage = "";
+    private bool _yosMessageIsError;
+    private Topo.Services.YearsOfServiceStatus? _yosStatus;
+
+    protected override async Task OnInitializedAsync()
     {
         if (!_storageService.IsAuthenticated)
         {
             NavigationManager.NavigateTo("index");
+            return;
         }
         _autoAwards.Changed += OnAutoChanged;
+        _yosEnabled = await _yearsOfService.IsEnabledAsync();
+        if (_yosEnabled)
+        {
+            _yosStatus = await _yearsOfService.StatusAsync();
+        }
+    }
+
+    private async Task YosToggle(ChangeEventArgs e)
+    {
+        _yosEnabled = e.Value is true;
+        _yosMessage = "";
+        _yosStatus = null;
+        await _yearsOfService.SetEnabledAsync(_yosEnabled);
+        if (_yosEnabled)
+        {
+            StateHasChanged();
+            _yosStatus = await _yearsOfService.StatusAsync(true);
+        }
+    }
+
+    private async Task YosCreate()
+    {
+        _yosBusy = true;
+        var result = await _yearsOfService.CreateStoreAsync();
+        _yosConfirmCreate = false;
+        _yosMessage = result.Message;
+        _yosMessageIsError = !result.Succeeded;
+        _yosStatus = await _yearsOfService.StatusAsync(true);
+        _yosBusy = false;
+    }
+
+    private async Task YosStart()
+    {
+        _yosBusy = true;
+        var result = await _yearsOfService.StartAsync(_yosStartDate);
+        _yosMessage = result.Succeeded ? $"Years of service will be counted from {_yosStartDate:dd/MM/yyyy}." : result.Message;
+        _yosMessageIsError = !result.Succeeded;
+        _yosStatus = await _yearsOfService.StatusAsync(true);
+        _yosBusy = false;
+    }
+
+    private async Task YosReread()
+    {
+        _yosBusy = true;
+        _yosMessage = "";
+        _yosStatus = await _yearsOfService.StatusAsync(true);
+        _yosBusy = false;
     }
 
     private void OnAutoChanged() => InvokeAsync(StateHasChanged);

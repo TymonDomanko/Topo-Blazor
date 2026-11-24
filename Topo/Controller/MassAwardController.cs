@@ -415,7 +415,7 @@ namespace Topo.Controller
             }
             catch (Exception)
             {
-                TopoNote = "The Camper and Walkabout awards could not be worked out, so they are not listed.";
+                TopoNote = "The Camper, Walkabout and Years of Service awards could not be worked out, so they are not listed.";
                 return awards;
             }
         }

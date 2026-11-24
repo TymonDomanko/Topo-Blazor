@@ -21,6 +21,8 @@ namespace Topo.Model.BadgeStore
     public class BadgeStoreContents
     {
         public List<BadgeStoreRecord> Records { get; set; } = new List<BadgeStoreRecord>();
+        // How many store events the group has (normally one; none until a leader creates it)
+        public int StoreEvents { get; set; }
         // Comments left out, so a screen can say how many were not used rather than lose them silently
         public int IgnoredUntrustedAuthor { get; set; }
         public int IgnoredUnreadable { get; set; }
