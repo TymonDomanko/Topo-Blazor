@@ -83,9 +83,13 @@ else
         Report.Columns.Aggregate(new List<(string Heading, int Span)>(), (groups, column) =>
         {
             if (groups.Count > 0 && groups[^1].Heading == column.Group)
+            {
                 groups[^1] = (column.Group, groups[^1].Span + 1);
+            }
             else
+            {
                 groups.Add((column.Group, 1));
+            }
             return groups;
         });
 }
