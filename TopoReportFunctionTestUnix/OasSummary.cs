@@ -367,5 +367,15 @@ namespace TopoReportFunctionTest
             Assert.AreEqual("Canoeing", sheet.Range[6, canoeing].Text);
             Assert.AreEqual(5, sheet.Range[8, canoeing].Number);
         }
+
+        [TestMethod]
+        public void TheWorkbookKeepsTheNamesAndTheHeadingRowsInViewWhenScrolled()
+        {
+            var plain = new ReportService().GenerateOasSummaryWorkbook(ReportOf(new OasSummarySheet { Rows = { RowWith("Amy", 0, 1) } }), "Group", "scout", "Scout Unit").Worksheets[0];
+            Assert.IsTrue(plain.IsFreezePanes);
+            var records = new[] { BranchRecord("a", "paddling", "canoeing", 5, "awarded") };
+            var split = OasSummaryBuilder.Build(new[] { Scout("a", "Amy") }, records, "scout", false, false, OasSummaryLayout.BranchColumns(Tree, records), true);
+            Assert.IsTrue(new ReportService().GenerateOasSummaryWorkbook(split, "Group", "scout", "Scout Unit").Worksheets[0].IsFreezePanes);
+        }
     }
 }
