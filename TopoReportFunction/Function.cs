@@ -129,6 +129,9 @@ public class Function
                     case ReportType.ReadyToSubmit:
                         workbook = GenerateReadyToSubmitWorkbook(reportGenerationRequest);
                         break;
+                    case ReportType.MilestoneProgress:
+                        workbook = GenerateMilestoneProgressWorkbook(reportGenerationRequest);
+                        break;
                 }
 
                 Console.WriteLine("Workbook completed");
@@ -292,6 +295,16 @@ public class Function
             var workbook = reportService.GenerateLogbookWorkbook(reportData, reportGenerationRequest.GroupName, reportGenerationRequest.Section
                 , reportGenerationRequest.UnitName, reportGenerationRequest.OutputType == OutputType.PDF);
             return workbook;
+        }
+        return reportService.CreateWorkbookWithSheets(1);
+    }
+
+    private IWorkbook GenerateMilestoneProgressWorkbook(ReportGenerationRequest reportGenerationRequest)
+    {
+        var reportData = JsonConvert.DeserializeObject<MilestoneProgressReport>(reportGenerationRequest.ReportData);
+        if (reportData != null)
+        {
+            return reportService.GenerateMilestoneProgressWorkbook(reportData, reportGenerationRequest.GroupName, reportGenerationRequest.Section, reportGenerationRequest.UnitName);
         }
         return reportService.CreateWorkbookWithSheets(1);
     }

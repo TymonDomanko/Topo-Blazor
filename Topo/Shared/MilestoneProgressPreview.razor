@@ -1,0 +1,90 @@
+@using System.Globalization
+@using Topo.Model.Milestone
+
+@* What the downloaded pages will show, one for each Scout: the Participates in each Challenge Area and the Leads against what the milestone asks
+   for (green once met), the events that counted, and what the Scout wrote on their review. *@
+@foreach (var scout in Report.Pages)
+{
+    <div class="scout-page">
+        <div class="scout-heading">
+            <h4 class="mb-0">@scout.Name</h4>
+            <span class="status @(scout.Ready ? "ready" : "")">@scout.Status</span>
+            @if (scout.Patrol != "")
+            {
+                <span class="text-muted">@scout.Patrol</span>
+            }
+        </div>
+
+        <table class="counts">
+            <thead>
+                <tr>
+                    @foreach (var area in scout.Areas)
+                    {
+                        <th>@area.Area</th>
+                    }
+                    <th>@scout.Leads.Area</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    @foreach (var area in scout.Areas)
+                    {
+                        <td class="@(area.Met ? "met" : "")">@area.Count of @area.Target</td>
+                    }
+                    <td class="@(scout.Leads.Met ? "met" : "")">@scout.Leads.Count of @scout.Leads.Target</td>
+                </tr>
+            </tbody>
+        </table>
+
+        @if (scout.Events.Count > 0)
+        {
+            <details class="mt-2">
+                <summary>Events that counted (@scout.Events.Count)</summary>
+                <table class="events">
+                    <tbody>
+                        @foreach (var line in scout.Events)
+                        {
+                            <tr>
+                                <td>@line.Date.ToString("d MMM yyyy", CultureInfo.InvariantCulture)</td>
+                                <td>@line.Event</td>
+                                <td>@line.Area</td>
+                                <td>@line.Credit</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </details>
+        }
+
+        <div class="review mt-2">
+            @if (scout.Review.Count == 0)
+            {
+                <div class="text-muted">Nothing written on the review yet.</div>
+            }
+            @foreach (var answer in scout.Review)
+            {
+                <div class="question">@answer.Question</div>
+                <div class="answer">@answer.Answer</div>
+            }
+        </div>
+
+        @if (scout.EventReviews.Count > 0)
+        {
+            <details class="mt-2">
+                <summary>What they wrote about events (@scout.EventReviews.Count)</summary>
+                <div class="review">
+                    @foreach (var answer in scout.EventReviews)
+                    {
+                        <div class="question">@answer.Question</div>
+                        <div class="answer">@answer.Answer</div>
+                    }
+                </div>
+            </details>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public MilestoneProgressReport Report { get; set; } = new MilestoneProgressReport();
+}

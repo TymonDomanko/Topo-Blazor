@@ -39,6 +39,7 @@ namespace Topo.Services
         public IWorkbook GenerateMilestoneWorkbook(List<MilestoneSummaryListModel> milestoneSummaries, string groupName, string section, string unitName, bool forPdfOutput, bool breakByPatrol = false);
         public IWorkbook GenerateLogbookWorkbook(List<MemberLogbookReportViewModel> logbookEntries, string groupName, string section, string unitName, bool forPdfOutput);
         public IWorkbook GenerateWallchartWorkbook(List<WallchartItemModel> wallchartEntries, string groupName, string section, string unitName, bool forPdfOutput, bool breakByPatrol = false);
+        public IWorkbook GenerateMilestoneProgressWorkbook(MilestoneProgressReport report, string groupName, string section, string unitName);
         public IWorkbook GenerateApprovalsWorkbook(List<ApprovalsListModel> selectedApprovals, string groupName, string section, string unitName, DateTime approvalSearchFromDate, DateTime approvalSearchToDate, bool groupByMember, bool forPdfOutput);
         public IWorkbook GenerateProgressWorkbook(ProgressDetailsPageViewModel progressEntries, string groupName, string section, string unitName);
         public IWorkbook GenerateScoutingHistoryWorkbook(ScoutingHistoryModel history, string groupName, string section, string unitName);
@@ -2324,6 +2325,169 @@ namespace Topo.Services
 
             return workbook;
 
+        }
+
+        // The Milestone Progress pages: a sheet (a page of the pdf, or more if the answers run on) for each Scout, with their Participates and Leads
+        // against what the milestone asks for, the events that counted, and what they wrote on the review
+        public IWorkbook GenerateMilestoneProgressWorkbook(MilestoneProgressReport report, string groupName, string section, string unitName)
+        {
+            const int lastColumn = 4;
+            const int charactersAcross = 86;
+            var pages = report.Pages.Count == 0 ? new List<MilestoneScoutPage> { null! } : report.Pages;
+            var workbook = CreateWorkbookWithSheets(pages.Count);
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var worksheetIndex = 0;
+
+            foreach (var page in pages)
+            {
+                IWorksheet sheet = AddLogoToSheet(workbook, worksheetIndex, groupName, section, lastColumn);
+                IStyle headingStyle = workbook.Styles["headingStyle"];
+                int rowNumber = 1;
+
+                // a sheet's name is at most 31 characters, without : \ / ? * [ ], and different from the others
+                var sheetName = new string((page == null ? "Milestone" : page.Name).Where(c => !":\\/?*[]".Contains(c)).ToArray());
+                sheetName = sheetName.Length > 28 ? sheetName.Substring(0, 28) : sheetName;
+                var unique = sheetName;
+                for (var n = 2; !names.Add(unique); n++)
+                    unique = $"{sheetName} {n}";
+                sheet.Name = unique;
+
+                rowNumber++;
+                sheet.Range[rowNumber, 2].Text = unitName;
+                sheet.Range[rowNumber, 2].CellStyle = headingStyle;
+                sheet.Range[rowNumber, 2, rowNumber, lastColumn].Merge();
+                sheet.SetRowHeight(rowNumber, 25);
+
+                rowNumber++;
+                sheet.Range[rowNumber, 2].Text = page == null
+                    ? $"Milestone {report.Stage} Progress as at {report.GeneratedAt.ToShortDateString()}"
+                    : $"Milestone {report.Stage}: {page.Name}{(string.IsNullOrEmpty(page.Patrol) ? "" : " (" + page.Patrol + ")")} as at {report.GeneratedAt.ToShortDateString()}";
+                sheet.Range[rowNumber, 2].CellStyle = headingStyle;
+                sheet.Range[rowNumber, 2, rowNumber, lastColumn].Merge();
+                sheet.SetRowHeight(rowNumber, 25);
+
+                if (page == null)
+                {
+                    rowNumber += 2;
+                    sheet.Range[rowNumber, 1].Text = report.OnlyReady ? $"No Scouts are ready for Milestone {report.Stage} yet." : $"No Scouts have a record for Milestone {report.Stage}.";
+                }
+                else
+                {
+                    rowNumber += 2;
+                    sheet.Range[rowNumber, 1].Text = "Status";
+                    sheet.Range[rowNumber, 1].CellStyle.Font.Bold = true;
+                    sheet.Range[rowNumber, 2].Text = page.Status;
+                    if (page.Ready)
+                        sheet.Range[rowNumber, 2].CellStyle.Color = Colour("#9cf250");
+
+                    // The Participates in each Challenge Area and the Leads, against what the milestone asks for
+                    rowNumber += 2;
+                    sheet.Range[rowNumber, 1].Text = "Counted so far";
+                    sheet.Range[rowNumber, 2].Text = "Count";
+                    sheet.Range[rowNumber, 3].Text = "Asked for";
+                    sheet.Range[rowNumber, 1, rowNumber, 3].CellStyle.Font.Bold = true;
+                    sheet.Range[rowNumber, 1, rowNumber, 3].CellStyle.ColorIndex = ExcelKnownColors.Grey_25_percent;
+                    foreach (var area in page.Areas.Append(page.Leads))
+                    {
+                        rowNumber++;
+                        sheet.Range[rowNumber, 1].Text = area.Area == "Leads" ? "Leads (any area)" : $"{area.Area} Participates";
+                        sheet.Range[rowNumber, 2].Number = area.Count;
+                        sheet.Range[rowNumber, 3].Number = area.Target;
+                        if (area.Met)
+                            sheet.Range[rowNumber, 1, rowNumber, 3].CellStyle.Color = Colour("#9cf250");
+                    }
+                    sheet.Range[rowNumber - page.Areas.Count, 1, rowNumber, 3].BorderAround();
+                    sheet.Range[rowNumber - page.Areas.Count, 1, rowNumber, 3].BorderInside();
+                    sheet.Range[rowNumber - page.Areas.Count, 2, rowNumber, 3].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+
+                    // The events that counted
+                    if (page.Events.Count > 0)
+                    {
+                        rowNumber += 2;
+                        sheet.Range[rowNumber, 1].Text = "Date";
+                        sheet.Range[rowNumber, 2].Text = "Event";
+                        sheet.Range[rowNumber, 3].Text = "Challenge Area";
+                        sheet.Range[rowNumber, 4].Text = "Counted as";
+                        sheet.Range[rowNumber, 1, rowNumber, lastColumn].CellStyle.Font.Bold = true;
+                        sheet.Range[rowNumber, 1, rowNumber, lastColumn].CellStyle.ColorIndex = ExcelKnownColors.Grey_25_percent;
+                        var firstEvent = rowNumber + 1;
+                        foreach (var line in page.Events)
+                        {
+                            rowNumber++;
+                            sheet.Range[rowNumber, 1].DateTime = line.Date;
+                            sheet.Range[rowNumber, 1].NumberFormat = "dd/MM/yy";
+                            sheet.Range[rowNumber, 1].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignLeft;
+                            sheet.Range[rowNumber, 2].Text = line.Event;
+                            sheet.Range[rowNumber, 3].Text = line.Area;
+                            sheet.Range[rowNumber, 4].Text = line.Credit;
+                        }
+                        sheet.Range[firstEvent - 1, 1, rowNumber, lastColumn].BorderAround();
+                        sheet.Range[firstEvent - 1, 1, rowNumber, lastColumn].BorderInside();
+                    }
+
+                    // What they wrote on the review, then about events
+                    rowNumber = WriteMilestoneAnswers(sheet, rowNumber, lastColumn, charactersAcross, "Review", page.Review, "Nothing has been written on the review yet.");
+                    if (page.EventReviews.Count > 0)
+                        rowNumber = WriteMilestoneAnswers(sheet, rowNumber, lastColumn, charactersAcross, "What they wrote about events", page.EventReviews, "");
+                }
+
+                sheet.SetColumnWidth(1, 22);
+                sheet.SetColumnWidth(2, 40);
+                sheet.SetColumnWidth(3, 16);
+                sheet.SetColumnWidth(4, 16);
+
+                sheet.PageSetup.PaperSize = ExcelPaperSize.PaperA4;
+                sheet.PageSetup.Orientation = ExcelPageOrientation.Portrait;
+                sheet.PageSetup.BottomMargin = 0.25;
+                sheet.PageSetup.TopMargin = 0.25;
+                sheet.PageSetup.LeftMargin = 0.25;
+                sheet.PageSetup.RightMargin = 0.25;
+                sheet.PageSetup.HeaderMargin = 0;
+                sheet.PageSetup.FooterMargin = 0;
+                sheet.PageSetup.IsFitToPage = true;
+                sheet.PageSetup.FitToPagesWide = 1;
+                sheet.PageSetup.FitToPagesTall = 0;
+
+                worksheetIndex++;
+            }
+            return workbook;
+        }
+
+        // A heading, then each question in bold with its answer under it, wrapped across the page. A merged cell does not size its own row, so the
+        // height is worked out from how many lines the text takes.
+        private int WriteMilestoneAnswers(IWorksheet sheet, int rowNumber, int lastColumn, int charactersAcross, string heading, List<MilestoneReviewAnswer> answers, string whenNone)
+        {
+            rowNumber += 2;
+            sheet.Range[rowNumber, 1].Text = heading;
+            sheet.Range[rowNumber, 1, rowNumber, lastColumn].CellStyle.Font.Bold = true;
+            sheet.Range[rowNumber, 1, rowNumber, lastColumn].CellStyle.ColorIndex = ExcelKnownColors.Grey_25_percent;
+            sheet.Range[rowNumber, 1, rowNumber, lastColumn].Merge();
+
+            if (answers.Count == 0 && whenNone != "")
+            {
+                rowNumber++;
+                sheet.Range[rowNumber, 1].Text = whenNone;
+                sheet.Range[rowNumber, 1, rowNumber, lastColumn].Merge();
+            }
+            foreach (var answer in answers)
+            {
+                rowNumber++;
+                sheet.Range[rowNumber, 1].Text = answer.Question;
+                sheet.Range[rowNumber, 1].CellStyle.Font.Bold = true;
+                sheet.Range[rowNumber, 1].CellStyle.Font.Size = 9;
+                sheet.Range[rowNumber, 1, rowNumber, lastColumn].Merge();
+                sheet.Range[rowNumber, 1].CellStyle.WrapText = true;
+                sheet.SetRowHeight(rowNumber, 13 * Math.Max(1, (answer.Question.Length + charactersAcross - 1) / charactersAcross));
+
+                rowNumber++;
+                sheet.Range[rowNumber, 1].Text = answer.Answer;
+                sheet.Range[rowNumber, 1, rowNumber, lastColumn].Merge();
+                sheet.Range[rowNumber, 1].CellStyle.WrapText = true;
+                sheet.Range[rowNumber, 1].CellStyle.VerticalAlignment = ExcelVAlign.VAlignTop;
+                var lines = answer.Answer.Split('\n').Sum(line => Math.Max(1, (line.Length + charactersAcross - 1) / charactersAcross));
+                sheet.SetRowHeight(rowNumber, 15 * lines + 3);
+            }
+            return rowNumber;
         }
 
         public IWorkbook GenerateWallchartWorkbook(List<WallchartItemModel> wallchartEntries, string groupName, string section, string unitName, bool forPdfOutput, bool breakByPatrol = false)

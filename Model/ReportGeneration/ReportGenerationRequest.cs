@@ -23,7 +23,9 @@
         UnitReport,
         SectionReport,
         SiaProgress,
-        ReadyToSubmit
+        ReadyToSubmit,
+        // Added at the end: the type travels as a number, so the others must keep theirs
+        MilestoneProgress
     }
 
     public enum OutputType
