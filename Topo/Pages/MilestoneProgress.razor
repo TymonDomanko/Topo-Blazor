@@ -1,5 +1,6 @@
 @page "/milestoneprogress"
 @inherits Controller.MilestoneProgressController
+@using Topo.Model.Milestone
 
 <PageTitle>Topo / Milestone Progress</PageTitle>
 
@@ -29,6 +30,7 @@
                 <option value="1">Milestone 1</option>
                 <option value="2">Milestone 2</option>
                 <option value="3">Milestone 3</option>
+                <option value="@MilestoneProgressBuilder.AllMilestones">All milestones</option>
             </select>
         </div>
     </div>
@@ -61,16 +63,7 @@
     else if (Report != null)
     {
         <div class="mb-3 text-muted">
-            @if (Report.Pages.Count == 0)
-            {
-                @(Report.OnlyReady
-                    ? $"No Scouts are ready for Milestone {Report.Stage} yet ({Report.ScoutsWithTheMilestone} {(Report.ScoutsWithTheMilestone == 1 ? "Scout has" : "Scouts have")} it). Untick the box above to see them all."
-                    : $"No Scouts have a record for Milestone {Report.Stage}.")
-            }
-            else
-            {
-                @($"{Report.Pages.Count} of {Report.ScoutsWithTheMilestone} {(Report.ScoutsWithTheMilestone == 1 ? "Scout" : "Scouts")} with Milestone {Report.Stage}.")
-            }
+            @Summary
         </div>
 
         <ReportButtons Name="Milestone Progress" OnPdf="PdfClick" OnXlsx="XlsxClick" Disabled="@(Report.Pages.Count == 0)" />

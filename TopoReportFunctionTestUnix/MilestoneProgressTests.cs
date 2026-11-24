@@ -239,7 +239,7 @@ namespace TopoReportFunctionTest
         private static MilestoneScoutPage Page(string name, string patrol = "") =>
             new MilestoneScoutPage
             {
-                MemberId = name, Name = name, Patrol = patrol, Status = "Ready", Ready = true,
+                MemberId = name, Name = name, Patrol = patrol, Stage = 1, Status = "Ready", Ready = true,
                 Areas = { new MilestoneAreaProgress { Area = "Community", Count = 6, Target = 6 }, new MilestoneAreaProgress { Area = "Outdoors", Count = 4, Target = 6 },
                           new MilestoneAreaProgress { Area = "Creative", Count = 6, Target = 6 }, new MilestoneAreaProgress { Area = "Personal growth", Count = 6, Target = 6 } },
                 Leads = new MilestoneAreaProgress { Area = "Leads", Count = 2, Target = 2 },
@@ -323,6 +323,57 @@ namespace TopoReportFunctionTest
             var report = ReportWith();
             var sheet = new ReportService().GenerateMilestoneProgressWorkbook(report, "Group", "scout", "Scout Unit").Worksheets[0];
             StringAssert.Contains(Cell(sheet, 5, 1), "No Scouts are ready for Milestone 1");
+        }
+
+        [TestMethod]
+        public void AllMilestonesMakesPagesForEachOfTheThreeInOrderOfMilestone()
+        {
+            var records = new[]
+            {
+                Record("a", 1, "in_progress", "complete"), Record("b", 1, "awarded", "complete"), Record("a", 2, "in_progress", "incomplete"), Record("b", 2, "in_progress", "complete"),
+                Record("b", 3, "in_progress", "complete"), Record("a", 3, "in_progress", "complete")
+            };
+            var members = new[] { Scout("a", "Amy"), Scout("b", "Ben") };
+            var report = Build(members, records, MilestoneProgressBuilder.AllMilestones, true);
+            CollectionAssert.AreEqual(new[] { "Amy 1", "Ben 2", "Amy 3", "Ben 3" }, report.Pages.Select(p => p.Name + " " + p.Stage).ToArray());
+            Assert.AreEqual(6, report.ScoutsWithTheMilestone, "a Scout with three milestones counts three");
+            Assert.AreEqual(MilestoneProgressBuilder.AllMilestones, report.Stage);
+        }
+
+        [TestMethod]
+        public void AllMilestonesWithoutTheOptionShowsEveryScoutsEveryMilestone()
+        {
+            var records = new[] { Record("a", 1, "awarded"), Record("a", 2, "in_progress"), Record("b", 3, "in_progress") };
+            var pages = Build(new[] { Scout("a", "Amy"), Scout("b", "Ben") }, records, MilestoneProgressBuilder.AllMilestones, false).Pages;
+            CollectionAssert.AreEqual(new[] { 1, 2, 3 }, pages.Select(p => p.Stage).ToArray());
+        }
+
+        [TestMethod]
+        public void APageKnowsItsMilestoneWhenOneIsChosen()
+        {
+            Assert.AreEqual(2, Build(new[] { Scout("a", "Amy") }, new[] { Record("a", 2, "in_progress", "complete") }, 2).Pages.Single().Stage);
+        }
+
+        [TestMethod]
+        public void TheWorkbookForAllMilestonesNamesEachSheetWithItsMilestoneAndTitlesItSo()
+        {
+            var one = Page("Amy"); one.Stage = 1;
+            var two = Page("Amy"); two.Stage = 2;
+            var report = ReportWith(one, two);
+            report.Stage = MilestoneProgressBuilder.AllMilestones;
+            var workbook = new ReportService().GenerateMilestoneProgressWorkbook(report, "Group", "scout", "Scout Unit");
+            Assert.AreEqual("Amy M1", workbook.Worksheets[0].Name);
+            Assert.AreEqual("Amy M2", workbook.Worksheets[1].Name);
+            StringAssert.Contains(Cell(workbook.Worksheets[1], 3, 2), "Milestone 2: Amy");
+        }
+
+        [TestMethod]
+        public void TheEmptyWorkbookForAllMilestonesSaysNoMilestone()
+        {
+            var report = ReportWith();
+            report.Stage = MilestoneProgressBuilder.AllMilestones;
+            var sheet = new ReportService().GenerateMilestoneProgressWorkbook(report, "Group", "scout", "Scout Unit").Worksheets[0];
+            StringAssert.Contains(Cell(sheet, 5, 1), "No Scouts are ready for any milestone");
         }
     }
 }

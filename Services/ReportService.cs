@@ -2841,7 +2841,7 @@ namespace Topo.Services
                 int rowNumber = 1;
 
                 // a sheet's name is at most 31 characters, without : \ / ? * [ ], and different from the others
-                var sheetName = new string((page == null ? "Milestone" : page.Name).Where(c => !":\\/?*[]".Contains(c)).ToArray());
+                var sheetName = new string((page == null ? "Milestone" : page.Name + (report.Stage == MilestoneProgressBuilder.AllMilestones ? " M" + page.Stage : "")).Where(c => !":\\/?*[]".Contains(c)).ToArray());
                 sheetName = sheetName.Length > 28 ? sheetName.Substring(0, 28) : sheetName;
                 var unique = sheetName;
                 for (var n = 2; !names.Add(unique); n++)
@@ -2856,8 +2856,8 @@ namespace Topo.Services
 
                 rowNumber++;
                 sheet.Range[rowNumber, 2].Text = page == null
-                    ? $"Milestone {report.Stage} Progress as at {report.GeneratedAt.ToShortDateString()}"
-                    : $"Milestone {report.Stage}: {page.Name}{(string.IsNullOrEmpty(page.Patrol) ? "" : " (" + page.Patrol + ")")} as at {report.GeneratedAt.ToShortDateString()}";
+                    ? $"{(report.Stage == MilestoneProgressBuilder.AllMilestones ? "Milestone" : "Milestone " + report.Stage)} Progress as at {report.GeneratedAt.ToShortDateString()}"
+                    : $"Milestone {page.Stage}: {page.Name}{(string.IsNullOrEmpty(page.Patrol) ? "" : " (" + page.Patrol + ")")} as at {report.GeneratedAt.ToShortDateString()}";
                 sheet.Range[rowNumber, 2].CellStyle = headingStyle;
                 sheet.Range[rowNumber, 2, rowNumber, lastColumn].Merge();
                 sheet.SetRowHeight(rowNumber, 25);
@@ -2865,7 +2865,8 @@ namespace Topo.Services
                 if (page == null)
                 {
                     rowNumber += 2;
-                    sheet.Range[rowNumber, 1].Text = report.OnlyReady ? $"No Scouts are ready for Milestone {report.Stage} yet." : $"No Scouts have a record for Milestone {report.Stage}.";
+                    var which = report.Stage == MilestoneProgressBuilder.AllMilestones ? "any milestone" : $"Milestone {report.Stage}";
+                    sheet.Range[rowNumber, 1].Text = report.OnlyReady ? $"No Scouts are ready for {which} yet." : $"No Scouts have a record for {which}.";
                 }
                 else
                 {

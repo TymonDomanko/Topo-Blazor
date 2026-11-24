@@ -118,6 +118,26 @@ namespace Topo.Controller
             }
         }
 
+        private string Which => Report == null || Report.Stage == MilestoneProgressBuilder.AllMilestones ? "any milestone" : $"Milestone {Report.Stage}";
+
+        // How many pages are shown out of how many there could be, or why there are none
+        public string Summary
+        {
+            get
+            {
+                if (Report == null)
+                    return "";
+                var all = Report.Stage == MilestoneProgressBuilder.AllMilestones;
+                if (Report.Pages.Count == 0)
+                    return Report.OnlyReady
+                        ? $"No Scouts are ready for {Which} yet. Untick the box above to see them all ({Report.ScoutsWithTheMilestone})."
+                        : $"No Scouts have a record for {Which}.";
+                return all
+                    ? $"{Report.Pages.Count} of the {Report.ScoutsWithTheMilestone} milestones the Scouts have, across Milestones 1, 2 and 3."
+                    : $"{Report.Pages.Count} of {Report.ScoutsWithTheMilestone} {(Report.ScoutsWithTheMilestone == 1 ? "Scout" : "Scouts")} with Milestone {Report.Stage}.";
+            }
+        }
+
         // The pages follow the options as they are changed, without reading Terrain again
         internal void OptionChanged() => Recalculate();
 
@@ -158,7 +178,7 @@ namespace Topo.Controller
             {
                 var groupName = _storageService.GroupName ?? "";
                 var bytes = await _reportService.GetMilestoneProgressReport(groupName, Report.Section, Report.UnitName, outputType, JsonConvert.SerializeObject(Report));
-                var fileName = $"Milestone_{Report.Stage}_Progress_{Report.UnitName.Replace(' ', '_')}.{extension}";
+                var fileName = $"Milestone_{(Report.Stage == MilestoneProgressBuilder.AllMilestones ? "All" : Report.Stage.ToString())}_Progress_{Report.UnitName.Replace(' ', '_')}.{extension}";
                 await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, contentType, bytes);
             }
             catch (Exception)
