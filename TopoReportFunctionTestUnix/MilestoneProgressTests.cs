@@ -1,5 +1,4 @@
 using Topo.Model.Milestone;
-using Topo.Model.SiaProgress;
 using Topo.Services;
 
 namespace TopoReportFunctionTest
@@ -18,11 +17,11 @@ namespace TopoReportFunctionTest
                 Leader = new MilestoneAreaCounts { Community = leads }
             };
 
-        private static MilestoneProgressReport Build(IEnumerable<MilestoneProgressMember> members, IEnumerable<MilestoneProgressRecord> records, int stage = 1, bool onlyReady = true, Dictionary<string, SiaTemplate>? forms = null) =>
+        private static MilestoneProgressReport Build(IEnumerable<MilestoneProgressMember> members, IEnumerable<MilestoneProgressRecord> records, int stage = 1, bool onlyReady = true, Dictionary<string, MilestoneForm>? forms = null) =>
             MilestoneProgressBuilder.Build(new MilestoneProgressInput
             {
                 UnitName = "Scout Unit", Section = "scout", Stage = stage, OnlyReady = onlyReady, Members = members.ToList(), Records = records.ToList(),
-                Forms = forms ?? new Dictionary<string, SiaTemplate>(), GeneratedAt = new DateTime(2026, 11, 25)
+                Forms = forms ?? new Dictionary<string, MilestoneForm>(), GeneratedAt = new DateTime(2026, 11, 25)
             });
 
         [TestMethod]
@@ -132,38 +131,64 @@ namespace TopoReportFunctionTest
             CollectionAssert.AreEqual(new[] { "Participated", "Led" }, events.Select(e => e.Credit).ToArray());
         }
 
-        private static Dictionary<string, SiaTemplate> Form() => new Dictionary<string, SiaTemplate>
+        private static MilestoneForm Form3() => new MilestoneForm
         {
-            ["milestone/scout/review/1|3"] = new SiaTemplate
+            Questions =
             {
-                Questions = { new SiaQuestion { Id = "favourite_adventure", Label = "What was your favourite adventure?" }, new SiaQuestion { Id = "best_challenge", Label = "What was the best Challenge?" },
-                              new SiaQuestion { Id = "spices_selection", Label = "Which SPICES objectives?" } },
-                Options = { ["social"] = "Social", ["character"] = "Character" }
+                new MilestoneFormQuestion { Id = "favourite_adventure", Label = "What was your favourite adventure?" },
+                new MilestoneFormQuestion { Id = "best_challenge", Label = "What was the best Challenge?" },
+                new MilestoneFormQuestion { Id = "spices_selection", Label = "Which SPICES objectives?", IsChoice = true,
+                    Choices = { new MilestoneChoice { Id = "social", Title = "Social" }, new MilestoneChoice { Id = "physical", Title = "Physical" }, new MilestoneChoice { Id = "character", Title = "Character" } } }
             }
         };
 
+        private static Dictionary<string, MilestoneForm> Forms() => new Dictionary<string, MilestoneForm>
+        {
+            ["milestone/scout/review/1|3"] = Form3(),
+            [MilestoneProgressBuilder.LatestKey("scout", 1)] = Form3()
+        };
+
         [TestMethod]
-        public void TheReviewShowsTheFormsQuestionsInOrderWithOnlyWhatWasAnswered()
+        public void TheFormShowsEveryQuestionInOrderFilledInWhereAnsweredAndBlankWhereNot()
         {
             var record = Record("a", 1, "pending_review", "complete");
             record.Template = "milestone/scout/review/1"; record.Version = 3;
             record.Answers["spices_selection"] = "social, character";
             record.Answers["favourite_adventure"] = "The kayak day.";
             record.Answers["best_challenge"] = "  ";
-            var review = Build(new[] { Scout("a", "Amy") }, new[] { record }, 1, true, Form()).Pages.Single().Review;
-            CollectionAssert.AreEqual(new[] { "What was your favourite adventure?", "Which SPICES objectives?" }, review.Select(r => r.Question).ToArray());
-            CollectionAssert.AreEqual(new[] { "The kayak day.", "Social, Character" }, review.Select(r => r.Answer).ToArray());
+            var form = Build(new[] { Scout("a", "Amy") }, new[] { record }, 1, true, Forms()).Pages.Single().Form;
+            CollectionAssert.AreEqual(new[] { "What was your favourite adventure?", "What was the best Challenge?", "Which SPICES objectives?" }, form.Select(r => r.Question).ToArray());
+            Assert.AreEqual("The kayak day.", form[0].Answer);
+            Assert.IsFalse(form[0].Blank);
+            Assert.IsTrue(form[1].Blank, "written as spaces is not an answer");
+            Assert.IsTrue(form[2].IsChoice);
+            CollectionAssert.AreEqual(new[] { true, false, true }, form[2].Choices.Select(c => c.Chosen).ToArray());
+            CollectionAssert.AreEqual(new[] { "Social", "Physical", "Character" }, form[2].Choices.Select(c => c.Title).ToArray());
+            Assert.IsFalse(form[2].Blank);
+        }
+
+        [TestMethod]
+        public void AScoutWhoHasWrittenNothingIsGivenTheCurrentFormBlankToFillIn()
+        {
+            var record = Record("a", 1, "in_progress", "complete");
+            var form = Build(new[] { Scout("a", "Amy") }, new[] { record }, 1, true, Forms()).Pages.Single().Form;
+            Assert.AreEqual(3, form.Count);
+            Assert.IsTrue(form.All(e => e.Blank));
+            Assert.IsTrue(form[2].Choices.All(c => !c.Chosen), "the options are there to tick");
         }
 
         [TestMethod]
         public void AnAnswerOnAnOlderFormIsShownWithThatFormsWording()
         {
-            var forms = Form();
-            forms["milestone/scout/review/1|1"] = new SiaTemplate { Questions = { new SiaQuestion { Id = "favourite_adventure", Label = "Old wording of the question" } } };
+            var forms = Forms();
+            forms["milestone/scout/review/1|1"] = new MilestoneForm { Questions = { new MilestoneFormQuestion { Id = "favourite_adventure", Label = "Old wording of the question" } } };
             var record = Record("a", 1, "pending_review", "complete");
             record.Template = "milestone/scout/review/1"; record.Version = 1;
             record.Answers["favourite_adventure"] = "Camp.";
-            Assert.AreEqual("Old wording of the question", Build(new[] { Scout("a", "Amy") }, new[] { record }, 1, true, forms).Pages.Single().Review.Single().Question);
+            var form = Build(new[] { Scout("a", "Amy") }, new[] { record }, 1, true, forms).Pages.Single().Form;
+            Assert.AreEqual(1, form.Count, "that version only had the one question");
+            Assert.AreEqual("Old wording of the question", form[0].Question);
+            Assert.AreEqual("Camp.", form[0].Answer);
         }
 
         [TestMethod]
@@ -173,9 +198,28 @@ namespace TopoReportFunctionTest
             record.Answers["favourite_adventure"] = "Camp.";
             record.Answers["skipped_by"] = "someone";
             record.Answers["supporting_files"] = "abc";
-            var review = Build(new[] { Scout("a", "Amy") }, new[] { record }).Pages.Single().Review;
-            Assert.AreEqual(1, review.Count);
-            Assert.AreEqual("favourite adventure", review[0].Question);
+            var form = Build(new[] { Scout("a", "Amy") }, new[] { record }).Pages.Single().Form;
+            Assert.AreEqual(1, form.Count);
+            Assert.AreEqual("favourite adventure", form[0].Question);
+        }
+
+        [TestMethod]
+        public void TheFormParserReadsTextQuestionsAndOptionsAndLeavesOutTheUploaderAndTheLink()
+        {
+            var json = @"{ ""template"": ""milestone/scout/review/1"", ""version"": 3, ""document"": [ { ""input_groups"": [ { ""inputs"": [
+                { ""id"": ""favourite_adventure"", ""type"": ""text_input"", ""label"": ""What was your favourite adventure?"" },
+                { ""id"": ""spices_selection"", ""type"": ""single_tab_selector"", ""multi_select"": true, ""label"": ""Which SPICES objectives? *"", ""selections"": [ { ""id"": ""social"", ""title"": ""Social"" }, { ""id"": ""physical"", ""title"": ""Physical"" } ] },
+                { ""id"": ""by_tab"", ""type"": ""multi_tab_selector"", ""label"": ""Tabbed"", ""tabs"": [ { ""title"": ""One"", ""selections"": [ { ""id"": ""a"", ""title"": ""Option A"" } ] } ] },
+                { ""id"": ""spices_text_link"", ""type"": ""text_end_link"", ""label"": ""The SPICES i-statements may help"" },
+                { ""id"": ""supporting_files"", ""type"": ""file_uploader"", ""label"": ""Upload supporting files"" } ] } ] } ] }";
+            var form = MilestoneFormParser.Parse(json);
+            CollectionAssert.AreEqual(new[] { "favourite_adventure", "spices_selection", "by_tab" }, form.Questions.Select(q => q.Id).ToArray());
+            Assert.IsFalse(form.Questions[0].IsChoice);
+            Assert.IsTrue(form.Questions[1].IsChoice);
+            Assert.AreEqual("Which SPICES objectives?", form.Questions[1].Label);
+            CollectionAssert.AreEqual(new[] { "Social", "Physical" }, form.Questions[1].Choices.Select(c => c.Title).ToArray());
+            CollectionAssert.AreEqual(new[] { "a" }, form.Questions[2].Choices.Select(c => c.Id).ToArray());
+            Assert.AreEqual(0, MilestoneFormParser.Parse("not json").Questions.Count);
         }
 
         [TestMethod]
@@ -244,7 +288,7 @@ namespace TopoReportFunctionTest
                           new MilestoneAreaProgress { Area = "Creative", Count = 6, Target = 6 }, new MilestoneAreaProgress { Area = "Personal growth", Count = 6, Target = 6 } },
                 Leads = new MilestoneAreaProgress { Area = "Leads", Count = 2, Target = 2 },
                 Events = { new MilestoneEventLine { Date = new DateTime(2026, 3, 1), Event = "Pizza night", Area = "Community", Credit = "Participated" } },
-                Review = { new MilestoneReviewAnswer { Question = "What was your favourite adventure?", Answer = "The kayak day." } }
+                Form = { new MilestoneFormEntry { Question = "What was your favourite adventure?", Answer = "The kayak day." } }
             };
 
         private static string Cell(Syncfusion.XlsIO.IWorksheet sheet, int row, int column) => sheet.Range[row, column].Text ?? "";
@@ -287,9 +331,9 @@ namespace TopoReportFunctionTest
             Assert.AreEqual("Date", Cell(sheet, 14, 1));
             Assert.AreEqual("Pizza night", Cell(sheet, 15, 2));
             Assert.AreEqual("Participated", Cell(sheet, 15, 4));
-            Assert.AreEqual("Review", Cell(sheet, 17, 1));
-            Assert.AreEqual("What was your favourite adventure?", Cell(sheet, 18, 1));
-            Assert.AreEqual("The kayak day.", Cell(sheet, 19, 1));
+            Assert.AreEqual("Milestone 1 review: Amy", Cell(sheet, 17, 1));
+            Assert.AreEqual("What was your favourite adventure?", Cell(sheet, 19, 1));
+            Assert.AreEqual("The kayak day.", Cell(sheet, 20, 1));
         }
 
         [TestMethod]
@@ -300,21 +344,43 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
-        public void AScoutWithNothingWrittenIsToldSo()
+        public void AQuestionNotAnsweredYetIsABoxTallEnoughToWriteIn()
         {
-            var empty = Page("Amy");
-            empty.Review.Clear();
-            var sheet = new ReportService().GenerateMilestoneProgressWorkbook(ReportWith(empty), "Group", "scout", "Scout Unit").Worksheets[0];
-            Assert.AreEqual("Nothing has been written on the review yet.", Cell(sheet, 18, 1));
+            var blank = Page("Amy");
+            blank.Form[0].Answer = "";
+            blank.Form[0].Blank = true;
+            var sheet = new ReportService().GenerateMilestoneProgressWorkbook(ReportWith(blank), "Group", "scout", "Scout Unit").Worksheets[0];
+            Assert.AreEqual("What was your favourite adventure?", Cell(sheet, 19, 1));
+            Assert.AreEqual("", Cell(sheet, 20, 1));
+            Assert.IsTrue(sheet.GetRowHeight(20) >= 70, "room for handwriting");
+        }
+
+        [TestMethod]
+        public void AQuestionOfOptionsListsThemWithTheOnesPickedMarked()
+        {
+            var page = Page("Amy");
+            page.Form.Add(new MilestoneFormEntry { Question = "Which SPICES objectives?", IsChoice = true, Choices = { new MilestoneChoiceState { Title = "Social", Chosen = true }, new MilestoneChoiceState { Title = "Physical" } } });
+            var sheet = new ReportService().GenerateMilestoneProgressWorkbook(ReportWith(page), "Group", "scout", "Scout Unit").Worksheets[0];
+            Assert.AreEqual("Which SPICES objectives?", Cell(sheet, 22, 1));
+            StringAssert.Contains(Cell(sheet, 23, 1), "[x] Social");
+            StringAssert.Contains(Cell(sheet, 23, 1), "[ ] Physical");
+        }
+
+        [TestMethod]
+        public void TheFormStartsOnAPageOfItsOwn()
+        {
+            var sheet = new ReportService().GenerateMilestoneProgressWorkbook(ReportWith(Page("Amy")), "Group", "scout", "Scout Unit").Worksheets[0];
+            Assert.AreEqual(1, sheet.HPageBreaks.Count);
+            Assert.AreEqual(17, sheet.HPageBreaks[0].Location.Row);
         }
 
         [TestMethod]
         public void LongAnswersGetARowTallEnoughForTheirLines()
         {
             var page = Page("Amy");
-            page.Review[0].Answer = new string('x', 400);
+            page.Form[0].Answer = new string('x', 400);
             var sheet = new ReportService().GenerateMilestoneProgressWorkbook(ReportWith(page), "Group", "scout", "Scout Unit").Worksheets[0];
-            Assert.IsTrue(sheet.GetRowHeight(19) >= 15 * 4, "400 characters across about 86 take five lines");
+            Assert.IsTrue(sheet.GetRowHeight(20) >= 15 * 4, "400 characters across about 86 take five lines");
         }
 
         [TestMethod]

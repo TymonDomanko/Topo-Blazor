@@ -1,5 +1,4 @@
 using Topo.Model.Milestone;
-using Topo.Model.SiaProgress;
 
 namespace Topo.Services
 {
@@ -7,7 +6,7 @@ namespace Topo.Services
     public class MilestoneProgressData
     {
         public List<MilestoneProgressRecord> Records { get; set; } = new List<MilestoneProgressRecord>();
-        public Dictionary<string, SiaTemplate> Forms { get; set; } = new Dictionary<string, SiaTemplate>();
+        public Dictionary<string, MilestoneForm> Forms { get; set; } = new Dictionary<string, MilestoneForm>();
     }
 
     public interface IMilestoneProgressService
@@ -22,7 +21,7 @@ namespace Topo.Services
 
         private readonly ITerrainAPIService _terrainAPIService;
         // A form never changes once published, so each version of it is read once
-        private readonly Dictionary<string, SiaTemplate> _forms = new Dictionary<string, SiaTemplate>();
+        private readonly Dictionary<string, MilestoneForm> _forms = new Dictionary<string, MilestoneForm>();
 
         public MilestoneProgressService(ITerrainAPIService terrainAPIService)
         {
@@ -36,19 +35,30 @@ namespace Topo.Services
             var records = MilestoneProgressParser.Parse(await _terrainAPIService.GetUnitAchievementsJsonAsync(unitId, "milestone"));
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Each answered record is on a version of the review form; the questions are read as they were worded then
-            var wanted = records
+            // Each answered record is on a version of the review form; the questions are read as they were worded then. Each milestone's current
+            // form is read as well, for a Scout who has written nothing yet.
+            var reads = new List<(string key, Func<Task<string>> read)>();
+            foreach (var r in records
                 .Where(r => string.Equals(r.Section, section, StringComparison.OrdinalIgnoreCase) && r.FormKey != "" && r.Answers.Values.Any(v => !string.IsNullOrWhiteSpace(v)))
-                .GroupBy(r => r.FormKey)
-                .Select(g => g.First())
-                .Where(r => !_forms.ContainsKey(r.FormKey))
-                .ToList();
-            if (wanted.Count > 0)
+                .GroupBy(r => r.FormKey).Select(g => g.First()).Where(r => !_forms.ContainsKey(r.FormKey)))
+            {
+                var template = r.Template;
+                var version = r.Version;
+                reads.Add((r.FormKey, () => _terrainAPIService.GetTemplateVersionJsonAsync(template, version)));
+            }
+            foreach (var stage in MilestoneProgressBuilder.Milestones)
+            {
+                var key = MilestoneProgressBuilder.LatestKey(section, stage);
+                var path = $"milestone/{section.ToLowerInvariant()}/review/{stage}";
+                if (!_forms.ContainsKey(key))
+                    reads.Add((key, () => _terrainAPIService.GetTemplateJsonAsync(path)));
+            }
+            if (reads.Count > 0)
             {
                 progress?.Invoke("the review forms");
-                foreach (var batch in wanted.Chunk(FormsAtOnce))
+                foreach (var batch in reads.Chunk(FormsAtOnce))
                 {
-                    var read = await Task.WhenAll(batch.Select(async r => (key: r.FormKey, form: SiaTemplateParser.Parse(await _terrainAPIService.GetTemplateVersionJsonAsync(r.Template, r.Version)))));
+                    var read = await Task.WhenAll(batch.Select(async x => (x.key, form: MilestoneFormParser.Parse(await x.read()))));
                     cancellationToken.ThrowIfCancellationRequested();
                     // a form that couldn't be read is tried again next time
                     foreach (var (key, form) in read.Where(f => f.form.Questions.Count > 0))
@@ -56,7 +66,7 @@ namespace Topo.Services
                 }
             }
 
-            return new MilestoneProgressData { Records = records, Forms = new Dictionary<string, SiaTemplate>(_forms) };
+            return new MilestoneProgressData { Records = records, Forms = new Dictionary<string, MilestoneForm>(_forms) };
         }
     }
 }
