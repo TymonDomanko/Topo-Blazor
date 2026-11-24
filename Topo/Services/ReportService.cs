@@ -23,6 +23,7 @@ namespace Topo.Services
         public Task<byte[]> GetWallchartReport(string groupName, string section, string unitName, OutputType outputType, string serialisedWallchartItems, bool breakByPatrol);
         public Task<byte[]> GetAdditionalAwardsReport(string groupName, string section, string unitName, OutputType outputType, string serialisedReportData, bool breakByPatrol);
         public Task<byte[]> GetOasSummaryReport(string groupName, string section, string unitName, OutputType outputType, string serialisedReport);
+        public Task<byte[]> GetMilestoneProgressReport(string groupName, string section, string unitName, OutputType outputType, string serialisedReport);
         public Task<byte[]> GetApprovalsReport(string groupName, string section, string unitName, OutputType outputType, string serialisedReportData, DateTime fromDate, DateTime toDate, bool groupByMember);
         public Task<byte[]> GetProgressReport(string groupName, string section, string unitName, OutputType outputType, string serialisedReportData);
         public Task<byte[]> GetScoutingHistoryReport(string groupName, string section, string unitName, OutputType outputType, string serialisedReportData);
@@ -255,6 +256,21 @@ namespace Topo.Services
             var reportGenerationRequest = new ReportGenerationRequest()
             {
                 ReportType = ReportType.OasSummary,
+                GroupName = groupName,
+                Section = section,
+                UnitName = unitName,
+                OutputType = outputType,
+                ReportData = serialisedReport
+            };
+
+            return await CallReportGeneratorFunction(reportGenerationRequest);
+        }
+
+        public async Task<byte[]> GetMilestoneProgressReport(string groupName, string section, string unitName, OutputType outputType, string serialisedReport)
+        {
+            var reportGenerationRequest = new ReportGenerationRequest()
+            {
+                ReportType = ReportType.MilestoneProgress,
                 GroupName = groupName,
                 Section = section,
                 UnitName = unitName,

@@ -84,6 +84,8 @@ namespace Topo.Services
         public Task<PatrolWriteResult> PutUnitMemberAsync(string groupId, string unitId, string memberId, string duty, bool unitCouncil);
         public Task<string> GetUnitAchievementsJsonAsync(string unitId, string type);
         public Task<string> GetTemplateJsonAsync(string templatePath);
+        // A template as it was at an earlier version, for a record written on an older form
+        public Task<string> GetTemplateVersionJsonAsync(string templatePath, int version);
     }
 
     public class TerrainAPIService : ITerrainAPIService
@@ -787,6 +789,15 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{achievementsAddress}units/{unitId}/achievements?type={type}";
+            return await SendRequest(HttpMethod.Get, requestUri);
+        }
+
+        // A template as it was at a version (milestone/scout/review/1 at version 2), which is how a record's own form is found
+        public async Task<string> GetTemplateVersionJsonAsync(string templatePath, int version)
+        {
+            await RefreshTokenAsync();
+
+            string requestUri = $"{templatesAddress}{templatePath}/{version}.json";
             return await SendRequest(HttpMethod.Get, requestUri);
         }
 

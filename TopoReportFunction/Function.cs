@@ -140,6 +140,9 @@ public class Function
                     case ReportType.OasSummary:
                         workbook = GenerateOasSummaryWorkbook(reportGenerationRequest);
                         break;
+                    case ReportType.MilestoneProgress:
+                        workbook = GenerateMilestoneProgressWorkbook(reportGenerationRequest);
+                        break;
                 }
 
                 Console.WriteLine("Workbook completed");
@@ -313,6 +316,16 @@ public class Function
         if (reportData != null)
         {
             return reportService.GenerateOasSummaryWorkbook(reportData, reportGenerationRequest.GroupName, reportGenerationRequest.Section, reportGenerationRequest.UnitName);
+        }
+        return reportService.CreateWorkbookWithSheets(1);
+    }
+
+    private IWorkbook GenerateMilestoneProgressWorkbook(ReportGenerationRequest reportGenerationRequest)
+    {
+        var reportData = JsonConvert.DeserializeObject<MilestoneProgressReport>(reportGenerationRequest.ReportData);
+        if (reportData != null)
+        {
+            return reportService.GenerateMilestoneProgressWorkbook(reportData, reportGenerationRequest.GroupName, reportGenerationRequest.Section, reportGenerationRequest.UnitName);
         }
         return reportService.CreateWorkbookWithSheets(1);
     }

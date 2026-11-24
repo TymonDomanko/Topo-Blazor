@@ -70,6 +70,7 @@ namespace Topo.Shared
                 new("SIA", "sia", "oi-clipboard"),
                 new("SIA Progress", "siaprogress", "oi-task"),
                 new("Milestone", "milestone", "oi-flag"),
+                new("Milestone Progress", "milestoneprogress", "oi-task"),
                 new("Additional Awards", "awards", "oi-shield"),
                 new("Ready to Submit", "readytosubmit", "oi-share"),
             }),
