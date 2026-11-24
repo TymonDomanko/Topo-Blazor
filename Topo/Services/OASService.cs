@@ -76,6 +76,7 @@ namespace Topo.Services
             {
                 Stream = streamTitle,
                 Branch = treeNode.branch_id,
+                ParentBranch = "",
                 StageTitle = treeNode.title,
                 Stage = treeNode.stage,
                 TemplateLink = treeNode.template_link,
@@ -85,16 +86,17 @@ namespace Topo.Services
             {
                 foreach (var child in treeNode.children)
                 {
-                    ProcessChild(streamTitle, child, oasStageListModels);
+                    ProcessChild(streamTitle, child, treeNode.branch_id, oasStageListModels);
                 }
             }
         }
-        private void ProcessChild(string streamTitle, Child childNode, List<OASStageListModel> oasStageListModels)
+        private void ProcessChild(string streamTitle, Child childNode, string parentBranch, List<OASStageListModel> oasStageListModels)
         {
             oasStageListModels.Add(new OASStageListModel
             {
                 Stream = streamTitle,
                 Branch = childNode.branch_id,
+                ParentBranch = parentBranch,
                 StageTitle = childNode.title,
                 Stage = childNode.stage,
                 TemplateLink = childNode.template_link,
@@ -104,7 +106,7 @@ namespace Topo.Services
             {
                 foreach (var child in childNode.children)
                 {
-                    ProcessChild(streamTitle, child, oasStageListModels);
+                    ProcessChild(streamTitle, child, childNode.branch_id, oasStageListModels);
                 }
             }
         }

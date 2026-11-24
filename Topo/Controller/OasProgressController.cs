@@ -1,17 +1,14 @@
-﻿using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Microsoft.VisualBasic;
 using Newtonsoft.Json;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 using Topo.Model.OAS;
 using Topo.Model.ReportGeneration;
 using Topo.Services;
 
 namespace Topo.Controller
 {
+    // The OAS Progress page: the worksheets for a skill (or the three core skills) at a level, with the levels below it and the branches
+    // at it as the leader wants them
     public class OasProgressController : ComponentBase
     {
         [Inject]
@@ -29,148 +26,182 @@ namespace Topo.Controller
         [Inject]
         public IOASService _oasService { get; set; }
 
+        [Inject]
+        public IMembersService _membersService { get; set; }
+
         public OASPageViewModel model = new OASPageViewModel();
+        public bool Loading;
+        public string Progress = "";
+        // The branches the skills have taken at the chosen level, for the leader to pick from
+        public List<OasBranchChoice> BranchChoices = new List<OasBranchChoice>();
+        // What the worksheets will be made for, and what is left out because everyone in the unit has it already
+        public OasWorksheetSelectionResult Selection = new OasWorksheetSelectionResult();
+        private HashSet<string> _everyoneHas = new HashSet<string>();
+        // The highest stage anyone in the unit has been awarded in each skill, for "one above the highest"
+        private Dictionary<string, int> _highest = new Dictionary<string, int>();
+        private int _loadId;
 
-        public ElementReference _select2Reference;
+        // The skills to pick from, in the order Terrain lists them
+        public List<string> Skills => model.Stages.Select(s => s.Stream).Distinct().ToList();
 
-        protected override async Task OnAfterRenderAsync(bool firstRender)
-        {
-            if (firstRender)
-            {
-                await JS.InvokeVoidAsync("BindSelect2");
-            }
-        }
+        // The levels to pick from
+        public IEnumerable<int> Levels => Enumerable.Range(1, Math.Max(OasWorksheetSelection.HighestLevel(model.Stages), 9));
+
+        public bool CanMake => !Loading && !string.IsNullOrEmpty(model.UnitId) && Selection.Included.Count > 0;
 
         protected override async Task OnInitializedAsync()
         {
             if (!_storageService.IsAuthenticated)
+            {
                 NavigationManager.NavigateTo("index");
+                return;
+            }
 
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
-            model.Stages = await _oasService.GetOASStagesList();
             model.UseFullNames = _storageService.UseFullNames;
-            if (!string.IsNullOrEmpty(_storageService.UnitId))
+            try
             {
-                await UnitChange(_storageService.UnitId);
+                model.Stages = await _oasService.GetOASStagesList();
             }
+            catch (Exception)
+            {
+                model.ErrorMessage = "Couldn't read the Outdoor Adventure Skills from Terrain.";
+            }
+            if (!string.IsNullOrEmpty(_storageService.UnitId))
+                await UnitChange(_storageService.UnitId);
         }
 
-        internal async Task UnitChange(ChangeEventArgs e)
-        {
-            var unitId = e.Value?.ToString() ?? "";
-            await UnitChange(unitId);
-        }
+        internal async Task UnitChange(ChangeEventArgs e) => await UnitChange(e.Value?.ToString() ?? "");
 
+        // The unit's Scouts and what they have been awarded are read so levels everyone already has can be left out
         internal async Task UnitChange(string unitId)
         {
             model.UnitId = unitId;
-            _storageService.UnitId = model.UnitId;
+            _storageService.UnitId = unitId;
             model.UnitName = _storageService.UnitName;
-        }
-
-        internal async Task OASWorksheetPdfClick()
-        {
-            if (!await GetSelections(_select2Reference))
-                return;
-
-            byte[] report = await OASWorksheet(OutputType.PDF);
-            var fileName = $"OAS_Worksheet_{model.UnitName.Replace(' ', '_')}.pdf";
-
-            // Send the data to JS to actually download the file
-            await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, "application/pdf", report);
-        }
-
-        internal async Task OASWorksheetXlsxClick()
-        {
-            if (!await GetSelections(_select2Reference))
-                return;
-
-            byte[] report = await OASWorksheet(OutputType.Excel);
-            var fileName = $"OAS_Worksheet_{model.UnitName.Replace(' ', '_')}.xlsx";
-
-            // Send the data to JS to actually download the file
-            await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, "application/vnd.ms-excel", report);
-        }
-
-        private async Task<byte[]> OASWorksheet(OutputType outputType = OutputType.PDF)
-        {
-            _storageService.UseFullNames = model.UseFullNames;
-            var sortedAnswers = new List<OASWorksheetAnswers>();
-            foreach (var selectedStageTemplate in model.SelectedStages)
+            _everyoneHas = new HashSet<string>();
+            _highest = new Dictionary<string, int>();
+            var loadId = ++_loadId;
+            if (string.IsNullOrEmpty(unitId))
             {
-                var templateList = await _oasService.GetOASTemplate(selectedStageTemplate.Replace("/latest.json", ""));
-                var selectedStage = model.Stages.Where(s => s.TemplateLink == selectedStageTemplate).FirstOrDefault() ?? new OASStageListModel();
-                var sortedTemplateAnswers = await _oasService.GenerateOASWorksheetAnswers(model.UnitId, selectedStage, model.HideCompletedMembers, templateList);
-                sortedAnswers.AddRange(sortedTemplateAnswers);
+                Loading = false;
+                Progress = "";
+                Recalculate();
+                return;
             }
 
-            var groupName = _storageService.GroupName ?? "";
-            var unitName = _storageService.UnitName ?? "";
-            var section = _storageService.Section;
-
-            var serialisedSortedMemberAnswers = JsonConvert.SerializeObject(sortedAnswers);
-
-            var report = await _reportService.GetOASWorksheetReport(groupName, section, unitName, outputType, serialisedSortedMemberAnswers, model.BreakByPatrol, model.FormatLikeTerrain);
-            return report;
-        }
-
-        internal async Task GetCoreSelections(ChangeEventArgs arg)
-        {
-            model.SelectedStages = new string[0];
-            model.StagesErrorMessage = "";
-            if (model.UseCore)
+            Loading = true;
+            Progress = "what the Scouts have been awarded";
+            try
             {
-                List<OASStageListModel> coreStages = new List<OASStageListModel>();
-                for (int i = 0; i < 9; i++)
+                var youth = (await _membersService.GetMembersAsync(unitId)).Where(m => m.isAdultLeader == 0).Select(m => m.id).ToList();
+                var records = await _oasService.GetUnitOasRecords(unitId);
+                if (loadId == _loadId)
                 {
-                    if (model.CoreStages[i])
-                    {
-                        coreStages = coreStages.Concat(GetCoreForStage(i + 1)).ToList();
-                    }
-                }
-
-                foreach (var coreStage in coreStages)
-                {
-                    model.SelectedStages = model.SelectedStages.Append(coreStage.TemplateLink).ToArray();
-                }
-
-                if (model.SelectedStages == null || model.SelectedStages.Length == 0)
-                {
-                    model.StagesErrorMessage = "Please select at least one stage";
+                    _everyoneHas = OasWorksheetSelection.AwardedToEveryone(youth, records.results);
+                    _highest = OasWorksheetSelection.HighestAwarded(youth, records.results);
                 }
             }
+            catch (Exception)
+            {
+                // the worksheets can still be made; no level is left out
+                if (loadId == _loadId)
+                    model.ErrorMessage = "Couldn't read what the Scouts have been awarded, so no levels are left out.";
+            }
+            finally
+            {
+                if (loadId == _loadId)
+                {
+                    Loading = false;
+                    Progress = "";
+                    Recalculate();
+                }
+            }
+        }
+
+        internal void SkillChanged(ChangeEventArgs e)
+        {
+            model.Skill = e.Value?.ToString() ?? "";
+            TickAllBranches();
+            Recalculate();
+        }
+
+        internal void LevelChanged(ChangeEventArgs e)
+        {
+            model.Level = int.TryParse(e.Value?.ToString(), out var level) ? level : 0;
+            TickAllBranches();
+            Recalculate();
+        }
+
+        internal void IncludeBelowChanged() => Recalculate();
+
+        internal void BranchChanged(OasBranchChoice choice, bool ticked)
+        {
+            if (ticked)
+                model.ChosenBranches.Add(choice.Key);
             else
+                model.ChosenBranches.Remove(choice.Key);
+            Recalculate();
+        }
+
+        // Every branch at the level starts ticked; the leader unticks the ones they do not want
+        private void TickAllBranches()
+        {
+            BranchChoices = OasWorksheetSelection.BranchesAt(model.Stages, OasWorksheetSelection.StreamsFor(model.Skill), model.Level, _highest);
+            model.ChosenBranches = BranchChoices.Select(c => c.Key).ToHashSet();
+        }
+
+        private void Recalculate()
+        {
+            var streams = OasWorksheetSelection.StreamsFor(model.Skill);
+            BranchChoices = OasWorksheetSelection.BranchesAt(model.Stages, streams, model.Level, _highest);
+            Selection = OasWorksheetSelection.Select(model.Stages, streams, model.Level, model.IncludeBelow, model.ChosenBranches, _everyoneHas, _highest);
+        }
+
+        internal async Task OASWorksheetPdfClick() => await Download(OutputType.PDF, "pdf", "application/pdf");
+
+        internal async Task OASWorksheetXlsxClick() => await Download(OutputType.Excel, "xlsx", "application/vnd.ms-excel");
+
+        private async Task Download(OutputType outputType, string extension, string contentType)
+        {
+            if (!CanMake)
+                return;
+
+            model.ErrorMessage = "";
+            Loading = true;
+            try
             {
-                for (int i = 0; i < 9; i++)
+                _storageService.UseFullNames = model.UseFullNames;
+                var stages = Selection.Included.ToList();
+                var sortedAnswers = new List<OASWorksheetAnswers>();
+                for (var i = 0; i < stages.Count; i++)
                 {
-                    model.CoreStages[i] = false;
+                    Progress = $"{stages[i].SelectListItemText} ({i + 1} of {stages.Count})";
+                    await InvokeAsync(StateHasChanged);
+                    var templateList = await _oasService.GetOASTemplate(stages[i].TemplateLink.Replace("/latest.json", ""));
+                    sortedAnswers.AddRange(await _oasService.GenerateOASWorksheetAnswers(model.UnitId, stages[i], model.HideCompletedMembers, templateList));
                 }
-                model.StagesErrorMessage = "Please select at least one stage";
+
+                var groupName = _storageService.GroupName ?? "";
+                var unitName = _storageService.UnitName ?? "";
+                Progress = "the worksheet";
+                await InvokeAsync(StateHasChanged);
+                var report = await _reportService.GetOASWorksheetReport(groupName, _storageService.Section, unitName, outputType, JsonConvert.SerializeObject(sortedAnswers), model.BreakByPatrol, model.FormatLikeTerrain);
+                var fileName = $"OAS_Worksheet_{model.UnitName.Replace(' ', '_')}.{extension}";
+
+                // Send the data to JS to actually download the file
+                await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, contentType, report);
             }
-
-            await JS.InvokeVoidAsync("BindSelect2");
-            await JS.InvokeVoidAsync("BindSelect2");
-        }
-
-        public async Task<bool> GetSelections(ElementReference elementReference)
-        {
-            model.SelectedStages = (await JS.InvokeAsync<List<string>>("getSelectedValues", _select2Reference)).ToArray<string>();
-            model.StagesErrorMessage = "";
-
-            if (model.SelectedStages == null || model.SelectedStages.Length == 0)
+            catch (Exception)
             {
-                model.StagesErrorMessage = "Please select at least one stage";
-                return false;
+                model.ErrorMessage = "Couldn't make the worksheets.";
             }
-            return true;
-        }
-
-        private List<OASStageListModel> GetCoreForStage(int stageNumber)
-        {
-            var stages = model.Stages.Where(stage => stage.Stage == stageNumber && (stage.Stream == "Bushcraft" || stage.Stream == "Bushwalking" || stage.Stream == "Camping")).ToList();
-            return stages;
+            finally
+            {
+                Loading = false;
+                Progress = "";
+            }
         }
     }
-
 }
