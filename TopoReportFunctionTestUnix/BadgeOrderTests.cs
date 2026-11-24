@@ -32,13 +32,6 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
-        public void AProductPageLinkSelectsTheOption()
-        {
-            Assert.AreEqual("https://scoutshop.com.au/products/oas-camping-badge?Badge+Type=Stage+3", ScoutShopCatalog.Find("oas-camping-badge", "Stage 3")!.Url);
-            Assert.AreEqual("https://scoutshop.com.au/products/first-aid-badge", ScoutShopCatalog.Find("first-aid-badge", "Default Title")!.Url);
-        }
-
-        [TestMethod]
         public void MilestonesAreTheProductOfTheirOwnSection()
         {
             var lines = BadgeOrderBuilder.Build(Report(Section("cub", b => b.Milestones.Add(Count("Milestone 2", 3))), Section("scout", b => b.Milestones.Add(Count("Milestone 2", 1)))));

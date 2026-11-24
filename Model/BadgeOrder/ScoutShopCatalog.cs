@@ -12,7 +12,6 @@ namespace Topo.Model.BadgeOrder
         public string Option { get; set; } = "";
         public long VariantId { get; set; }
         public decimal Price { get; set; }
-        public string Url => ScoutShopCatalog.ShopUrl + "products/" + Handle + (Option == "Default Title" ? "" : "?Badge+Type=" + Uri.EscapeDataString(Option).Replace("%20", "+"));
     }
 
     // The badges the Scout Shop sells that Topo can order for, as the shop listed them on 25 November 2026. The numbers are the shop's own
