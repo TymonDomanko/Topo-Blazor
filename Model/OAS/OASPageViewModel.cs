@@ -16,12 +16,12 @@ namespace Topo.Model.OAS
         public string Skill { get; set; } = string.Empty;
         // 1 to 9, or OasWorksheetSelection.OneAboveHighest
         public int Level { get; set; } = 1;
-        public bool IncludeBelow { get; set; }
+        public bool IncludeBelow { get; set; } = true;
         // The branches ticked at the level, by OasBranchChoice.Key
         public HashSet<string> ChosenBranches { get; set; } = new HashSet<string>();
 
         [Display(Name = "Hide Completed Members")]
-        public bool HideCompletedMembers { get; set; }
+        public bool HideCompletedMembers { get; set; } = true;
 
         [Display(Name = "Break by Patrol")]
         public bool BreakByPatrol { get; set; } = false;
