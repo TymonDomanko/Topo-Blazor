@@ -2431,7 +2431,7 @@ namespace Topo.Services
                         rowNumber = WriteMilestoneAnswers(sheet, rowNumber, lastColumn, charactersAcross, "What they wrote about events", page.EventReviews, "");
                 }
 
-                sheet.SetColumnWidth(1, 22);
+                sheet.SetColumnWidth(1, 28);
                 sheet.SetColumnWidth(2, 40);
                 sheet.SetColumnWidth(3, 16);
                 sheet.SetColumnWidth(4, 16);
