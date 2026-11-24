@@ -85,7 +85,9 @@ namespace Topo.Controller
         private async Task Load()
         {
             if (model.Members.Count == 0)
+            {
                 return;
+            }
 
             Loading = true;
             try
@@ -111,7 +113,9 @@ namespace Topo.Controller
         {
             var member = model.Members.FirstOrDefault(m => m.id == change.Id);
             if (member != null)
+            {
                 member.selected = change.Ticked;
+            }
         }
 
         internal void ClearTicks()
@@ -137,7 +141,9 @@ namespace Topo.Controller
         {
             var reportData = ReportData();
             if (reportData == null || reportData.Count == 0)
+            {
                 return;
+            }
 
             try
             {

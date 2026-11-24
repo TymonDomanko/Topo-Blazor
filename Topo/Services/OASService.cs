@@ -186,6 +186,7 @@ namespace Topo.Services
         {
             var getUnitAchievementsResultsModel = await GetUnitAchievements(selectedUnitId, selectedStage.Stream.ToLower(), selectedStage.Branch, selectedStage.Stage);
             var sortedMemberList = members.Where(m => m.isAdultLeader == 0).OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();
+            var names = await _membersService.GetDisplayNamesAsync(selectedUnitId);
             var templateTitle = templateList.Count > 0 ? templateList[0].TemplateTitle : "";
             if (hideCompletedMembers)
                 templateTitle += " (in progress)";
@@ -205,7 +206,7 @@ namespace Topo.Services
                         InputTitleSortIndex = item.InputGroupSort,
                         InputSortIndex = item.Id,
                         MemberId = member.id,
-                        MemberName = $"{member.first_name} {_membersService.GetMemberLastName(selectedUnitId, member.id).Result}",
+                        MemberName = names.TryGetValue(member.id, out var memberName) ? memberName : member.first_name,
                         MemberPatrol = member.patrol_name,
                         MemberAnswer = "",
                         Answered = false,
