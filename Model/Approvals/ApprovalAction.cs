@@ -65,13 +65,28 @@ namespace Topo.Model.Approvals
             var isAward = string.Equals(submissionType, "award", StringComparison.OrdinalIgnoreCase);
             if (Kind == ApprovalActionKind.Award)
             {
-                if (!isAward) return "Only award requests can be awarded.";
-                if (DateAwarded == null) return "Choose the date the achievement was awarded.";
-                if (today != null && DateAwarded.Value.Date > today.Value.Date) return "The award date cannot be in the future.";
+                if (!isAward)
+                {
+                    return "Only award requests can be awarded.";
+                }
+                if (DateAwarded == null)
+                {
+                    return "Choose the date the achievement was awarded.";
+                }
+                if (today != null && DateAwarded.Value.Date > today.Value.Date)
+                {
+                    return "The award date cannot be in the future.";
+                }
                 return null;
             }
-            if (isAward) return "Award requests cannot be approved or sent back for improvement.";
-            if (Comment.Length > MaxCommentLength) return $"The comment can be at most {MaxCommentLength} characters.";
+            if (isAward)
+            {
+                return "Award requests cannot be approved or sent back for improvement.";
+            }
+            if (Comment.Length > MaxCommentLength)
+            {
+                return $"The comment can be at most {MaxCommentLength} characters.";
+            }
             return null;
         }
 

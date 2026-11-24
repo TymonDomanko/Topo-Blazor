@@ -81,9 +81,13 @@ namespace Topo.Model.Approvals
             string reason = string.Empty;
             // With no idea who the leader is nothing can be checked, so nothing can be selected
             if (string.IsNullOrEmpty(currentMemberId))
+            {
                 reason = "Your own member id could not be found";
+            }
             else if (result.member.id == currentMemberId)
+            {
                 reason = "Your own award";
+            }
             return new AwardRequest { Item = PendingApprovalQueue.FromResult(result), CanAward = reason.Length == 0, Reason = reason };
         }
     }
@@ -106,9 +110,14 @@ namespace Topo.Model.Approvals
 
         public void Toggle(string submissionId)
         {
-            if (_selected.Remove(submissionId)) return;
+            if (_selected.Remove(submissionId))
+            {
+                return;
+            }
             if (_list.People.SelectMany(p => p.Awards).Any(a => a.CanAward && a.Item.SubmissionId == submissionId))
+            {
                 _selected.Add(submissionId);
+            }
         }
 
         // How many of the person's awards that can be awarded are ticked, and how many could be
@@ -129,9 +138,13 @@ namespace Topo.Model.Approvals
         {
             var awards = Selectable(memberId);
             if (IsPersonFullySelected(memberId))
+            {
                 foreach (var award in awards) _selected.Remove(award.Item.SubmissionId);
+            }
             else
+            {
                 foreach (var award in awards) _selected.Add(award.Item.SubmissionId);
+            }
         }
 
         public void SelectAll()
