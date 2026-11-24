@@ -121,7 +121,9 @@ namespace Topo.Model.BadgeStore
         {
             var existing = contents.Records.FirstOrDefault(r => r.MemberId == memberId && r.AwardId == awardId);
             if (existing == null || existing.Awarded.Date != awarded.Date)
+            {
                 return false;
+            }
             return presented == null || existing.Presented?.Date == presented.Value.Date;
         }
 

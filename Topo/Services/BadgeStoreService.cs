@@ -44,7 +44,9 @@ namespace Topo.Services
                 var original = await _terrainAPIService.GetCalendarsAsync(userId);
                 var changed = original == null ? null : BadgeStoreCalendars.WithGroupCalendarOn(original, groupId);
                 if (changed != null)
+                {
                     await _terrainAPIService.PutCalendarsAsync(userId, changed);
+                }
                 try
                 {
                     var events = await _terrainAPIService.GetEventsAsync(userId, BadgeStoreSpec.SearchFromUtc, BadgeStoreSpec.SearchToUtc);
@@ -53,7 +55,9 @@ namespace Topo.Services
                 finally
                 {
                     if (changed != null)
+                    {
                         await _terrainAPIService.PutCalendarsAsync(userId, original!);
+                    }
                 }
             }
             finally
@@ -85,22 +89,30 @@ namespace Topo.Services
         {
             var existing = BadgeStoreWrites.ChooseWriteEvent(await FindStoreEventsAsync(userId, groupId));
             if (existing != null)
+            {
                 return new BadgeStoreWriteResult { Outcome = BadgeStoreWriteOutcome.StoreAlreadyExists, EventId = existing.id, Message = "The group already has a store event." };
+            }
 
             var body = JsonConvert.SerializeObject(BadgeStoreWrites.CreateEventBody(groupId, userId, userName));
             var created = await _terrainAPIService.CreateGroupEventAsync(groupId, body);
             if (!created.Success)
+            {
                 return Failed($"Terrain did not create the store event ({Describe(created)}). Creating a group event needs a group leader.");
+            }
 
             // Terrain does not say which event it made. The organiser's own list shows it whatever calendars are switched on.
             for (var attempt = 0; attempt < 5; attempt++)
             {
                 if (attempt > 0)
+                {
                     await Task.Delay(1000);
+                }
                 var organised = await _terrainAPIService.GetOrganisedEventsAsync(userId);
                 var found = (organised?.results ?? new Event[0]).Where(e => BadgeStoreWrites.IsCreatedStoreEvent(e, groupId)).OrderBy(e => e.id, StringComparer.Ordinal).FirstOrDefault();
                 if (found != null)
+                {
                     return new BadgeStoreWriteResult { Outcome = BadgeStoreWriteOutcome.StoreCreated, EventId = found.id, Message = "The store event was created." };
+                }
             }
             return Failed("Terrain accepted the store event but it could not be found afterwards. Look for it in your organised events before trying again.");
         }
@@ -108,16 +120,22 @@ namespace Topo.Services
         public async Task<BadgeStoreWriteResult> RecordAwardAsync(string userId, string groupId, string memberId, string awardId, DateTime awarded, DateTime? presented, Func<string, bool> isTrustedAuthor)
         {
             if (string.IsNullOrWhiteSpace(memberId) || string.IsNullOrWhiteSpace(awardId))
+            {
                 return Failed("A member and an award are needed.");
+            }
 
             var events = await FindStoreEventsAsync(userId, groupId);
             var storeEvent = BadgeStoreWrites.ChooseWriteEvent(events);
             if (storeEvent == null)
+            {
                 return new BadgeStoreWriteResult { Outcome = BadgeStoreWriteOutcome.NoStoreEvent, Message = "The group has no store event yet." };
+            }
 
             var current = await ReadEventsAsync(events, isTrustedAuthor);
             if (BadgeStoreWrites.IsAlreadyRecorded(current, memberId, awardId, awarded, presented))
+            {
                 return new BadgeStoreWriteResult { Outcome = BadgeStoreWriteOutcome.AlreadyRecorded, EventId = storeEvent.id, Message = "The store already says this." };
+            }
 
             return await PostAndConfirmAsync(userId, storeEvent.id, BadgeStoreReader.AwardText(memberId, awardId, awarded, presented));
         }
@@ -127,11 +145,15 @@ namespace Topo.Services
             var events = await FindStoreEventsAsync(userId, groupId);
             var storeEvent = BadgeStoreWrites.ChooseWriteEvent(events);
             if (storeEvent == null)
+            {
                 return new BadgeStoreWriteResult { Outcome = BadgeStoreWriteOutcome.NoStoreEvent, Message = "The group has no store event yet." };
+            }
 
             var current = await ReadEventsAsync(events, isTrustedAuthor);
             if (!BadgeStoreWrites.HasRecord(current, memberId, awardId))
+            {
                 return new BadgeStoreWriteResult { Outcome = BadgeStoreWriteOutcome.NothingToRevoke, EventId = storeEvent.id, Message = "There is no record to take back." };
+            }
 
             return await PostAndConfirmAsync(userId, storeEvent.id, BadgeStoreReader.RevokeText(memberId, awardId));
         }
@@ -149,12 +171,16 @@ namespace Topo.Services
         {
             var posted = await _terrainAPIService.PostEventCommentAsync(eventId, userId, text);
             if (!posted.Success)
+            {
                 return Failed($"Terrain did not accept the record ({Describe(posted)}).");
+            }
 
             var read = await _terrainAPIService.GetEventCommentsAsync(eventId);
             var ours = read.results.Where(c => c.text == text && c.member.id == userId).OrderByDescending(c => c.created_datetime).FirstOrDefault();
             if (ours == null)
+            {
                 return Failed("Terrain accepted the record but it could not be read back. Check the store before trying again.");
+            }
             return new BadgeStoreWriteResult { Outcome = BadgeStoreWriteOutcome.Written, EventId = eventId, CommentId = ours.id, Message = "The record was saved." };
         }
 
