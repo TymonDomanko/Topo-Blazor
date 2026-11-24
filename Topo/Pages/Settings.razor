@@ -43,7 +43,9 @@
     protected override void OnInitialized()
     {
         if (!_storageService.IsAuthenticated)
+        {
             NavigationManager.NavigateTo("index");
+        }
         _autoAwards.Changed += OnAutoChanged;
     }
 

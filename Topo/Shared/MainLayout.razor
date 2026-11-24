@@ -33,7 +33,9 @@
     {
         // Opening Topo is all it needs: this watches for a quiet moment and does its work then
         if (firstRender)
+        {
             _autoAwards.Start();
+        }
     }
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => _activity.UserActivity();
