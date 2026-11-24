@@ -1,0 +1,73 @@
+/* The table scrolls inside its own box, keeping the names and the headings in view, so it never widens the page */
+.scroller {
+    overflow: auto;
+    width: 0;
+    min-width: 100%;
+    max-height: calc(100vh - 1rem);
+    max-height: calc(100dvh - 1rem);
+}
+
+.oas {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.oas th,
+.oas td {
+    padding: 0.15rem 0.45rem;
+    border-right: 1px solid #d6d5d5;
+    border-bottom: 1px solid #d6d5d5;
+}
+
+/* The three heading rows stack up under each other, so each is given the height the next one sits below */
+.oas thead th {
+    position: sticky;
+    z-index: 2;
+    background-color: #fff;
+    height: 1.7rem;
+}
+
+.oas .groups th {
+    background-color: #e9ecef;
+    font-weight: bold;
+}
+
+.oas thead tr:nth-child(1) th {
+    top: 0;
+}
+
+.oas thead tr:nth-child(2) th {
+    top: 1.7rem;
+}
+
+.oas thead tr:nth-child(3) th {
+    top: 3.4rem;
+}
+
+.oas .name {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 9rem;
+    background-color: #fff;
+    text-align: left;
+}
+
+.oas thead .name {
+    z-index: 3;
+}
+
+.legend .swatch {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    margin: 0 0.25rem 0 1rem;
+    border: 1px solid #adb5bd;
+    vertical-align: text-bottom;
+}
+
+.legend .swatch:first-child {
+    margin-left: 0;
+}

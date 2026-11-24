@@ -13,6 +13,8 @@ namespace Topo.Services
         public Task<List<OASWorksheetAnswers>> GenerateOASWorksheetAnswers(string selectedUnitId, OASStageListModel selectedStage, bool hideCompletedMembers, List<OASTemplate> templateList);
         public Task<List<OASWorksheetAnswers>> GenerateOASWorksheetAnswersForMember(string selectedUnitId, OASStageListModel selectedStage, bool hideCompletedMembers, List<OASTemplate> templateList, string memberId);
         public Task<GetUnitAchievementsResultsModel> GetUnitAchievements(string unit, string stream, string branch, int stage);
+        // Every Outdoor Adventure Skill record of every member of the unit, in one read
+        public Task<GetUnitAchievementsResultsModel> GetUnitOasRecords(string unitId);
     }
 
     public class OASService : IOASService
@@ -351,6 +353,9 @@ namespace Topo.Services
 
             return sortedAnswers;
         }
+
+        public Task<GetUnitAchievementsResultsModel> GetUnitOasRecords(string unitId) =>
+            _terrainAPIService.GetUnitAchievementsOfType<GetUnitAchievementsResultsModel>(unitId, "outdoor_adventure_skill");
 
         public async Task<GetUnitAchievementsResultsModel> GetUnitAchievements(string unit, string stream, string branch, int stage)
         {
