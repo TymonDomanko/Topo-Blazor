@@ -81,7 +81,9 @@ namespace Topo.Controller
         internal async Task OptionChanged()
         {
             if (model.SelectedCalendars == null || model.SelectedCalendars.Length == 0)
+            {
                 return;
+            }
             await _auto.RunAsync(LoadIdeas, OptionDelayMilliseconds);
         }
 
@@ -145,7 +147,9 @@ namespace Topo.Controller
             finally
             {
                 if (!cancellationToken.IsCancellationRequested)
+                {
                     Loading = false;
+                }
             }
         }
 

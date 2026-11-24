@@ -123,11 +123,17 @@ namespace Topo.Controller
 
             var approvals = _all.Where(a => a.submission_date >= model.ApprovalSearchFromDate && a.submission_date <= model.ApprovalSearchToDate.AddDays(1)).ToList();
             if (model.ToBePresented)
+            {
                 approvals = approvals.Where(a => a.submission_type == "Award" && !a.presented_date.HasValue).ToList();
+            }
             if (model.IsPresented)
+            {
                 approvals = approvals.Where(a => a.presented_date.HasValue && a.presented_date != a.awarded_date).ToList();
+            }
             if (!model.ShowRejected)
+            {
                 approvals = approvals.Where(a => a.submission_outcome.ToLower() != "rejected").ToList();
+            }
             model.Approvals = approvals;
         }
 

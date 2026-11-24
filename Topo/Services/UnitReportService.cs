@@ -112,12 +112,16 @@ namespace Topo.Services
                 {
                     done++;
                     if (!seen.Add(summary.id))
+                    {
                         continue;
+                    }
                     cancellationToken.ThrowIfCancellationRequested();
                     progress?.Invoke($"events, period {window} of {windows}: event {done} of {summaries.Length}");
                     var detail = await _terrainAPIService.GetEventAsync(summary.id);
                     if (detail != null)
+                    {
                         events.Add(new UnitEventInput { Scope = summary.invitee_type, Event = detail });
+                    }
                 }
             }
             return events;
