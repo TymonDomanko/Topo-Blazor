@@ -100,6 +100,10 @@ One queue, three lanes (profile, unit, calendar), each lane running its jobs in 
 ## What is shown and when it refreshes
 
 - A cached page shows instantly. Each page says when its data was last updated, next to the Refresh data button.
+  - **Data-age line (from the UI review, 2026-11-24):** every page that reads Terrain shows "Data read 9:42am today" (or "yesterday 4:10pm", "3 days ago") with the **Refresh data** button beside it, at the top of the page where the Select Unit box is. Without it, once pages stop reading Terrain on every visit, nobody can tell whether the list in front of them is current.
+  - The time shown is the **oldest** of the reads the page used, so the line never overstates how fresh it is. Past its lifetime it reads "Data read 3 days ago, updating…" while the background refresh runs.
+  - While a read is in progress the same line shows a count ("Reading 12 of 39 Scouts") instead, so the long pages (Logbook ~30s, Wallchart ~24s) also give progress.
+  - The line is one shared component fed by the cache, not something each page writes for itself, so a new page gets it by listing the keys it needs.
 - **Stale while refreshing:** data past its lifetime is still shown straight away, marked stale, and refreshed in the background; the page updates when the new data arrives.
 - Topo's own writes (Mass awarding, patrol and program pushes) drop the keys they change.
 - Logging out clears the whole cache. It holds young people's names, attendance and logbooks, so it should not stay behind on a shared computer.
