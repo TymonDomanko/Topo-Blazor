@@ -14,17 +14,25 @@ namespace Topo.Model.Approvals
             {
                 var toPresent = line.Where(a => !a.presented_date.HasValue).OrderBy(a => a.oas_stage).ToList();
                 if (toPresent.Count == 0)
+                {
                     continue;
+                }
                 var highest = toPresent[^1];
                 var presentedAbove = line.Where(a => a.presented_date.HasValue && a.oas_stage > highest.oas_stage).OrderByDescending(a => a.oas_stage).FirstOrDefault();
                 foreach (var row in toPresent)
                 {
                     if (presentedAbove != null)
+                    {
                         row.to_award = $"Not the highest - {presentedAbove.achievement_name} was already presented";
+                    }
                     else if (row == highest)
+                    {
                         row.to_award = "Award";
+                    }
                     else
+                    {
                         row.to_award = $"Not the highest - award {highest.achievement_name}";
+                    }
                 }
             }
         }

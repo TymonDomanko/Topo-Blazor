@@ -45,9 +45,13 @@ namespace Topo.Model.AdditionalAwards
                     number = parts[1];
                 }
                 else
+                {
                     continue;
+                }
                 if (int.TryParse(number, NumberStyles.None, CultureInfo.InvariantCulture, out var threshold) && threshold > 0)
+                {
                     tiers.Add(new AwardTier { Id = id, Name = name, Family = family, Threshold = threshold });
+                }
             }
             return tiers.OrderBy(t => t.Family).ThenBy(t => t.Threshold).ToList();
         }
@@ -61,9 +65,13 @@ namespace Topo.Model.AdditionalAwards
         public static LogbookAwardEntry? ToEntry(string startDate, string endDate, string[] categories, double distanceWalkaboutMetres)
         {
             if (!DateTime.TryParseExact(startDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var start))
+            {
                 return null;
+            }
             if (!DateTime.TryParseExact(endDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var end))
+            {
                 end = start;
+            }
             var camping = categories.Contains("camping");
             var hiking = categories.Contains("walking_hike");
             return new LogbookAwardEntry
@@ -95,7 +103,9 @@ namespace Topo.Model.AdditionalAwards
                 {
                     var counts = camper ? entry.Nights : entry.Kilometres;
                     if (counts <= 0)
+                    {
                         continue;
+                    }
                     running += counts;
                     runningAfter.Add((running, entry.End));
                 }

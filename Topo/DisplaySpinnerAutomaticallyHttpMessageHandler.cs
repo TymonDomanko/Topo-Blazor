@@ -17,7 +17,9 @@ namespace Topo
             // Work Topo does in the background (the automatic Camper and Walkabout check) shows no spinner and is not counted as the
             // leader using Topo
             if (_activityMonitor.InBackground)
+            {
                 return await base.SendAsync(request, cancellationToken);
+            }
 
             try
             {

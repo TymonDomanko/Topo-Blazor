@@ -87,7 +87,9 @@ namespace Topo.Services
                 var unitName = _storageService.Units.TryGetValue(unitId, out var name) ? name : "";
                 foreach (var member in (await _membersService.GetMembersAsync(unitId)).Where(m => m.isAdultLeader == 0))
                     if (unitOf.TryAdd(member.id, (unitId, unitName)))
+                    {
                         youth.Add(member);
+                    }
                 progress?.Invoke($"Terrain's award records for {unitName}");
                 terrainRecords.UnionWith(RecordDays((await _terrainAPIService.GetUnitAdditionalAwardAchievements(unitId)).results).Keys);
             }
@@ -110,13 +112,17 @@ namespace Topo.Services
                         {
                             totals.Add(cached.totals);
                             if (cached.entries != null)
+                            {
                                 entriesByMember[member.id] = cached.entries;
+                            }
                             result.MembersChecked++;
                             continue;
                         }
 
                         if (pacing != null)
+                        {
                             await pacing.WaitForGapAsync();
+                        }
                         try
                         {
                             await _terrainAPIService.AssumeProfile(member.id);
@@ -133,12 +139,18 @@ namespace Topo.Services
                             // The entries are only read for a Scout who has something to hand over
                             List<LogbookAwardEntry>? entries = null;
                             if (AwardCheckRows.Missing(new[] { memberTotals }, tiers, terrainRecords).Count > 0)
+                            {
                                 entries = await ReadEntriesAsync(member.id, pacing);
+                            }
                             totals.Add(memberTotals);
                             if (entries != null)
+                            {
                                 entriesByMember[member.id] = entries;
+                            }
                             if (pacing != null)
+                            {
                                 _readCache[member.id] = (memberTotals, entries, DateTime.UtcNow);
+                            }
                             result.MembersChecked++;
                         }
                         finally
@@ -167,7 +179,9 @@ namespace Topo.Services
                 await _terrainAPIService.RevokeAssumedProfiles();
             }
             if (result.Stopped)
+            {
                 return result;
+            }
 
             var members = youth.ToDictionary(m => m.id);
             var missing = new List<MissingAward>();
@@ -211,7 +225,9 @@ namespace Topo.Services
             var cache = await LoadCacheAsync();
             var forUnit = cache.Missing.Where(m => m.UnitId == unitId).ToList();
             if (forUnit.Count == 0)
+            {
                 return new List<AwardRow>();
+            }
             var records = await TerrainRecordsAsync(unitId);
             return AwardCheckRows.Pending(forUnit, await TiersAsync(), records);
         }
@@ -225,7 +241,9 @@ namespace Topo.Services
             {
                 var key = record.Key.Split('|');
                 if (key.Length != 2 || !members.TryGetValue(key[0], out var member))
+                {
                     continue;
+                }
                 recorded.Add(new RecordedAward
                 {
                     MemberId = key[0], FirstName = member.first_name, LastName = member.last_name, AwardId = key[1],
@@ -242,7 +260,9 @@ namespace Topo.Services
         {
             var specifications = _storageService.AdditionalAwardSpecifications;
             if (specifications == null || specifications.Count == 0)
+            {
                 return (await _terrainAPIService.GetAdditionalAwardSpecifications()).AwardDescriptions.GroupBy(a => a.id).ToDictionary(g => g.Key, g => g.First().title);
+            }
             return specifications.GroupBy(a => a.id).ToDictionary(g => g.Key, g => g.First().name);
         }
 
@@ -255,7 +275,9 @@ namespace Topo.Services
                 var key = record.member_id + "|" + record.achievement_meta.additional_award_id;
                 var day = Topo.Model.AwardDate.Resolve(record.date_awarded, record.imported?.date_awarded, record.status_updated).Date;
                 if (!days.TryGetValue(key, out var existing) || day < existing)
+                {
                     days[key] = day;
+                }
             }
             return days;
         }
@@ -275,10 +297,14 @@ namespace Topo.Services
                 pacing?.ThrowIfPageNeedsTerrain();
                 var detail = await _terrainAPIService.GetMemberLogbookDetail(memberId, item.id);
                 if (detail == null)
+                {
                     continue;
+                }
                 var entry = CamperWalkaboutRules.ToEntry(detail.start_date, detail.end_date, detail.categories, detail.distance_walkabout);
                 if (entry != null)
+                {
                     entries.Add(entry);
+                }
             }
             return entries;
         }

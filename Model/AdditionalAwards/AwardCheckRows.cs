@@ -104,7 +104,9 @@ namespace Topo.Model.AdditionalAwards
                 {
                     var highestHeld = tierList.Where(t => t.Family == tier.Family && terrainRecords.Contains(member.MemberId + "|" + t.Id)).Select(t => t.Threshold).DefaultIfEmpty(0).Max();
                     if (tier.Threshold > highestHeld && !terrainRecords.Contains(member.MemberId + "|" + tier.Id))
+                    {
                         missing.Add((member, tier));
+                    }
                 }
             return missing;
         }
@@ -124,7 +126,9 @@ namespace Topo.Model.AdditionalAwards
                     var highestHeld = tiers.Where(t => t.Family == family.Key && terrainRecords.Contains(member.Key + "|" + t.Id)).Select(t => t.Threshold).DefaultIfEmpty(0).Max();
                     var open = family.Where(m => tierById[m.AwardId].Threshold > highestHeld).OrderBy(m => tierById[m.AwardId].Threshold).ToList();
                     if (open.Count == 0)
+                    {
                         continue;
+                    }
                     var highest = open[^1];
                     foreach (var m in open)
                         rows.Add(new AwardRow

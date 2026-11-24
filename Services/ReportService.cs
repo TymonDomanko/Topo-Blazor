@@ -1885,7 +1885,9 @@ namespace Topo.Services
                     // A Camper or Walkabout Award that is earned and not yet in Terrain is red. A lower level that is not the highest is not
                     // handed over, so it is left unshaded.
                     if (approval.achievement_type == "additional_award" && approval.to_award == "Award")
+                    {
                         sheet.Range[rowNumber, 2, rowNumber, 8].CellStyle.Color = Color.Red;
+                    }
                 }
             }
 
