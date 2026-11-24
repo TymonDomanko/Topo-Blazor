@@ -51,7 +51,9 @@ namespace Topo.Services
                 var key = MilestoneProgressBuilder.LatestKey(section, stage);
                 var path = $"milestone/{section.ToLowerInvariant()}/review/{stage}";
                 if (!_forms.ContainsKey(key))
+                {
                     reads.Add((key, () => _terrainAPIService.GetTemplateJsonAsync(path)));
+                }
             }
             if (reads.Count > 0)
             {

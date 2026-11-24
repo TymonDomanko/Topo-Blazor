@@ -78,7 +78,9 @@ namespace Topo.Model.ProgramBuilder
                 while (nextBreak < breaks.Count && entry.Date.Date >= breaks[nextBreak].From.Date)
                 {
                     if (rows.Count > 0)
+                    {
                         rows.Add(new ProgramDocRow { IsBreak = true, BreakLabel = breaks[nextBreak].Label, Date = breaks[nextBreak].From });
+                    }
                     nextBreak++;
                 }
                 rows.Add(new ProgramDocRow
@@ -98,11 +100,15 @@ namespace Topo.Model.ProgramBuilder
             for (var i = 0; i < rows.Count; i++)
             {
                 if (rows[i].IsBreak)
+                {
                     continue;
+                }
                 var month = rows[i].Date.ToString("MMMM", CultureInfo.InvariantCulture);
                 var previous = i > 0 && !rows[i - 1].IsBreak ? rows[i - 1].Date.ToString("MMMM", CultureInfo.InvariantCulture) : null;
                 if (month == previous)
+                {
                     continue;
+                }
                 rows[i].Month = month;
                 rows[i].MonthSpan = 1;
                 for (var j = i + 1; j < rows.Count && !rows[j].IsBreak && rows[j].Date.ToString("MMMM", CultureInfo.InvariantCulture) == month; j++)
@@ -125,11 +131,26 @@ namespace Topo.Model.ProgramBuilder
         private static List<string> Columns(ProgramDraft draft)
         {
             var columns = new List<string>();
-            if (draft.ShowGame) columns.Add("game");
-            if (draft.ShowLocation) columns.Add("location");
-            if (draft.ShowChallengeArea) columns.Add("challenge");
-            if (draft.ShowDutyPatrol) columns.Add("duty");
-            if (draft.ShowLeader) columns.Add("leader");
+            if (draft.ShowGame)
+            {
+                columns.Add("game");
+            }
+            if (draft.ShowLocation)
+            {
+                columns.Add("location");
+            }
+            if (draft.ShowChallengeArea)
+            {
+                columns.Add("challenge");
+            }
+            if (draft.ShowDutyPatrol)
+            {
+                columns.Add("duty");
+            }
+            if (draft.ShowLeader)
+            {
+                columns.Add("leader");
+            }
             return columns;
         }
 
@@ -149,7 +170,9 @@ namespace Topo.Model.ProgramBuilder
             }).ToList();
             var notSet = new ProgramAreaSummary { Key = "", Area = "Not set", InProgram = rows.Count(k => !known.Contains(k)), Ideas = ideas.Count(k => !known.Contains(k)) };
             if (notSet.InProgram + notSet.Ideas > 0)
+            {
                 summary.Add(notSet);
+            }
             return summary;
         }
 
@@ -167,7 +190,9 @@ namespace Topo.Model.ProgramBuilder
         public static string DateText(ProgramRow row, DayOfWeek sectionNight)
         {
             if (row.EndDate != null && row.EndDate.Value.Date > row.Date.Date)
+            {
                 return $"{row.Date.Day}-{row.EndDate.Value.Day}";
+            }
             return row.Date.DayOfWeek == sectionNight
                 ? row.Date.Day.ToString()
                 : $"{row.Date.ToString("ddd", CultureInfo.InvariantCulture)} {row.Date.Day}";

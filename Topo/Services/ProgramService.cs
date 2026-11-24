@@ -78,7 +78,9 @@ namespace Topo.Services
         {
             var read = await _terrainAPIService.GetCalendarsAsync(GetUser());
             if (!_switched && read != null)
+            {
                 _getCalendarsResultModel = read;
+            }
         }
 
         public async Task<Dictionary<string, string>> GetCalendars()

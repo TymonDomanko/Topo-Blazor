@@ -112,23 +112,41 @@ namespace Topo.Model.ProgramBuilder
                 matched.Add(found.id);
                 var differences = new List<string>();
                 if (Local(found.start_datetime).Date != planned.Row.Date.Date)
+                {
                     differences.Add($"Date: {Local(found.start_datetime):ddd d MMM} to {planned.Row.Date:ddd d MMM}");
+                }
                 if (!string.Equals(found.title.Trim(), planned.Title, StringComparison.OrdinalIgnoreCase))
+                {
                     differences.Add($"Activity: {found.title.Trim()} to {planned.Title}");
+                }
                 if (planned.Location != "" && !string.Equals(found.location.Trim(), planned.Location, StringComparison.OrdinalIgnoreCase))
+                {
                     differences.Add($"Location: {(found.location.Trim() == "" ? "none" : found.location.Trim())} to {planned.Location}");
+                }
                 if (planned.Leader != "" && !LeaderMatches(found, planned.Leader))
+                {
                     differences.Add($"Leader in charge: {(OrganiserNames(found) == "" ? "none" : OrganiserNames(found))} to {planned.Leader}");
+                }
                 if (Local(found.start_datetime).TimeOfDay != planned.Start.TimeOfDay || Local(found.end_datetime).TimeOfDay != planned.End.TimeOfDay)
+                {
                     differences.Add($"Time: {Local(found.start_datetime):HH:mm}-{Local(found.end_datetime):HH:mm} to {planned.Start:HH:mm}-{planned.End:HH:mm}");
+                }
                 if (planned.ChallengeArea != "" && !string.Equals(found.challenge_area, planned.ChallengeArea, StringComparison.OrdinalIgnoreCase))
+                {
                     differences.Add($"Challenge area: {(found.challenge_area == "" ? "none" : ProgramLayout.AreaLabel(found.challenge_area))} to {ProgramLayout.AreaLabel(planned.ChallengeArea)}");
+                }
                 if (planned.ScoutMethod.Count > 0 && !ProgramScoutMethod.Same(found.review?.scout_method_elements ?? new string[0], planned.ScoutMethod))
+                {
                     differences.Add($"Scout Method: {ProgramScoutMethod.Summary(found.review?.scout_method_elements ?? new string[0])} to {ProgramScoutMethod.Summary(planned.ScoutMethod)}");
+                }
                 if (planned.Game != "" && !string.Equals(ProgramDescription.Game(found.description), planned.Game, StringComparison.OrdinalIgnoreCase))
+                {
                     differences.Add($"Game: {(ProgramDescription.Game(found.description) == "" ? "none" : ProgramDescription.Game(found.description))} to {planned.Game}");
+                }
                 if (planned.DutyPatrol != "" && !string.Equals(ProgramDescription.Duty(found.description), planned.DutyPatrol, StringComparison.OrdinalIgnoreCase))
+                {
                     differences.Add($"Duty patrol: {(ProgramDescription.Duty(found.description) == "" ? "none" : ProgramDescription.Duty(found.description))} to {planned.DutyPatrol}");
+                }
                 if (differences.Count > 0)
                 {
                     var change = Change("Change", planned, string.Join("; ", differences));
@@ -152,7 +170,9 @@ namespace Topo.Model.ProgramBuilder
         {
             var events = Events(draft).Where(e => e.Row.TerrainEventId == "").ToList();
             if (inTerrain == null)
+            {
                 return events;
+            }
             var adds = Changes(draft, inTerrain).Where(c => c.Action == "Add").Select(c => (c.Date, c.Activity)).ToHashSet();
             return events.Where(e => adds.Contains((e.Row.Date.Date, e.Title))).ToList();
         }
@@ -239,7 +259,9 @@ namespace Topo.Model.ProgramBuilder
             {
                 var byId = existing.FirstOrDefault(e => e.id == planned.Row.TerrainEventId);
                 if (byId != null)
+                {
                     return byId;
+                }
             }
             var sameDay = existing.Where(e => !matched.Contains(e.id) && Local(e.start_datetime).Date == planned.Row.Date.Date).ToList();
             return sameDay.FirstOrDefault(e => string.Equals(e.title.Trim(), planned.Title, StringComparison.OrdinalIgnoreCase)) ?? sameDay.FirstOrDefault();

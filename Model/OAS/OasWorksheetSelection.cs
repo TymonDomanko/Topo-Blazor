@@ -46,7 +46,9 @@ namespace Topo.Model.OAS
         public static int LevelFor(string stream, int level, IReadOnlyDictionary<string, int>? highestInUnit, int topLevel)
         {
             if (level != OneAboveHighest)
+            {
                 return Math.Max(level, 0);
+            }
             var highest = highestInUnit != null && highestInUnit.TryGetValue(stream.ToLowerInvariant(), out var found) ? found : 0;
             return Math.Min(highest + 1, Math.Max(topLevel, 1));
         }
@@ -76,7 +78,9 @@ namespace Topo.Model.OAS
                 var streamLevel = LevelFor(stream, level, highestInUnit, top);
                 var atLevel = StageNodes(all, stream).Where(s => s.Stage == streamLevel).ToList();
                 if (atLevel.Select(s => s.Branch.ToLowerInvariant()).Distinct().Count() > 1)
+                {
                     choices.AddRange(atLevel.Select(s => new OasBranchChoice { Stream = s.Stream, Branch = s.Branch, Title = s.StageTitle }));
+                }
             }
             return choices;
         }
@@ -96,7 +100,9 @@ namespace Topo.Model.OAS
             var top = HighestLevel(all);
             var result = new OasWorksheetSelectionResult();
             if (level < 1 && level != OneAboveHighest)
+            {
                 return result;
+            }
 
             foreach (var stream in streams)
             {
@@ -108,11 +114,13 @@ namespace Topo.Model.OAS
 
                 var wanted = new List<(OASStageListModel stage, bool required)>(chosen.Select(s => (s, true)));
                 if (includeBelow)
+                {
                     foreach (var node in chosen)
                     {
                         var lineage = Lineage(nodes, node.Branch);
                         wanted.AddRange(nodes.Where(s => s.Stage < streamLevel && lineage.Contains(s.Branch.ToLowerInvariant())).Select(s => (s, false)));
                     }
+                }
 
                 foreach (var (stage, required) in wanted
                     .GroupBy(w => w.stage.TemplateLink)
@@ -120,9 +128,13 @@ namespace Topo.Model.OAS
                     .OrderBy(w => w.stage.Stage).ThenBy(w => all.IndexOf(w.stage)))
                 {
                     if (!required && everyoneHas.Contains(StageKey(stage.Stream, stage.Branch, stage.Stage)))
+                    {
                         result.LeftOut.Add(stage);
+                    }
                     else
+                    {
                         result.Included.Add(stage);
+                    }
                 }
             }
             return result;
@@ -133,7 +145,9 @@ namespace Topo.Model.OAS
         {
             var members = memberIds.Distinct().ToList();
             if (members.Count == 0)
+            {
                 return new HashSet<string>();
+            }
             var done = records
                 .Where(r => r.status == "awarded" || r.status == "approved")
                 .GroupBy(r => r.member_id)
@@ -143,9 +157,13 @@ namespace Topo.Model.OAS
             {
                 var mine = done.TryGetValue(member, out var set) ? set : new HashSet<string>();
                 if (everyone == null)
+                {
                     everyone = new HashSet<string>(mine);
+                }
                 else
+                {
                     everyone.IntersectWith(mine);
+                }
             }
             return everyone ?? new HashSet<string>();
         }

@@ -158,7 +158,9 @@ namespace Topo.Model.PatrolPlanner
 
                 var needed = StepsFor(current, member.PatrolName, member.PatrolDuty, member.UnitCouncil, patrolIds);
                 if (needed.Steps.Count == 0)
+                {
                     continue;
+                }
                 foreach (var created in needed.PatrolsToCreate.Where(p => !plan.PatrolsToCreate.Contains(p)))
                     plan.PatrolsToCreate.Add(created);
                 plan.Members.Add(new PatrolPushMember
@@ -177,7 +179,9 @@ namespace Topo.Model.PatrolPlanner
             foreach (var removed in patrolsRemovedFromBoard.Where(p => patrolIds.ContainsKey(p)))
                 plan.Notes.Add($"{removed} was removed on the board, but is not deleted in Terrain (its members are moved out; the empty patrol stays).");
             if (plan.PatrolsToCreate.Count > 0)
+            {
                 plan.Notes.Add($"Created in Terrain first: {string.Join(", ", plan.PatrolsToCreate)}.");
+            }
             return plan;
         }
 
@@ -222,14 +226,18 @@ namespace Topo.Model.PatrolPlanner
                 {
                     var known = patrolIds.TryGetValue(wantPatrolName, out var patrolId);
                     if (!known && !result.PatrolsToCreate.Contains(wantPatrolName))
+                    {
                         result.PatrolsToCreate.Add(wantPatrolName);
+                    }
                     result.Steps.Add(new PatrolPushStep { Kind = PatrolPushStepKind.AddToPatrol, PatrolName = wantPatrolName, PatrolId = known ? patrolId! : "", Duty = wantPatrolDuty });
                 }
                 phrases.Add(string.IsNullOrEmpty(currentPatrolName) ? $"join {wantPatrolName}"
                     : string.IsNullOrEmpty(wantPatrolName) ? $"leave {currentPatrolName}"
                     : $"{currentPatrolName} → {wantPatrolName}");
                 if (!string.IsNullOrEmpty(wantPatrolName) && wantPatrolDuty != MemberDuty)
+                {
                     phrases.Add($"as {DutyText(wantPatrolDuty)}");
+                }
             }
             else if (!string.IsNullOrEmpty(wantPatrolName) && wantPatrolDuty != currentPatrolDuty)
             {
@@ -241,9 +249,13 @@ namespace Topo.Model.PatrolPlanner
             {
                 result.Steps.Add(new PatrolPushStep { Kind = PatrolPushStepKind.SetUnitDuty, Duty = wantUnitDuty, UnitCouncil = wantCouncil });
                 if (wantUnitDuty != currentUnitDuty)
+                {
                     phrases.Add(wantUnitDuty == UnitLeaderDuty ? "becomes Unit Leader" : "no longer Unit Leader");
+                }
                 if (wantCouncil != currentCouncil)
+                {
                     phrases.Add(wantCouncil ? "joins Unit Council" : "leaves Unit Council");
+                }
             }
 
             result.Summary = string.Join(", ", phrases);
@@ -262,11 +274,17 @@ namespace Topo.Model.PatrolPlanner
         public static string BoardDuty(string unitDuty, string patrolDuty)
         {
             if (unitDuty == UnitLeaderDuty)
+            {
                 return "UL";
+            }
             if (patrolDuty == AssistantPatrolLeaderDuty)
+            {
                 return "APL";
+            }
             if (patrolDuty == PatrolLeaderDuty)
+            {
                 return "PL";
+            }
             return "";
         }
 

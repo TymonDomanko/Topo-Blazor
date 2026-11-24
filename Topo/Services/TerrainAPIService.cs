@@ -326,7 +326,9 @@ namespace Topo.Services
             httpRequest.Headers.Add("authorization", _storageService?.AuthenticationResult?.IdToken);
             httpRequest.Headers.Add("accept", "application/json, text/plain, */*");
             if (body != null)
+            {
                 httpRequest.Content = new StringContent(body is string text ? text : JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
+            }
             try
             {
                 var response = await _httpClient.SendAsync(httpRequest);
@@ -565,7 +567,9 @@ namespace Topo.Services
                 var response = await _httpClient.SendAsync(httpRequest);
                 _logger.LogInformation($"Version: {_storageService.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; Request: POST {requestUri} ({action.Outcome}); StatusCode: {(int)response.StatusCode}");
                 if (response.IsSuccessStatusCode)
+                {
                     return null;
+                }
                 return (int)response.StatusCode switch
                 {
                     401 => "Terrain did not accept your sign in. Sign in again and retry.",
@@ -749,7 +753,9 @@ namespace Topo.Services
             httpRequest.Headers.Add("authorization", _storageService?.AuthenticationResult?.IdToken);
             httpRequest.Headers.Add("accept", "application/json, text/plain, */*");
             if (body != null)
+            {
                 httpRequest.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
+            }
             try
             {
                 var response = await _httpClient.SendAsync(httpRequest);
@@ -827,7 +833,9 @@ namespace Topo.Services
         {
             var httpRequest = new HttpRequestMessage(httpMethod, requestUri);
             if (!string.IsNullOrEmpty(jsonBody))
+            {
                 httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+            }
             httpRequest.Headers.Add("authorization", _storageService?.AuthenticationResult?.IdToken);
             httpRequest.Headers.Add("accept", "application/json, text/plain, */*");
             try

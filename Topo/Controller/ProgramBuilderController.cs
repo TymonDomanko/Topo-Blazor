@@ -87,10 +87,14 @@ namespace Topo.Controller
             {
                 var last = await LastUnit();
                 if (last != "" && Units.ContainsKey(last))
+                {
                     unitId = last;
+                }
             }
             if (!string.IsNullOrEmpty(unitId))
+            {
                 await LoadUnit(unitId);
+            }
         }
 
         private const string LastUnitKey = "ProgramBuilder_LastUnit";
@@ -150,7 +154,9 @@ namespace Topo.Controller
             {
                 draft = saved;
                 if (ProgramFill.AddLeaderContacts(draft, Leaders) > 0)
+                {
                     await Save();
+                }
                 AutoFill();
                 return;
             }
@@ -169,7 +175,9 @@ namespace Topo.Controller
         private void AutoFill(int delayMilliseconds = 0)
         {
             if (UnitId == "" || draft.Start.Year < 2000 || draft.End < draft.Start)
+            {
                 return;
+            }
             _ = ReadTerrain(fill: true, automatic: true, delayMilliseconds);
         }
 
@@ -195,7 +203,9 @@ namespace Topo.Controller
         internal async Task Save()
         {
             if (string.IsNullOrEmpty(UnitId))
+            {
                 return;
+            }
             draft.UnitName = UnitName;
             draft.Section = _storageService.Section;
             // a place goes into the list of locations once something in the program is there, however it got there
@@ -215,13 +225,17 @@ namespace Topo.Controller
         internal async Task ClearClick()
         {
             if (!await JS.InvokeAsync<bool>("confirm", "Clear the program? The dates, ideas, activities, camps, hikes and breaks are removed; the section night, usual times, locations, contacts and what is shown are kept."))
+            {
                 return;
+            }
 
             // the duty cycle carries on from where this program ended
             var next = ProgramDuty.NextAfterProgram(draft);
             draft = NewDraft(draft);
             if (next != "")
+            {
                 draft.FirstDutyPatrol = next;
+            }
             _terrainEvents = null;
             Message = "Cleared.";
             ErrorMessage = "";
@@ -246,7 +260,9 @@ namespace Topo.Controller
                 if (cycle == null)
                 {
                     if (!automatic)
+                    {
                         Message = "No duty patrol is written in the activities Terrain has before the program, so the cycle starts as it was.";
+                    }
                     return;
                 }
                 draft.DutyPatrols = cycle.Order;
@@ -299,7 +315,9 @@ namespace Topo.Controller
                     found.Add($"other activities {usual.OtherStart} to {usual.OtherEnd}");
                 }
                 if (found.Count == 0)
+                {
                     Message = "Couldn't tell which night the section meets or its times, from the calendar, so choose them.";
+                }
                 else
                 {
                     Message = $"From the calendar: {string.Join(", ", found)}.";
@@ -343,11 +361,17 @@ namespace Topo.Controller
                         // not worth an error when nobody asked for it: a unit may well have no calendar of its own
                         var none = "There is no calendar named after this unit, so there is nothing to read from Terrain.";
                         if (automatic)
+                        {
                             Message = none + ideasNote;
+                        }
                         else
+                        {
                             ErrorMessage = none;
+                        }
                         if (ideasAdded > 0)
+                        {
                             await Save();
+                        }
                         return;
                     }
                     _terrainEvents = events;
@@ -361,7 +385,9 @@ namespace Topo.Controller
                         await Save();
                     }
                     else
+                    {
                         Message = $"Terrain has {events.Count(e => e.start_datetime.Date >= draft.Start.Date && e.start_datetime.Date <= draft.End.Date)} activities between the dates.";
+                    }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -385,7 +411,9 @@ namespace Topo.Controller
         internal async Task SetStart(ChangeEventArgs e)
         {
             if (!TryDate(e.Value, out var start))
+            {
                 return;
+            }
             draft.Start = start;
             await Save();
             AutoFill(800);
@@ -394,7 +422,9 @@ namespace Topo.Controller
         internal async Task SetEnd(ChangeEventArgs e)
         {
             if (!TryDate(e.Value, out var end))
+            {
                 return;
+            }
             draft.End = end;
             await Save();
             AutoFill(800);
@@ -421,9 +451,13 @@ namespace Topo.Controller
         {
             var name = e.Value?.ToString() ?? "";
             if (name != "" && !draft.DutyPatrols.Contains(name, StringComparer.OrdinalIgnoreCase))
+            {
                 draft.DutyPatrols.Add(name);
+            }
             if (draft.FirstDutyPatrol == "")
+            {
                 draft.FirstDutyPatrol = name;
+            }
             await Save();
         }
 
@@ -433,7 +467,9 @@ namespace Topo.Controller
             var open = patrol.LastIndexOf('(');
             var close = patrol.LastIndexOf(')');
             if (open < 0 || close != patrol.Length - 1 || close - open < 2)
+            {
                 return "";
+            }
             var colour = patrol.Substring(open + 1, close - open - 1).Trim();
             return colour.All(char.IsLetter) ? "border-left-color: " + colour : "";
         }
@@ -442,7 +478,9 @@ namespace Topo.Controller
         {
             draft.DutyPatrols.Remove(name);
             if (draft.FirstDutyPatrol == name)
+            {
                 draft.FirstDutyPatrol = draft.DutyPatrols.FirstOrDefault() ?? "";
+            }
             await Save();
         }
 
@@ -459,7 +497,9 @@ namespace Topo.Controller
         internal void OverDutyPatrol(string name)
         {
             if (_draggedPatrol != null && _draggedPatrol != name)
+            {
                 DutyOver = name;
+            }
         }
 
         internal void EndDutyDrag()
@@ -474,14 +514,20 @@ namespace Topo.Controller
             var name = _draggedPatrol;
             EndDutyDrag();
             if (name == null || name == onto)
+            {
                 return;
+            }
             var at = draft.DutyPatrols.IndexOf(name);
             if (at < 0)
+            {
                 return;
+            }
             // where it ends up is where the other one was, whichever way it moves
             var to = onto == null ? draft.DutyPatrols.Count - 1 : draft.DutyPatrols.IndexOf(onto);
             if (to < 0)
+            {
                 return;
+            }
             draft.DutyPatrols.RemoveAt(at);
             draft.DutyPatrols.Insert(to, name);
             await Save();
@@ -501,7 +547,9 @@ namespace Topo.Controller
         {
             var key = ProgramPlanner.NightKey(date);
             if (!draft.NightEdits.TryGetValue(key, out var row))
+            {
                 draft.NightEdits[key] = row = new ProgramRow { Date = date.Date };
+            }
             return row;
         }
 
@@ -616,7 +664,9 @@ namespace Topo.Controller
         internal async Task AddIdea()
         {
             if (NewIdea.Title.Trim() == "")
+            {
                 return;
+            }
             NewIdea.Title = NewIdea.Title.Trim();
             draft.Ideas.Add(NewIdea);
             NewIdea = new ProgramIdea { ChallengeArea = NewIdea.ChallengeArea };
@@ -638,12 +688,16 @@ namespace Topo.Controller
             var dragged = _dragged;
             _dragged = null;
             if (dragged == null)
+            {
                 return;
+            }
             var done = dragged.Value.FromIdeas
                 ? ProgramIdeas.Assign(draft, dragged.Value.Key, night)
                 : ProgramIdeas.Move(draft, DateTime.ParseExact(dragged.Value.Key, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), night);
             if (done)
+            {
                 await Save();
+            }
         }
 
         // Dropping what is on a night back among the ideas
@@ -652,9 +706,13 @@ namespace Topo.Controller
             var dragged = _dragged;
             _dragged = null;
             if (dragged == null || dragged.Value.FromIdeas)
+            {
                 return;
+            }
             if (ProgramIdeas.Unassign(draft, DateTime.ParseExact(dragged.Value.Key, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)))
+            {
                 await Save();
+            }
         }
 
         // ---- camps, hikes and the rest
@@ -675,10 +733,14 @@ namespace Topo.Controller
         internal async Task SetExtraFrom(ProgramRow extra, ChangeEventArgs e)
         {
             if (!TryDate(e.Value, out var from))
+            {
                 return;
+            }
             // a camp given its first day gets the usual three days, to be changed
             if (!ProgramPlanner.IsDated(extra) && extra.Kind == ProgramRowKind.Camp && extra.EndDate == null)
+            {
                 extra.EndDate = from.AddDays(2);
+            }
             else if (extra.EndDate != null && ProgramPlanner.IsDated(extra))
             {
                 var length = (extra.EndDate.Value.Date - extra.Date.Date).Days;
@@ -692,13 +754,21 @@ namespace Topo.Controller
         internal async Task SetExtraTo(ProgramRow extra, ChangeEventArgs e)
         {
             if (!ProgramPlanner.IsDated(extra))
+            {
                 return;
+            }
             if (string.IsNullOrEmpty(e.Value?.ToString()))
+            {
                 extra.EndDate = null;
+            }
             else if (TryDate(e.Value, out var to))
+            {
                 extra.EndDate = to < extra.Date.Date ? extra.Date.Date : to;
+            }
             else
+            {
                 return;
+            }
             await Save();
         }
 
@@ -724,7 +794,9 @@ namespace Topo.Controller
         internal async Task AddLocationTo(ProgramRow row)
         {
             if (NewLocationName.Trim() == "")
+            {
                 return;
+            }
             var name = LocationNamed(NewLocationName);
             NewLocationName = "";
             await ChooseLocation(row, name);
@@ -754,7 +826,9 @@ namespace Topo.Controller
                 var olds = new List<string> { oldName };
                 var leader = contact.MemberId == "" ? null : Leaders.FirstOrDefault(l => l.Id == contact.MemberId);
                 if (leader != null)
+                {
                     olds.Add(leader.FirstName);
+                }
                 ProgramLeaders.Rename(draft, olds, newName);
             }
             await Save();
@@ -827,9 +901,13 @@ namespace Topo.Controller
         internal async Task DeleteFromTerrainClick(ProgramRow row)
         {
             if (row.TerrainEventId == "" || _storageService.IsYouthMember)
+            {
                 return;
+            }
             if (!await JS.InvokeAsync<bool>("confirm", $"Delete \"{row.Activity}\" ({row.Date:ddd d MMM}) from the unit's calendar in Terrain? It is removed there for everyone, and this can't be undone from here."))
+            {
                 return;
+            }
 
             ErrorMessage = "";
             var result = await _programBuilderService.DeleteEvent(row.TerrainEventId);
@@ -854,7 +932,9 @@ namespace Topo.Controller
         internal async Task ConfirmPushClick()
         {
             if (PushPlan == null || !PushPlan.HasWork || PushBusy)
+            {
                 return;
+            }
 
             PushBusy = true;
             try

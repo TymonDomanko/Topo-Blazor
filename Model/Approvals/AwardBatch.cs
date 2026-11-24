@@ -32,12 +32,16 @@ namespace Topo.Model.Approvals
         {
             var toAward = awards.Where(a => a.CanAward).ToList();
             if (toAward.Count == 0)
+            {
                 return new AwardBatchResult { Problem = "Tick at least one award first." };
+            }
 
             var action = ApprovalAction.Award(dateAwarded);
             var problem = action.Problem("award", today);
             if (problem != null)
+            {
                 return new AwardBatchResult { Problem = problem };
+            }
 
             var outcomes = new List<AwardOutcome>();
             foreach (var award in toAward)

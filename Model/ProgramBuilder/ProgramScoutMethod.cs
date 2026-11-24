@@ -18,7 +18,9 @@ namespace Topo.Model.ProgramBuilder
         {
             var set = current.ToList();
             if (!set.Remove(key))
+            {
                 set.Add(key);
+            }
             var order = Elements.Select(e => e.Key).ToList();
             return set.OrderBy(k => order.IndexOf(k) < 0 ? int.MaxValue : order.IndexOf(k)).ToList();
         }

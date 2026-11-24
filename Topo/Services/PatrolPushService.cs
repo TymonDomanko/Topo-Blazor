@@ -57,7 +57,9 @@ namespace Topo.Services
                     cannotCreate[patrolName] = created.Message;
                     refused |= created.NotAllowed;
                     if (refused)
+                    {
                         break;
+                    }
                 }
             }
 
@@ -99,7 +101,9 @@ namespace Topo.Services
                     done++;
                 }
                 if (memberResult.Outcome != PatrolPushOutcome.Failed)
+                {
                     memberResult.Outcome = PatrolPushOutcome.Done;
+                }
             }
 
             await CheckAndRetryAsync(plan, result, refused, progress);
@@ -114,7 +118,9 @@ namespace Topo.Services
             var attempted = plan.Members.Select((member, i) => (member, outcome: result.Members[i]))
                 .Where(x => x.outcome.Outcome != PatrolPushOutcome.NotAttempted).ToList();
             if (attempted.Count == 0)
+            {
                 return;
+            }
 
             var retried = new HashSet<string>();
             for (var attempt = 1; attempt <= 2; attempt++)
@@ -148,7 +154,9 @@ namespace Topo.Services
                 }
 
                 if (unmet.Count == 0)
+                {
                     return;
+                }
 
                 if (attempt == 2 || refused)
                 {
@@ -170,7 +178,9 @@ namespace Topo.Services
                 foreach (var (member, outcome, steps, current) in unmet)
                 {
                     if (current == null || steps.Steps.Count == 0 || steps.PatrolsToCreate.Count > 0)
+                    {
                         continue;
+                    }
                     retried.Add(member.MemberId);
                     foreach (var step in steps.Steps)
                     {

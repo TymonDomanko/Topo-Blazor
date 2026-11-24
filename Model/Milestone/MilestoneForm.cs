@@ -35,7 +35,9 @@ namespace Topo.Model.Milestone
             {
                 using var document = JsonDocument.Parse(json);
                 if (document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("document", out var body))
+                {
                     Walk(body, form);
+                }
             }
             catch (JsonException)
             {
@@ -57,9 +59,13 @@ namespace Topo.Model.Milestone
                 if (id != "" && type != "" && element.TryGetProperty("label", out _))
                 {
                     if (type == "text_input")
+                    {
                         form.Questions.Add(new MilestoneFormQuestion { Id = id, Label = Label(element) });
+                    }
                     else if (type.EndsWith("selector", StringComparison.Ordinal) || type == "radio")
+                    {
                         form.Questions.Add(new MilestoneFormQuestion { Id = id, Label = Label(element), IsChoice = true, Choices = Choices(element) });
+                    }
                     return;
                 }
                 foreach (var property in element.EnumerateObject())
@@ -74,17 +80,27 @@ namespace Topo.Model.Milestone
             void Add(JsonElement selections)
             {
                 if (selections.ValueKind != JsonValueKind.Array)
+                {
                     return;
+                }
                 foreach (var selection in selections.EnumerateArray())
                     if (Text(selection, "id") != "")
+                    {
                         choices.Add(new MilestoneChoice { Id = Text(selection, "id"), Title = Text(selection, "title") });
+                    }
             }
             if (question.TryGetProperty("selections", out var direct))
+            {
                 Add(direct);
+            }
             if (question.TryGetProperty("tabs", out var tabs) && tabs.ValueKind == JsonValueKind.Array)
+            {
                 foreach (var tab in tabs.EnumerateArray())
                     if (tab.TryGetProperty("selections", out var inTab))
+                    {
                         Add(inTab);
+                    }
+            }
             return choices;
         }
 

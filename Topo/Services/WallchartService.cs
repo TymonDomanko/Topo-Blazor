@@ -40,7 +40,9 @@ namespace Topo.Services
                 foreach (var item in cachedWallchartItems)
                 {
                     if (cachedNames.TryGetValue(item.MemberId, out var cachedName))
+                    {
                         item.MemberName = cachedName;
+                    }
                 }
                 return cachedWallchartItems;
             }

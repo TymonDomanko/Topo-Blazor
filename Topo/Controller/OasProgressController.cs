@@ -75,7 +75,9 @@ namespace Topo.Controller
                 model.ErrorMessage = "Couldn't read the Outdoor Adventure Skills from Terrain.";
             }
             if (!string.IsNullOrEmpty(_storageService.UnitId))
+            {
                 await UnitChange(_storageService.UnitId);
+            }
         }
 
         internal async Task UnitChange(ChangeEventArgs e) => await UnitChange(e.Value?.ToString() ?? "");
@@ -115,7 +117,9 @@ namespace Topo.Controller
             {
                 // the worksheets can still be made; no level is left out
                 if (loadId == _loadId)
+                {
                     model.ErrorMessage = "Couldn't read what the Scouts have been awarded, so no levels are left out.";
+                }
             }
             finally
             {
@@ -127,7 +131,9 @@ namespace Topo.Controller
                 }
             }
             if (loadId == _loadId)
+            {
                 await ShowWorksheets();
+            }
         }
 
         internal async Task SkillChanged(ChangeEventArgs e)
@@ -155,9 +161,13 @@ namespace Topo.Controller
         internal async Task BranchChanged(OasBranchChoice choice, bool ticked)
         {
             if (ticked)
+            {
                 model.ChosenBranches.Add(choice.Key);
+            }
             else
+            {
                 model.ChosenBranches.Remove(choice.Key);
+            }
             Recalculate();
             await ShowWorksheets();
         }
@@ -195,14 +205,18 @@ namespace Topo.Controller
             {
                 var answers = await ReadWorksheets(Selection.Included.ToList(), viewId);
                 if (answers == null || viewId != _viewId)
+                {
                     return;
+                }
                 _shown = answers;
                 Layout();
             }
             catch (Exception)
             {
                 if (viewId == _viewId)
+                {
                     model.ErrorMessage = "Couldn't read the worksheets from Terrain.";
+                }
             }
             finally
             {
@@ -229,7 +243,9 @@ namespace Topo.Controller
                     var templateList = await _oasService.GetOASTemplate(stages[i].TemplateLink.Replace("/latest.json", ""));
                     answers = await _oasService.GenerateOASWorksheetAnswers(model.UnitId, stages[i], model.HideCompletedMembers, templateList);
                     if (viewId != null && viewId != _viewId)
+                    {
                         return null;
+                    }
                     _answers[key] = answers;
                 }
                 all.AddRange(answers);
@@ -258,7 +274,9 @@ namespace Topo.Controller
         private async Task Download(OutputType outputType, string extension, string contentType)
         {
             if (!CanMake)
+            {
                 return;
+            }
 
             model.ErrorMessage = "";
             Loading = true;

@@ -79,7 +79,9 @@ namespace Topo.Controller
             Units = _storageService.Units;
             UnitId = _storageService.UnitId;
             if (!string.IsNullOrEmpty(UnitId))
+            {
                 await RefreshClick();
+            }
         }
 
         internal async Task UnitChange(ChangeEventArgs e)
@@ -91,13 +93,18 @@ namespace Topo.Controller
             Selection = null;
             LoadError = null;
             if (!string.IsNullOrEmpty(UnitId))
+            {
                 await RefreshClick();
+            }
         }
 
         // Reads the pending awards from Terrain. Reading again clears what was ticked, since the list may have changed.
         internal async Task RefreshClick()
         {
-            if (string.IsNullOrEmpty(UnitId)) return;
+            if (string.IsNullOrEmpty(UnitId))
+            {
+                return;
+            }
             var unitId = UnitId;
             IsLoading = true;
             LoadError = null;
@@ -105,13 +112,19 @@ namespace Topo.Controller
             {
                 var awards = await WithTopoAwardsAsync(unitId, await _approvalsService.GetAwardRequests(unitId));
                 // The leader picked another unit while this was loading; that unit's own read decides what is shown
-                if (unitId != UnitId) return;
+                if (unitId != UnitId)
+                {
+                    return;
+                }
                 Awards = awards;
                 ShowEveryone();
             }
             catch (Exception)
             {
-                if (unitId != UnitId) return;
+                if (unitId != UnitId)
+                {
+                    return;
+                }
                 Awards = null;
                 Shown = null;
                 Selection = null;
@@ -119,9 +132,15 @@ namespace Topo.Controller
             }
             finally
             {
-                if (unitId == UnitId) IsLoading = false;
+                if (unitId == UnitId)
+                {
+                    IsLoading = false;
+                }
             }
-            if (unitId == UnitId && Awards != null) await LoadEvents();
+            if (unitId == UnitId && Awards != null)
+            {
+                await LoadEvents();
+            }
         }
 
         // Reads the unit's events for the last two years, so the date picker can block out the days with none
@@ -136,33 +155,51 @@ namespace Topo.Controller
             try
             {
                 var events = await _programService.GetEventChoices(EarliestDate, Today, unitId);
-                if (unitId != UnitId) return;
+                if (unitId != UnitId)
+                {
+                    return;
+                }
                 _allEvents = events;
                 EventDates = AwardEventChoice.Dates(events);
                 EventsRead = true;
                 // The leader picks the date themself. One already picked stays, unless it has no event now.
                 if (AwardDate != null && !AllowAnyDate && !EventDates.Contains(AwardDate.Value.Date))
+                {
                     AwardDate = null;
+                }
                 if (EventDates.Count == 0)
+                {
                     EventMessage = "No events found in the last two years. Events come from the calendars selected in Terrain; tick \"Allow any date\" to choose a day anyway.";
+                }
             }
             catch (Exception)
             {
-                if (unitId != UnitId) return;
+                if (unitId != UnitId)
+                {
+                    return;
+                }
                 EventMessage = "Could not read the events from Terrain, so any date can be chosen.";
             }
             finally
             {
-                if (unitId == UnitId) EventsLoading = false;
+                if (unitId == UnitId)
+                {
+                    EventsLoading = false;
+                }
             }
-            if (unitId == UnitId) await ShowEventsForDate();
+            if (unitId == UnitId)
+            {
+                await ShowEventsForDate();
+            }
         }
 
         // The picker greys out a day that has no event for the unit
         internal void RenderDay(RenderDayCellEventArgs args)
         {
             if (EventsRead && !AllowAnyDate && !EventDates.Contains(args.Date.Date))
+            {
                 args.IsDisabled = true;
+            }
         }
 
         // The award date was picked: the day's event is chosen for the leader, and the people who attended are ticked
@@ -184,7 +221,9 @@ namespace Topo.Controller
             Events = AwardDate == null ? new List<AwardEventChoice>() : AwardEventChoice.On(_allEvents, AwardDate.Value);
             ShowEveryone();
             if (Events.Count > 0)
+            {
                 await SelectEvent(Events[0].Id);
+            }
         }
 
         // The leader picked a different event (or "everyone")
@@ -208,7 +247,10 @@ namespace Topo.Controller
             try
             {
                 var attended = await _programService.GetAttendedMemberIds(eventId);
-                if (eventId != SelectedEventId) return;
+                if (eventId != SelectedEventId)
+                {
+                    return;
+                }
                 _attended = attended;
                 Shown = Awards?.OnlyMembers(attended);
                 Selection = Shown == null ? null : new AwardSelection(Shown);
@@ -218,14 +260,20 @@ namespace Topo.Controller
             }
             catch (Exception)
             {
-                if (eventId != SelectedEventId) return;
+                if (eventId != SelectedEventId)
+                {
+                    return;
+                }
                 SelectedEventId = string.Empty;
                 ShowEveryone();
                 EventMessage = "Could not read who attended that event from Terrain.";
             }
             finally
             {
-                if (eventId == SelectedEventId || string.IsNullOrEmpty(SelectedEventId)) EventsLoading = false;
+                if (eventId == SelectedEventId || string.IsNullOrEmpty(SelectedEventId))
+                {
+                    EventsLoading = false;
+                }
             }
         }
 
@@ -250,7 +298,10 @@ namespace Topo.Controller
         // What was ticked is what the confirmation shows, so any change to the ticks closes it
         private void ChangeTicks(Action change)
         {
-            if (IsAwarding) return;
+            if (IsAwarding)
+            {
+                return;
+            }
             change();
             ConfirmOpen = false;
             AwardMessage = null;
@@ -259,7 +310,10 @@ namespace Topo.Controller
         // Checks there is something to award and a good date, then shows what will be sent. Nothing is sent yet.
         internal void AwardClick()
         {
-            if (IsAwarding || Selection == null) return;
+            if (IsAwarding || Selection == null)
+            {
+                return;
+            }
             LastResult = null;
             AwardMessage = null;
             if (Selection.Count == 0)
@@ -270,20 +324,28 @@ namespace Topo.Controller
             AwardMessage = ApprovalAction.Award(AwardDate).Problem("award", Today);
             // A day with no event for the unit cannot be chosen in the picker, but a date can be typed in
             if (AwardMessage == null && EventsRead && !AllowAnyDate && !EventDates.Contains(AwardDate!.Value.Date))
+            {
                 AwardMessage = "There is no event for the unit on that date.";
+            }
             ConfirmOpen = AwardMessage == null;
         }
 
         internal void CancelConfirmClick()
         {
-            if (IsAwarding) return;
+            if (IsAwarding)
+            {
+                return;
+            }
             ConfirmOpen = false;
         }
 
         // The leader confirmed: award the ticked requests one after another, then read Terrain's list again
         internal async Task ConfirmAwardClick()
         {
-            if (IsAwarding || Selection == null || !ConfirmOpen) return;
+            if (IsAwarding || Selection == null || !ConfirmOpen)
+            {
+                return;
+            }
             var selected = Selection.SelectedAwards();
             var date = AwardDate;
             var unitId = UnitId;
@@ -304,7 +366,9 @@ namespace Topo.Controller
                 LastResult = result;
                 AwardMessage = result.Problem;
                 if (result.Outcomes.Count > 0)
+                {
                     await ReloadAfterAwards(unitId, result);
+                }
             }
             finally
             {
@@ -319,7 +383,10 @@ namespace Topo.Controller
             try
             {
                 var awards = await WithTopoAwardsAsync(unitId, await _approvalsService.GetAwardRequests(unitId));
-                if (unitId != UnitId) return;
+                if (unitId != UnitId)
+                {
+                    return;
+                }
                 // An award that went through but is still pending in Terrain has an awarded response recorded, so it is not listed
                 StillListed = result.Done.Count(o => awards.Hidden.Contains(o.Award.Item.SubmissionId));
                 Awards = awards;
@@ -358,12 +425,18 @@ namespace Topo.Controller
         private async Task<string?> SendAsync(string submissionId, ApprovalAction action)
         {
             if (!submissionId.StartsWith(PendingApprovalItem.TopoIdPrefix, StringComparison.Ordinal))
+            {
                 return await _approvalsService.PerformAction(submissionId, action);
+            }
             if (!_topoAwards.TryGetValue(submissionId, out var row))
+            {
                 return "That award is no longer on the list to hand over.";
+            }
             var written = await _additionalAwards.PresentAsync(new[] { row }, action.DateAwarded!.Value);
             if (written.Failures.Count == 0 && written.Done + written.Skipped > 0)
+            {
                 return null;
+            }
             return written.Failures.FirstOrDefault() ?? "It was not recorded.";
         }
     }

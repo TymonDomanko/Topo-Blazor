@@ -54,7 +54,9 @@ namespace Topo.Controller
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             if (!string.IsNullOrEmpty(_storageService.UnitId))
+            {
                 await UnitChange(_storageService.UnitId);
+            }
         }
 
         internal async Task UnitChange(ChangeEventArgs e) => await UnitChange(e.Value?.ToString() ?? "");
@@ -84,7 +86,9 @@ namespace Topo.Controller
                 // Youth only: the Unit Leader, Patrol Leaders and Assistant Patrol Leaders are youth, and stay in the order the unit is listed
                 var members = (await _membersService.GetMembersAsync(unitId)).Where(m => m.isAdultLeader == 0).ToList();
                 if (loadId != _loadId)
+                {
                     return;
+                }
                 if (members.Count == 0)
                 {
                     NoYouth = true;
@@ -93,7 +97,9 @@ namespace Topo.Controller
                 Progress = "their Outdoor Adventure Skills";
                 var records = await _oasService.GetUnitOasRecords(unitId);
                 if (loadId != _loadId)
+                {
                     return;
+                }
                 _members = members.Select(m => new OasSummaryMember { MemberId = m.id, FirstName = m.first_name, LastName = m.last_name, Patrol = m.patrol_name }).ToList();
                 _records = records.results.ToList();
                 await SplitChanged();
@@ -101,7 +107,9 @@ namespace Topo.Controller
             catch (Exception)
             {
                 if (loadId == _loadId)
+                {
                     model.ErrorMessage = "Couldn't read the Outdoor Adventure Skills from Terrain.";
+                }
             }
             finally
             {
@@ -150,7 +158,9 @@ namespace Topo.Controller
         private void Recalculate()
         {
             if (_members == null || _records == null)
+            {
                 return;
+            }
             var columns = model.SplitBranches ? OasSummaryLayout.BranchColumns(_branches ?? new List<OasBranch>(), _records) : OasSummaryLayout.SkillColumns();
             Report = OasSummaryBuilder.Build(_members, _records, _storageService.Section, model.BreakByPatrol, model.UseFullNames, columns, model.SplitBranches);
             Report.UnitName = _storageService.UnitName ?? "";
@@ -166,7 +176,9 @@ namespace Topo.Controller
         private async Task Download(OutputType outputType)
         {
             if (Report == null)
+            {
                 return;
+            }
             try
             {
                 var groupName = _storageService.GroupName ?? "";

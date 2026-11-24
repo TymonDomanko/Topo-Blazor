@@ -46,7 +46,9 @@ namespace Topo.Model.Approvals
         {
             var rows = toBePresented.Where(r => r.Status == AwardRowStatus.ToBePresented).ToList();
             if (rows.Count == 0)
+            {
                 return this;
+            }
 
             var people = People.ToDictionary(p => p.MemberId, p => new AwardPerson { MemberId = p.MemberId, Name = p.Name, SortName = p.SortName, Awards = p.Awards.ToList() });
             foreach (var row in rows)
@@ -76,7 +78,10 @@ namespace Topo.Model.Approvals
                 person.Awards.Sort((a, b) =>
                 {
                     var byName = string.Compare(a.Item.AchievementName, b.Item.AchievementName, StringComparison.CurrentCultureIgnoreCase);
-                    if (byName != 0) return byName;
+                    if (byName != 0)
+                    {
+                        return byName;
+                    }
                     var byDate = a.Item.SubmissionDate.CompareTo(b.Item.SubmissionDate);
                     return byDate != 0 ? byDate : string.CompareOrdinal(a.Item.SubmissionId, b.Item.SubmissionId);
                 });
@@ -135,9 +140,13 @@ namespace Topo.Model.Approvals
             string reason = string.Empty;
             // With no idea who the leader is nothing can be checked, so nothing can be selected
             if (string.IsNullOrEmpty(currentMemberId))
+            {
                 reason = "Your own member id could not be found";
+            }
             else if (result.member.id == currentMemberId)
+            {
                 reason = "Your own award";
+            }
             return new AwardRequest { Item = PendingApprovalQueue.FromResult(result), CanAward = reason.Length == 0, Reason = reason };
         }
     }
@@ -160,9 +169,14 @@ namespace Topo.Model.Approvals
 
         public void Toggle(string submissionId)
         {
-            if (_selected.Remove(submissionId)) return;
+            if (_selected.Remove(submissionId))
+            {
+                return;
+            }
             if (_list.People.SelectMany(p => p.Awards).Any(a => a.CanAward && a.Item.SubmissionId == submissionId))
+            {
                 _selected.Add(submissionId);
+            }
         }
 
         // How many of the person's awards that can be awarded are ticked, and how many could be
@@ -183,9 +197,13 @@ namespace Topo.Model.Approvals
         {
             var awards = Selectable(memberId);
             if (IsPersonFullySelected(memberId))
+            {
                 foreach (var award in awards) _selected.Remove(award.Item.SubmissionId);
+            }
             else
+            {
                 foreach (var award in awards) _selected.Add(award.Item.SubmissionId);
+            }
         }
 
         public void SelectAll()

@@ -214,7 +214,9 @@ namespace Topo.Controller
         internal async Task ConfirmPushClick()
         {
             if (PushPlan == null || !PushPlan.HasWork || PushBusy)
+            {
                 return;
+            }
 
             PushBusy = true;
             try

@@ -102,7 +102,9 @@ namespace Topo.Services
                     foreach (var detail in details)
                     {
                         if (detail != null)
+                        {
                             entries.Add(detail);
+                        }
                     }
                 }
             }

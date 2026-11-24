@@ -104,7 +104,9 @@ namespace Topo.Model.AdditionalAwards
                 {
                     var highestHeld = tierList.Where(t => t.Family == tier.Family && terrainRecords.Contains(member.MemberId + "|" + t.Id)).Select(t => t.Threshold).DefaultIfEmpty(0).Max();
                     if (tier.Threshold > highestHeld && !terrainRecords.Contains(member.MemberId + "|" + tier.Id))
+                    {
                         missing.Add((member, tier));
+                    }
                 }
             return missing;
         }
@@ -124,7 +126,9 @@ namespace Topo.Model.AdditionalAwards
                     var highestHeld = tiers.Where(t => t.Family == family.Key && terrainRecords.Contains(member.Key + "|" + t.Id)).Select(t => t.Threshold).DefaultIfEmpty(0).Max();
                     var open = family.Where(m => tierById[m.AwardId].Threshold > highestHeld).OrderBy(m => tierById[m.AwardId].Threshold).ToList();
                     if (open.Count == 0)
+                    {
                         continue;
+                    }
                     var highest = open[^1];
                     foreach (var m in open)
                         rows.Add(new AwardRow
@@ -166,14 +170,20 @@ namespace Topo.Model.AdditionalAwards
                     for (var i = 0; i < ordered.Count; i++)
                     {
                         if (terrainRecordDates.ContainsKey(memberId + "|" + ordered[i].Id))
+                        {
                             continue;
+                        }
                         // the nearest level above that Terrain holds gives the day
                         var above = ordered.Skip(i + 1).FirstOrDefault(t => terrainRecordDates.ContainsKey(memberId + "|" + t.Id));
                         if (above == null)
+                        {
                             continue;
+                        }
                         var day = terrainRecordDates[memberId + "|" + above.Id];
                         if (earned != null && earned.TryGetValue(memberId + "|" + ordered[i].Id, out var earnedDay) && earnedDay.Date < day)
+                        {
                             day = earnedDay.Date;
+                        }
                         lower.Add((memberId, ordered[i], day));
                     }
                 }

@@ -50,7 +50,9 @@ namespace Topo.Services
         public void Start()
         {
             if (_started)
+            {
                 return;
+            }
             _started = true;
             _ = LoopAsync();
         }
@@ -61,7 +63,9 @@ namespace Topo.Services
             Settings.Enabled = enabled;
             // Turned on, it is due straight away (the next quiet moment)
             if (enabled)
+            {
                 Settings.LastAttemptUtc = null;
+            }
             await SaveAsync();
             Changed?.Invoke();
         }
@@ -91,7 +95,9 @@ namespace Topo.Services
             }
             await LoadAsync();
             if (IsRunning || !AutoAwardSchedule.IsDue(Settings, DateTime.UtcNow) || !_activityMonitor.IsIdleFor(AutoAwardSchedule.QuietFor))
+            {
                 return;
+            }
             await RunAsync();
         }
 
@@ -99,7 +105,9 @@ namespace Topo.Services
         {
             var group = _storageService.GroupId ?? "";
             if (_loadedGroup == group)
+            {
                 return;
+            }
             Settings = await _localStorage.GetItemAsync<AutoAwardSettings>(Key) ?? new AutoAwardSettings();
             _loadedGroup = group;
             Changed?.Invoke();
@@ -133,9 +141,13 @@ namespace Topo.Services
                         (result.LowerLevelsRecorded > 0 ? $"; recorded {result.LowerLevelsRecorded} lower levels in Terrain" : "") +
                         (result.MembersNotRead.Count > 0 ? $"; could not read {result.MembersNotRead.Count} Scouts" : "") + ".";
                     if (result.Failures.Count > 0)
+                    {
                         Settings.LastError = $"{result.Failures.Count} could not be recorded: {result.Failures[0]}";
+                    }
                     else
+                    {
                         Settings.LastRunUtc = DateTime.UtcNow;
+                    }
                 }
             }
             catch (Exception ex)

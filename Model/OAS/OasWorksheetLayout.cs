@@ -70,9 +70,13 @@ namespace Topo.Model.OAS
                 foreach (var group in requirements.Select(r => r.InputTitle).Aggregate(new List<(string heading, int span)>(), (runs, title) =>
                 {
                     if (runs.Count > 0 && runs[^1].heading == title)
+                    {
                         runs[^1] = (title, runs[^1].span + 1);
+                    }
                     else
+                    {
                         runs.Add((title, 1));
+                    }
                     return runs;
                 }))
                     sheet.Groups.Add(new OasWorksheetGroup { Heading = group.heading, Colour = ColourOf(group.heading), Span = group.span });
@@ -90,9 +94,13 @@ namespace Topo.Model.OAS
         private static OasWorksheetCell CellOf(OASWorksheetAnswers answer)
         {
             if (!answer.Answered)
+            {
                 return new OasWorksheetCell();
+            }
             if (answer.Awarded)
+            {
                 return new OasWorksheetCell { Kind = OasWorksheetCellKind.Awarded, Text = answer.InputId == "logbook_up_to_date" ? answer.MemberAnswer : "" };
+            }
             return new OasWorksheetCell { Kind = OasWorksheetCellKind.InProgress, Text = string.IsNullOrEmpty(answer.MemberAnswer) ? "Y" : answer.MemberAnswer };
         }
     }

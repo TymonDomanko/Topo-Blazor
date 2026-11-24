@@ -106,9 +106,13 @@ namespace Topo.Model.ProgramBuilder
                 }
                 var organisers = Organisers(planned, context);
                 if (organisers.Unmatched.Count > 0)
+                {
                     plan.Notes.Add($"{label}: {string.Join(", ", organisers.Unmatched)} {(organisers.Unmatched.Count == 1 ? "is" : "are")} not a leader in the unit, so {(organisers.Ids.Count == 0 ? "no organiser is set" : "only the others are set as organisers")}.");
+                }
                 if (planned.ChallengeArea == "")
+                {
                     plan.Notes.Add($"{label}: no challenge area is set, so it is sent as Not applicable.");
+                }
                 plan.Items.Add(new ProgramPushItem { Event = planned, Summary = Summary(planned, organisers.Names), Body = Body(planned, context, organisers.Ids) });
             }
             // an activity that is in Terrain already but differs is a change to it: one that is still to come and has not been done is updated, and the
@@ -119,13 +123,21 @@ namespace Topo.Model.ProgramBuilder
                 var found = existing.FirstOrDefault(e => e.id == change.EventId);
                 var planned = change.Planned!;
                 if (found == null || planned.Start < now)
+                {
                     plan.Skipped.Add((label, $"is in Terrain already but differs ({change.Details}), and is in the past; changes to what has happened are made in Terrain"));
+                }
                 else if (!string.Equals(found.status, "planned", StringComparison.OrdinalIgnoreCase))
+                {
                     plan.Skipped.Add((label, $"is in Terrain already but differs ({change.Details}), and is {found.status}, not planned; changes to it are made in Terrain"));
+                }
                 else if (planned.ScoutMethod.Count == 0 && found.review?.scout_method_elements?.Length == 0)
+                {
                     plan.Skipped.Add((label, $"differs in Terrain ({change.Details}), and has no part of the Scout Method chosen; choose at least one for it"));
+                }
                 else
+                {
                     plan.Updates.Add(new ProgramPushItem { Kind = ProgramPushKind.Update, EventId = found.id, Differences = change.Details, Event = planned, Summary = $"{label}: {change.Details}" });
+                }
             }
             return plan;
         }
@@ -207,7 +219,9 @@ namespace Topo.Model.ProgramBuilder
             review["general_tags"] ??= new JsonArray();
             review["scout_spices_elements"] ??= new JsonArray();
             if (planned.ScoutMethod.Count > 0)
+            {
                 review["scout_method_elements"] = Strings(planned.ScoutMethod);
+            }
             review["scout_method_elements"] ??= new JsonArray();
 
             var attendance = raw["attendance"] as JsonObject;
@@ -245,7 +259,9 @@ namespace Topo.Model.ProgramBuilder
                 var leader = context.Leaders.FirstOrDefault(l => string.Equals(l.FirstName, name, StringComparison.OrdinalIgnoreCase)
                     || string.Equals($"{l.FirstName} {l.LastName}".Trim(), name, StringComparison.OrdinalIgnoreCase));
                 if (leader == null || leader.Id == "")
+                {
                     unmatched.Add(name);
+                }
                 else if (!ids.Contains(leader.Id))
                 {
                     ids.Add(leader.Id);
@@ -260,11 +276,17 @@ namespace Topo.Model.ProgramBuilder
             var days = e.End.Date > e.Start.Date ? $"{e.Start:ddd d MMM HH:mm} to {e.End:ddd d MMM HH:mm}" : $"{e.Start:ddd d MMM HH:mm}-{e.End:HH:mm}";
             var parts = new List<string> { $"{e.Title}, {days}" };
             if (e.Location != "")
+            {
                 parts.Add($"at {e.Location}");
+            }
             if (organiserNames.Count > 0)
+            {
                 parts.Add($"led by {string.Join(" and ", organiserNames)}");
+            }
             if (e.ChallengeArea != "")
+            {
                 parts.Add(ProgramLayout.AreaLabel(e.ChallengeArea));
+            }
             return string.Join(", ", parts);
         }
 
@@ -311,7 +333,9 @@ namespace Topo.Model.ProgramBuilder
                 item.Event.Row.TerrainEventId = found.id;
                 // a section night's row is a copy made for the plan, so the id is put on what the program keeps for the night as well
                 if (draft != null && item.Event.Row.Kind == ProgramRowKind.SectionNight && draft.NightEdits.TryGetValue(ProgramPlanner.NightKey(item.Event.Row.Date), out var kept))
+                {
                     kept.TerrainEventId = found.id;
+                }
                 item.Outcome = ProgramPushOutcome.Created;
             }
         }
@@ -323,9 +347,13 @@ namespace Topo.Model.ProgramBuilder
             foreach (var item in result.Items.Where(i => i.Kind == ProgramPushKind.Update && i.Outcome == ProgramPushOutcome.Sent))
             {
                 if (stillDiffering.Contains(item.EventId))
+                {
                     item.Message = "sent, but Terrain still shows it differently";
+                }
                 else
+                {
                     item.Outcome = ProgramPushOutcome.Updated;
+                }
             }
         }
 

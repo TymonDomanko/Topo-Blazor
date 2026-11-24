@@ -110,7 +110,9 @@ namespace Topo.Controller
             var unread = model.Members.Where(m => !_logbooks.ContainsKey(m.id))
                 .Select(m => new KeyValuePair<string, string>(m.id, $"{m.first_name} {m.last_name}")).ToList();
             if (unread.Count == 0)
+            {
                 return;
+            }
 
             _cancel = new CancellationTokenSource();
             Loading = true;
@@ -129,7 +131,9 @@ namespace Topo.Controller
                     cancellationToken,
                     name => failed.Add(name));
                 if (version == _loadVersion && failed.Count > 0)
+                {
                     ErrorMessage = $"Couldn't read the logbook of {string.Join(", ", failed)}; Terrain would not give it.";
+                }
             }
             catch (OperationCanceledException)
             {
@@ -137,7 +141,9 @@ namespace Topo.Controller
             catch (Exception)
             {
                 if (version == _loadVersion)
+                {
                     ErrorMessage = "Couldn't read the logbooks from Terrain.";
+                }
             }
             finally
             {
@@ -154,7 +160,9 @@ namespace Topo.Controller
         {
             var member = model.Members.FirstOrDefault(m => m.id == change.Id);
             if (member != null)
+            {
                 member.selected = change.Ticked;
+            }
         }
 
         internal void ClearTicks()

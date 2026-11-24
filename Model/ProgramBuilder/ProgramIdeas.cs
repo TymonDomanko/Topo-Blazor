@@ -18,12 +18,16 @@ namespace Topo.Model.ProgramBuilder
             {
                 var key = proposal.OpenKey;
                 if (taken.Contains(key))
+                {
                     continue;
+                }
                 // seen now whether or not it is added, so a name that is on the program already does not turn up if that is later cleared
                 taken.Add(key);
                 draft.TakenProposals.Add(key);
                 if (!titles.Add(proposal.Title.Trim()))
+                {
                     continue;
+                }
                 draft.Ideas.Add(new ProgramIdea
                 {
                     Title = proposal.Title.Trim(),
@@ -41,7 +45,9 @@ namespace Topo.Model.ProgramBuilder
         {
             var idea = draft.Ideas.FirstOrDefault(i => i.Id == ideaId);
             if (idea == null || !IsOpenNight(draft, night))
+            {
                 return false;
+            }
 
             var row = Edit(draft, night);
             var replaced = Take(row);
@@ -53,7 +59,9 @@ namespace Topo.Model.ProgramBuilder
             row.ScoutMethod = new List<string>();
             draft.Ideas.Remove(idea);
             if (replaced != null)
+            {
                 draft.Ideas.Add(replaced);
+            }
             return true;
         }
 
@@ -62,10 +70,14 @@ namespace Topo.Model.ProgramBuilder
         public static bool Move(ProgramDraft draft, DateTime from, DateTime to)
         {
             if (from.Date == to.Date || !IsOpenNight(draft, from) || !IsOpenNight(draft, to))
+            {
                 return false;
+            }
             var source = Edit(draft, from);
             if (source.Activity.Trim() == "")
+            {
                 return false;
+            }
 
             var target = Edit(draft, to);
             var (activity, game, location, area, eventId, method) = (source.Activity, source.Game, source.Location, source.ChallengeArea, source.TerrainEventId, source.ScoutMethod);
@@ -78,10 +90,14 @@ namespace Topo.Model.ProgramBuilder
         public static bool Unassign(ProgramDraft draft, DateTime night)
         {
             if (!draft.NightEdits.TryGetValue(ProgramPlanner.NightKey(night), out var row))
+            {
                 return false;
+            }
             var idea = Take(row);
             if (idea == null)
+            {
                 return false;
+            }
             draft.Ideas.Add(idea);
             return true;
         }
@@ -90,7 +106,9 @@ namespace Topo.Model.ProgramBuilder
         private static ProgramIdea? Take(ProgramRow row)
         {
             if (row.Activity.Trim() == "")
+            {
                 return null;
+            }
             var idea = new ProgramIdea { Title = row.Activity, Game = row.Game, Location = row.Location, ChallengeArea = row.ChallengeArea };
             row.Activity = row.Game = row.Location = row.ChallengeArea = row.TerrainEventId = "";
             row.ScoutMethod = new List<string>();
@@ -104,7 +122,9 @@ namespace Topo.Model.ProgramBuilder
         {
             var key = ProgramPlanner.NightKey(night);
             if (!draft.NightEdits.TryGetValue(key, out var row))
+            {
                 draft.NightEdits[key] = row = new ProgramRow { Date = night.Date };
+            }
             return row;
         }
     }

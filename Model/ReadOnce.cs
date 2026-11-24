@@ -25,7 +25,9 @@ namespace Topo.Model
             {
                 fresh[keyOf(missing[i])] = answers[i];
                 if (known != null && answers[i] != null)
+                {
                     known[keyOf(missing[i])] = answers[i]!;
+                }
             }
             return items.Select(item =>
             {

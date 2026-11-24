@@ -148,7 +148,9 @@ namespace Topo.Services
             foreach (var summary in summaries)
             {
                 if (names.TryGetValue(summary.memberId, out var name))
+                {
                     summary.memberName = name;
+                }
             }
         }
 

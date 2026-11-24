@@ -11,11 +11,17 @@ namespace Topo.Model.Approvals
             var rows = (approvals ?? Enumerable.Empty<ApprovalsListModel>())
                 .Where(a => toBePresented || IsToHandOver(a) || (a.submission_date >= from && a.submission_date <= to.AddDays(1))).ToList();
             if (toBePresented)
+            {
                 rows = rows.Where(a => a.submission_type == "Award" && !a.presented_date.HasValue).ToList();
+            }
             if (isPresented)
+            {
                 rows = rows.Where(a => a.presented_date.HasValue && a.presented_date != a.awarded_date).ToList();
+            }
             if (!showRejected)
+            {
                 rows = rows.Where(a => a.submission_outcome.ToLower() != "rejected").ToList();
+            }
             return rows;
         }
 

@@ -188,9 +188,13 @@ namespace Topo.Model.Members
                 var age = m.age ?? "";
                 var band = AgeBand.None;
                 if (age.StartsWith((maxAge - 2).ToString()))
+                {
                     band = AgeBand.SecondLast;
+                }
                 if (age.StartsWith(maxAge.ToString()) || age.StartsWith((maxAge - 1).ToString()))
+                {
                     band = AgeBand.Last;
+                }
                 return new MemberListRow
                 {
                     FirstName = m.first_name,

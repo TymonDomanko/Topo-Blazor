@@ -116,7 +116,9 @@ namespace Topo.Services
             {
                 var logoPoints = sheet.Pictures.Count > 0 ? sheet.Pictures[0].Height * 0.75 : 0.0;
                 if (logoPoints + 6 <= usedPoints)
+                {
                     return rowNumber;
+                }
                 rowNumber++;
                 sheet.SetRowHeight(rowNumber, logoPoints + 6 - usedPoints);
                 return rowNumber;
@@ -225,7 +227,9 @@ namespace Topo.Services
                 var pages = SetUpPage(sheet, rowNumber, 4);
                 // a second page starts with the headings again
                 if (pages > 1)
+                {
                     sheet.PageSetup.PrintTitleRows = $"${headingRow}:${headingRow}";
+                }
                 printed.Add(("summary", sheet, pages));
             }
 
@@ -331,7 +335,9 @@ namespace Topo.Services
                 Row("Where it is up to", project.Status);
                 Row("Last updated", project.StatusUpdated.ToString(dateFormat, culture));
                 if (project.DateAwarded.HasValue)
+                {
                     Row("Awarded", project.DateAwarded.Value.ToString(dateFormat, culture));
+                }
 
                 Block("Plan");
                 Questions(project.Plan);
@@ -351,7 +357,9 @@ namespace Topo.Services
                 var pages = SetUpPage(sheet, rowNumber, 2);
                 // a second page says whose it is; the rows include the one the logo sits in, or its top is cut off
                 if (pages > 1)
+                {
                     sheet.PageSetup.PrintTitleRows = $"$1:${headerRows}";
+                }
                 printed.Add((project.MemberId, sheet, pages));
             }
 
@@ -445,11 +453,15 @@ namespace Topo.Services
                     var span = Math.Max(1, line.MonthSpan);
                     sheet.Range[row, 1].Text = span >= 3 ? line.Month : line.Month.Substring(0, Math.Min(3, line.Month.Length));
                     if (span > 1)
+                    {
                         sheet.Range[row, 1, row + span - 1, 1].Merge();
+                    }
                     sheet.Range[row, 1].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
                     sheet.Range[row, 1].CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
                     if (span >= 3)
+                    {
                         sheet.Range[row, 1].CellStyle.Rotation = 90;
+                    }
                 }
                 sheet.Range[row, 2].Text = line.DateText;
                 sheet.Range[row, 3].Text = line.Activity;
@@ -459,7 +471,9 @@ namespace Topo.Services
                     sheet.Range[row, 4 + i].Text = value;
                 }
                 if (shaded)
+                {
                     sheet.Range[row, 2, row, last].CellStyle.Color = band;
+                }
                 shaded = !shaded;
                 Border(row, 1, row, last);
             }
@@ -495,16 +509,22 @@ namespace Topo.Services
                     for (var i = 0; i < values.Length; i++)
                         sheet.Range[row, i + 1 + (i == 0 ? 0 : 1)].Text = values[i];
                     if (banded)
+                    {
                         sheet.Range[row, 1, row, columnCount + 1].CellStyle.Color = band;
+                    }
                     banded = !banded;
                     Border(row, 1, row, columnCount + 1);
                 }
             }
 
             if (program.Locations.Count > 0)
+            {
                 Fill(Table("Locations", new[] { "Location", "Address" }, program.Locations.Select(l => new[] { l.Name, l.Address })));
+            }
             if (program.Contacts.Count > 0)
+            {
                 Fill(Table("Contact Details", new[] { "Leader", "Position", "Email" }, program.Contacts.Select(c => new[] { c.Name, c.Position, c.Email })));
+            }
 
             sheet.SetColumnWidth(1, 6);
             sheet.SetColumnWidth(2, 11);
@@ -613,7 +633,9 @@ namespace Topo.Services
                 sheet.PageSetup.FitToPagesTall = 0;
                 // a second page starts with the headings again
                 if (headingRow > 0)
+                {
                     sheet.PageSetup.PrintTitleRows = $"${headingRow}:${headingRow}";
+                }
             }
 
             // 1. Everything done
@@ -643,7 +665,9 @@ namespace Topo.Services
                         sheet.Range[row, 1, row, 4].CellStyle.VerticalAlignment = ExcelVAlign.VAlignTop;
                         // a line between one Scout and the next
                         if (first && row > headingRow + 1)
+                        {
                             sheet.Range[row, 1, row, 4].CellStyle.Borders[ExcelBordersIndex.EdgeTop].LineStyle = ExcelLineStyle.Thin;
+                        }
                         sheet.SetRowHeight(row, Math.Max(16, Math.Ceiling(item.Badge.Length / 34.0) * 15));
                         first = false;
                     }
@@ -748,7 +772,9 @@ namespace Topo.Services
                         {
                             var cell = sheet.Range[row, 3 + s];
                             if (!badge.IsMissing(badge.Scouts[s], requirement))
+                            {
                                 cell.CellStyle.Color = grey;
+                            }
                         }
                         sheet.Range[row, 1, row, 2 + badge.Scouts.Count].CellStyle.VerticalAlignment = ExcelVAlign.VAlignTop;
                         foreach (var cell in sheet.Range[row, 1, row, 2 + badge.Scouts.Count].Cells)
@@ -844,7 +870,9 @@ namespace Topo.Services
                     while (last + 1 < report.Columns.Count && report.Columns[last + 1].Group == report.Columns[first].Group)
                         last++;
                     if (last > first)
+                    {
                         sheet.Range[groupRow, 3 + first, groupRow, 3 + last].Merge();
+                    }
                     sheet.Range[groupRow, 3 + first].Text = report.Columns[first].Group;
                     first = last + 1;
                 }
@@ -873,7 +901,9 @@ namespace Topo.Services
                         cell.Text = person.Cells[column].Text;
                         cell.CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
                         if (person.Cells[column].Colour != "")
+                        {
                             cell.CellStyle.Color = Hex(person.Cells[column].Colour);
+                        }
                     }
                     for (var c = 1; c <= 2 + report.Columns.Count; c++)
                         sheet.Range[row, c].BorderAround();
@@ -1062,7 +1092,9 @@ namespace Topo.Services
             {
                 AddLogoToSheet(workbook, i, groupName, section, 16);
                 if (breakByPatrol)
+                {
                     workbook.Worksheets[i].Name = string.IsNullOrEmpty(tables[i].Patrol) ? "Unit" : tables[i].Patrol;
+                }
                 AddAdditionalAwardsSheet(workbook, workbook.Worksheets[i], tables[i], unitName);
             }
             return workbook;
@@ -1103,7 +1135,9 @@ namespace Topo.Services
             for (var column = 0; column < table.Columns.Count; column++)
             {
                 if (table.Columns[column].Heading == "")
+                {
                     continue;
+                }
                 var cell = sheet.Range[rowNumber, column + columnOffset];
                 cell.Text = " " + table.Columns[column].Heading;
                 cell.CellStyle.Rotation = 90;
@@ -1127,9 +1161,13 @@ namespace Topo.Services
                 sheet.Range[rowNumber, 3].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
                 sheet.Range[rowNumber, 3].CellStyle.VerticalAlignment = ExcelVAlign.VAlignCenter;
                 if (awardRow.KMsColour != null)
+                {
                     sheet.Range[rowNumber, 2].CellStyle.Color = Colour(awardRow.KMsColour);
+                }
                 if (awardRow.NightsColour != null)
+                {
                     sheet.Range[rowNumber, 3].CellStyle.Color = Colour(awardRow.NightsColour);
+                }
                 for (var column = 0; column < awardRow.Cells.Count; column++)
                 {
                     var cell = sheet.Range[rowNumber, column + columnOffset];
@@ -1143,7 +1181,9 @@ namespace Topo.Services
                         cell.NumberFormat = "dd/MM/yy";
                     }
                     if (award.Colour != null)
+                    {
                         cell.CellStyle.Color = Colour(award.Colour);
+                    }
                 }
                 rowNumber++;
             }
@@ -1326,7 +1366,9 @@ namespace Topo.Services
             var rows = MemberReportLayouts.MemberList(sortedMemberList, section);
             var columns = new List<(string Heading, Func<MemberListRow, string> Value)> { ("First Name", r => r.FirstName) };
             if (MemberReportLayouts.ShowLastName(rows))
+            {
                 columns.Add(("Last Name", r => r.LastName));
+            }
             columns.Add(("Age", r => r.Age));
             columns.Add(("Member", r => r.MemberNumber));
             columns.Add(("Duty", r => r.Duty));
@@ -1352,23 +1394,31 @@ namespace Topo.Services
                 }
 
                 if (member.AgeBand == AgeBand.SecondLast)
+                {
                     sheet.Range[rowNumber, ageColumn].CellStyle.ColorIndex = ExcelKnownColors.Yellow;
+                }
                 if (member.AgeBand == AgeBand.Last)
+                {
                     sheet.Range[rowNumber, ageColumn].CellStyle.ColorIndex = ExcelKnownColors.Rose;
+                }
             }
 
             rowNumber++;
             rowNumber++;
             sheet.Range[rowNumber, 2].Text = "Second last year in section";
             if (ageColumn > 3)
+            {
                 sheet.Range[rowNumber, 2, rowNumber, ageColumn - 1].Merge();
+            }
             sheet.Range[rowNumber, ageColumn].Text = "";
             sheet.Range[rowNumber, ageColumn].BorderAround();
             sheet.Range[rowNumber, ageColumn].CellStyle.ColorIndex = ExcelKnownColors.Yellow;
             rowNumber++;
             sheet.Range[rowNumber, 2].Text = "Last year in section";
             if (ageColumn > 3)
+            {
                 sheet.Range[rowNumber, 2, rowNumber, ageColumn - 1].Merge();
+            }
             sheet.Range[rowNumber, ageColumn].Text = "";
             sheet.Range[rowNumber, ageColumn].BorderAround();
             sheet.Range[rowNumber, ageColumn].CellStyle.ColorIndex = ExcelKnownColors.Rose;
@@ -1485,9 +1535,13 @@ namespace Topo.Services
             // time in / signature / time out / signature, or a single tick box.
             var infoHeadings = new List<string>();
             if (options.IncludeRegisteredColumn)
+            {
                 infoHeadings.Add("Registered");
+            }
             if (options.IncludePaidColumn)
+            {
                 infoHeadings.Add("Paid");
+            }
             var attendanceHeadings = options.UseTimeInOutSignature
                 ? new[] { "Time In", "Signature", "Time Out", "Signature" }
                 : new[] { "Attended" };
@@ -1564,7 +1618,9 @@ namespace Topo.Services
 
                 // tall enough for the sideways headings
                 if (infoHeadings.Count > 0 || options.IncludeParticipationColumns)
+                {
                     sheet.SetRowHeight(rowNumber, 62);
+                }
             }
 
             // Names longer than this wrap onto two lines, so the name columns stay narrow enough for a portrait page
@@ -1598,7 +1654,9 @@ namespace Topo.Services
             // Youth by section then leaders (see SignInSheetLayout); a labelled heading row above each group.
             var groups = SignInSheetLayout.GetGroups(memberListModel, displayNames);
             if (!groups.Any())
+            {
                 WriteHeader();
+            }
             foreach (var group in groups)
             {
                 if (group.Heading != null)
@@ -1610,7 +1668,9 @@ namespace Topo.Services
                         sheet.HPageBreaks.Add(sheet.Range[rowNumber, 1]);
                     }
                     else
+                    {
                         rowNumber++;
+                    }
                     sheet.Range[rowNumber, 1].Text = group.Heading;
                     sheet.Range[rowNumber, 1].CellStyle.Font.Bold = true;
                     sheet.Range[rowNumber, 1].CellStyle.Font.Size = 12;
@@ -2342,7 +2402,9 @@ namespace Topo.Services
             {
                 AddLogoToSheet(workbook, i, groupName, section, 6);
                 if (breakByPatrol)
+                {
                     workbook.Worksheets[i].Name = string.IsNullOrEmpty(sheets[i].Patrol) ? "Unit" : sheets[i].Patrol;
+                }
                 AddSiaProjectsSheet(workbook, workbook.Worksheets[i], sheets[i], unitName);
             }
             return workbook;
@@ -2779,7 +2841,9 @@ namespace Topo.Services
                     {
                         var cell = i < row.Cells.Count ? row.Cells[i] : new OasSummaryCell();
                         if (cell.Awarded > 0)
+                        {
                             sheet.Range[rowNumber, column].Number = cell.Awarded;
+                        }
                         sheet.Range[rowNumber, column].CellStyle.Color = Colour(columns[i].Colour);
                         if (cell.State != OasWorking.None)
                         {
@@ -2875,7 +2939,9 @@ namespace Topo.Services
                     sheet.Range[rowNumber, 1].CellStyle.Font.Bold = true;
                     sheet.Range[rowNumber, 2].Text = page.Status;
                     if (page.Ready)
+                    {
                         sheet.Range[rowNumber, 2].CellStyle.Color = Colour("#9cf250");
+                    }
 
                     // The Participates in each Challenge Area and the Leads, against what the milestone asks for
                     rowNumber += 2;
@@ -2891,7 +2957,9 @@ namespace Topo.Services
                         sheet.Range[rowNumber, 2].Number = area.Count;
                         sheet.Range[rowNumber, 3].Number = area.Target;
                         if (area.Met)
+                        {
                             sheet.Range[rowNumber, 1, rowNumber, 3].CellStyle.Color = Colour("#9cf250");
+                        }
                     }
                     sheet.Range[rowNumber - page.Areas.Count, 1, rowNumber, 3].BorderAround();
                     sheet.Range[rowNumber - page.Areas.Count, 1, rowNumber, 3].BorderInside();
@@ -2928,7 +2996,9 @@ namespace Topo.Services
                     sheet.HPageBreaks.Add(sheet.Range[rowNumber, 1]);
                     rowNumber = WriteMilestoneForm(sheet, rowNumber, lastColumn, charactersAcross, page);
                     if (page.EventReviews.Count > 0)
+                    {
                         rowNumber = WriteMilestoneAnswers(sheet, rowNumber, lastColumn, charactersAcross, "What they wrote about events", page.EventReviews, "");
+                    }
                 }
 
                 sheet.SetColumnWidth(1, 28);
@@ -3276,13 +3346,17 @@ namespace Topo.Services
                     // A Camper or Walkabout Award that is earned and not yet in Terrain is red. A lower level that is not the highest is not
                     // handed over, so it is left unshaded.
                     if (approval.achievement_type == "additional_award" && approval.to_award == "Award")
+                    {
                         sheet.Range[rowNumber, 2, rowNumber, 8].CellStyle.Color = Color.Red;
+                    }
                 }
             }
 
             // nothing to fit when there are no approvals
             if (rowNumber >= 4)
+            {
                 sheet.Range[4, 2, rowNumber, 8].AutofitColumns();
+            }
 
             sheet.PageSetup.PaperSize = ExcelPaperSize.PaperA4;
             sheet.PageSetup.Orientation = ExcelPageOrientation.Portrait;
@@ -3393,21 +3467,35 @@ namespace Topo.Services
             void BadgesUsed(SectionBadges badges, string title, bool sectionSpecific = false)
             {
                 if (!badges.AnyUsed)
+                {
                     return;
+                }
                 Block(title);
                 if (badges.PeakAwards > 0)
+                {
                     Row("Peak Award", new[] { badges.PeakAwards.ToString() });
+                }
                 if (badges.MilestonesTotal > 0)
+                {
                     Row(sectionSpecific ? "Milestones (Section Specific)" : "Milestones", new[] { $"Total: {badges.MilestonesTotal}" }.Concat(Counts(badges.Milestones)));
+                }
                 if (badges.OasBadgesTotal > 0)
+                {
                     Row("Outdoor Adventure Skills", new[] { $"Badges: {badges.OasBadgesTotal}" }
                         .Concat(badges.OasStages.Select(o => $"{o.Stream} stage {o.Stage}: {o.Count}")));
+                }
                 if (badges.SiaTotal > 0)
+                {
                     Row(sectionSpecific ? "Special Interest Areas (Section Specific)" : "Special Interest Areas", new[] { $"Total: {badges.SiaTotal}" }.Concat(Counts(badges.SiaCategories)));
+                }
                 if (badges.AdditionalAwardsTotal > 0)
+                {
                     Row("Other badges", new[] { $"Total: {badges.AdditionalAwardsTotal}" }.Concat(Counts(badges.AdditionalAwards)));
+                }
                 if (badges.InvestitureItems.Count > 0)
+                {
                     Row("For new members", Counts(badges.InvestitureItems));
+                }
             }
 
             if (report.IsGroup)
@@ -3419,21 +3507,27 @@ namespace Topo.Services
                     $"{report.TotalInvested} invested, {report.TotalInvestedInPeriod} invested in this period"
                 });
                 if (report.AnyNewMembers)
+                {
                     Row("New members", new[]
                     {
                         $"From a younger section: {report.TotalNewFromYounger}",
                         $"Off the street: {report.TotalNewOffTheStreet}",
                         $"From another group: {report.TotalNewFromAnotherGroup}"
                     });
+                }
                 if (report.AnyLeaving)
+                {
                     Row("Members leaving", new[]
                     {
                         $"Moving up: {report.TotalMovedUp}",
                         $"Moved groups: {report.TotalMovedGroup}",
                         $"Left Scouting: {report.TotalLeftScouting}"
                     });
+                }
                 if (report.TotalYouthHelpers > 0)
+                {
                     Row("Youth helpers", new[] { $"{report.TotalYouthHelpers}" });
+                }
                 Row("Leaders", new[] { $"{report.TotalLeaders} current {(report.TotalLeaders == 1 ? "leader" : "leaders")}" });
                 Row("Awarded in the period", new[]
                 {
@@ -3465,21 +3559,31 @@ namespace Topo.Services
                 }
                 var newMembers = new List<string>();
                 if (unit.Section != "joey")
+                {
                     newMembers.Add($"From the {Section(SectionReportBuilder.PreviousSectionOf(unit.Section))}: {unit.NewFromYoungerSection}{Names(unit.NewMembers.Where(n => n.Origin == NewMemberOrigin.YoungerSection).Select(n => n.Name))}");
+                }
                 newMembers.Add($"Off the street: {unit.NewOffTheStreet}{Names(unit.NewMembers.Where(n => n.Origin == NewMemberOrigin.OffTheStreet).Select(n => n.Name))}");
                 newMembers.Add($"From another group: {unit.NewFromAnotherGroup}{Names(unit.NewMembers.Where(n => n.Origin == NewMemberOrigin.AnotherGroup).Select(n => n.Name))}");
                 if (unit.AnyNewMembers)
+                {
                     Row("New members", newMembers);
+                }
 
                 var leaving = new List<string>();
                 if (unit.NextSection != "")
+                {
                     leaving.Add($"Moving up to the {Section(unit.NextSection)}: {unit.MovedUp}{Names(unit.Departed.Where(d => d.Status == DepartureStatus.MovedUp).Select(d => d.Name))}");
+                }
                 leaving.Add($"Moved groups: {unit.MovedGroup}{Names(unit.Departed.Where(d => d.Status == DepartureStatus.MovedGroup).Select(d => d.Name))}");
                 leaving.Add($"Left Scouting: {unit.LeftScouting}{Names(unit.Departed.Where(d => d.Status == DepartureStatus.LeftScouting).Select(d => d.Name))}");
                 if (unit.DepartedUnset > 0)
+                {
                     leaving.Add($"Not yet sorted: {unit.DepartedUnset}{Names(unit.Departed.Where(d => d.Status == DepartureStatus.Unset).Select(d => d.Name))}");
+                }
                 if (unit.AnyLeaving)
+                {
                     Row("Members leaving", leaving);
+                }
 
                 var leaders = new List<string> { $"{unit.CurrentLeaders} current {(unit.CurrentLeaders == 1 ? "leader" : "leaders")}" };
                 if (unit.SavedRosterDate == null)
@@ -3491,18 +3595,26 @@ namespace Topo.Services
                     leaders.Add("New: " + string.Join(", ", unit.NewLeaders));
                 }
                 if (unit.DepartedLeaders.Count > 0)
+                {
                     leaders.Add("Departed: " + string.Join(", ", unit.DepartedLeaders));
+                }
                 if (unit.YouthHelpers.Count > 0)
+                {
                     Row("Youth helpers", new[] { $"{unit.YouthHelpers.Count} (under 18 with a leader role in the unit)" });
+                }
                 Row("Leaders", leaders);
 
                 if (unit.AnyEvents)
                 {
                     Block(report.IsGroup ? $"{unit.UnitName}: activities" : "Activities");
                     if (unit.PastEvents.Count > 0)
+                    {
                         Row("Past events", unit.PastEvents.Select(e => $"{Day(e.Start)} - {e.Title} ({e.ChallengeArea}) - {e.YouthAttended} youth, {e.LeadersAttended} {(e.LeadersAttended == 1 ? "leader" : "leaders")}"));
+                    }
                     if (unit.UpcomingEvents.Count > 0)
+                    {
                         Row("Upcoming events", unit.UpcomingEvents.Select(e => $"{Day(e.Start)} - {e.Title} ({e.ChallengeArea})"));
+                    }
                 }
                 Badges(unit.Badges, report.IsGroup ? unit.UnitName + ":" : "");
             }
@@ -3576,7 +3688,9 @@ namespace Topo.Services
             {
                 var text = lines.ToList();
                 if (text.Count == 0)
+                {
                     text.Add("None");
+                }
                 rowNumber++;
                 sheet.Range[rowNumber, 1].Text = label;
                 sheet.Range[rowNumber, 1].CellStyle.Font.Bold = true;
@@ -3600,7 +3714,9 @@ namespace Topo.Services
                 $"{m.CurrentLeaders} {(m.CurrentLeaders == 1 ? "leader" : "leaders")}"
             };
             if (m.YouthHelpers > 0)
+            {
                 currentMembers.Insert(1, $"{m.YouthHelpers} youth {(m.YouthHelpers == 1 ? "helper" : "helpers")}");
+            }
             Row("Current members", currentMembers);
             Row("Former members", new[] { $"{m.FormerAttendees} who attended the unit's events" });
             Row("Been part of the unit", new[] { m.Total.ToString() });
@@ -3702,7 +3818,9 @@ namespace Topo.Services
             {
                 var text = lines.ToList();
                 if (text.Count == 0)
+                {
                     text.Add("None");
+                }
                 rowNumber++;
                 sheet.Range[rowNumber, 1].Text = label;
                 sheet.Range[rowNumber, 1].CellStyle.Font.Bold = true;
@@ -3723,7 +3841,9 @@ namespace Topo.Services
             {
                 var title = s.SectionName + (string.IsNullOrEmpty(s.Units) ? "" : " - " + s.Units);
                 if (s.From != null)
+                {
                     title += $"  ({Date(s.From)} to {Date(s.To)}{(string.IsNullOrEmpty(s.TimeInSection) ? "" : ", " + s.TimeInSection)})";
+                }
                 Block(title);
 
                 Row("Milestones", s.Milestones.Count == 0
@@ -3736,7 +3856,9 @@ namespace Topo.Services
                         .Concat(s.Oas.Select(o => $"{o.Stream} - final stage {o.FinalStage} ({Plural(o.Stages.Count, "stage")} in this section: {string.Join(", ", o.Stages.Select(st => st.Stage))})")));
                 var sia = s.Sia.Select(a => $"{a.Area}{(string.IsNullOrEmpty(a.Project) ? "" : " - " + a.Project)}{(a.Date != null ? " " + Date(a.Date) : "")}").ToList();
                 if (s.SiaInProgress > 0 && sia.Count > 0)
+                {
                     sia.Add($"{s.SiaInProgress} not yet awarded");
+                }
                 Row("Special Interest Areas", sia);
                 Row("Additional Awards", s.AdditionalAwards.Select(a => $"{a.Name}{(a.Date != null ? " " + Date(a.Date) : "")}"));
                 Row("Activities", new[]
@@ -3746,7 +3868,9 @@ namespace Topo.Services
                 });
                 var roles = new List<string> { ScoutingHistoryRoles.Text(s.Led, s.Assisted, s.Participated) };
                 if (!string.IsNullOrEmpty(s.CurrentRole))
+                {
                     roles.Add($"Current role: {s.CurrentRole}");
+                }
                 Row("Roles", roles);
             }
 

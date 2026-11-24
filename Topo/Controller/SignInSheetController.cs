@@ -124,9 +124,13 @@ namespace Topo.Controller
         private void SetUnit(string unitId, bool selected)
         {
             if (selected)
+            {
                 model.SelectedUnits.Add(unitId);
+            }
             else
+            {
                 model.SelectedUnits.Remove(unitId);
+            }
             SetCalendarOfUnit(unitId, selected);
         }
 
@@ -134,7 +138,9 @@ namespace Topo.Controller
         {
             // one unit on its own is the unit the rest of Topo works on
             if (model.SelectedUnits.Count == 1)
+            {
                 _storageService.UnitId = model.SelectedUnits.First();
+            }
             await LoadEventsAsync();
             await RefreshPreview();
         }
@@ -147,11 +153,15 @@ namespace Topo.Controller
         {
             var calendarId = FindCalendarForUnit(model.Units[unitId]);
             if (calendarId == null)
+            {
                 return;
+            }
 
             var calendars = model.SelectedCalendars.Where(c => c != calendarId).ToList();
             if (selected)
+            {
                 calendars.Add(calendarId);
+            }
             model.SelectedCalendars = calendars.ToArray();
             _syncCalendarSelection = true;
         }
@@ -161,7 +171,9 @@ namespace Topo.Controller
         private string? FindCalendarForUnit(string? unitName)
         {
             if (string.IsNullOrWhiteSpace(unitName))
+            {
                 return null;
+            }
 
             var name = unitName.Trim();
             var calendars = model.Calendars.Select(c => (id: c.Key, title: c.Value.Trim())).ToList();
@@ -267,7 +279,9 @@ namespace Topo.Controller
 
             // ignore the answer if the user has picked something else in the meantime
             if (request != _previewRequest)
+            {
                 return;
+            }
             PreviewMembers = members;
             PreviewFailed = members == null;
         }
@@ -305,7 +319,9 @@ namespace Topo.Controller
         internal async Task DownloadClick(OutputType outputType)
         {
             if (PreviewMembers == null)
+            {
                 return;
+            }
 
             // no event chosen: the sheet has no event name
             var eventName = string.IsNullOrEmpty(EventId)

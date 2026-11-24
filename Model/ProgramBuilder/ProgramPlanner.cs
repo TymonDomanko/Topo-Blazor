@@ -32,7 +32,9 @@ namespace Topo.Model.ProgramBuilder
             for (var date = start.Date; date <= end.Date; date = date.AddDays(1))
             {
                 if (date.DayOfWeek == day && !breakList.Any(b => date >= b.From.Date && date <= b.To.Date))
+                {
                     nights.Add(date);
+                }
             }
             return nights;
         }
@@ -61,7 +63,9 @@ namespace Topo.Model.ProgramBuilder
                 {
                     // a patrol put on duty by hand does not use up a turn in the cycle
                     if (row.DutyPatrol != "")
+                    {
                         row.Duty = row.DutyPatrol;
+                    }
                     else
                     {
                         row.Duty = patrols[(turn + counted) % patrols.Count];
@@ -69,7 +73,9 @@ namespace Topo.Model.ProgramBuilder
                     }
                 }
                 else if (!row.Skipped && !row.NoDuty)
+                {
                     row.Duty = row.DutyPatrol;
+                }
                 rows.Add(row);
             }
             return rows;

@@ -40,7 +40,9 @@ namespace Topo.Model.AdditionalAwards
         public void RequestStarted()
         {
             if (InBackground)
+            {
                 return;
+            }
             _inFlight++;
             Touch();
         }
@@ -48,9 +50,13 @@ namespace Topo.Model.AdditionalAwards
         public void RequestEnded()
         {
             if (InBackground)
+            {
                 return;
+            }
             if (_inFlight > 0)
+            {
                 _inFlight--;
+            }
             Touch();
         }
 
@@ -69,11 +75,15 @@ namespace Topo.Model.AdditionalAwards
         public async Task PageRequestStartingAsync()
         {
             if (InBackground)
+            {
                 return;
+            }
             RequestStarted();
             var returned = _profileReturned;
             if (returned == null)
+            {
                 return;
+            }
             AbortRequested = true;
             await Task.WhenAny(returned.Task, Task.Delay(MaxHold));
         }
@@ -105,7 +115,9 @@ namespace Topo.Model.AdditionalAwards
         public void ThrowIfAbortRequested()
         {
             if (AbortRequested)
+            {
                 throw new OperationCanceledException("A page needs Terrain.");
+            }
         }
 
         // True when no request is running and nothing has happened for the given time
@@ -153,9 +165,13 @@ namespace Topo.Model.AdditionalAwards
         public static bool IsDue(AutoAwardSettings settings, DateTime nowUtc)
         {
             if (!settings.Enabled)
+            {
                 return false;
+            }
             if (settings.LastAttemptUtc.HasValue && nowUtc - settings.LastAttemptUtc.Value < RetryAfter)
+            {
                 return false;
+            }
             return !settings.LastRunUtc.HasValue || nowUtc - settings.LastRunUtc.Value >= Every;
         }
     }

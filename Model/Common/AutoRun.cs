@@ -32,7 +32,9 @@ namespace Topo.Model.Common
             try
             {
                 if (delayMilliseconds > 0)
+                {
                     await Task.Delay(delayMilliseconds, token);
+                }
                 token.ThrowIfCancellationRequested();
                 await work(token);
             }

@@ -98,7 +98,9 @@ namespace Topo.Model.ProgramBuilder
             {
                 xml.Append("<w:tr><w:trPr><w:cantSplit/></w:trPr>");
                 if (row.Month != "")
+                {
                     previousVertical = row.MonthSpan >= 3;
+                }
                 if (row.IsBreak)
                 {
                     xml.Append(Cell(row.BreakLabel, columns.Sum(), bold: true, fill: "A6A6A6", span: columns.Count, centred: true));
@@ -111,11 +113,15 @@ namespace Topo.Model.ProgramBuilder
                 band = !band;
                 // a month of one or two rows is too short to read turned sideways, so it is written across, as three letters
                 if (row.Month != "")
+                {
                     xml.Append(row.MonthSpan >= 3
                         ? Cell(row.Month, columns[0], fill: "FFFFFF", vertical: true, merge: "restart", centred: true)
                         : Cell(row.Month.Substring(0, Math.Min(3, row.Month.Length)), columns[0], fill: "FFFFFF", merge: row.MonthSpan > 1 ? "restart" : null, centred: true));
+                }
                 else
+                {
                     xml.Append(Cell("", columns[0], fill: "FFFFFF", vertical: previousVertical, merge: "continue", centred: true));
+                }
                 xml.Append(Cell(row.DateText, columns[1], fill: fill));
                 xml.Append(Cell(row.Activity, columns[2], fill: fill));
                 for (var i = 0; i < program.Columns.Count; i++)
