@@ -93,7 +93,9 @@ namespace Topo.Services
                     {
                         var detail = await _terrainAPIService.GetMemberLogbookDetail(memberId, item.id);
                         if (detail != null)
+                        {
                             entries.Add(detail);
+                        }
                     }
                 }
             }

@@ -84,25 +84,31 @@ namespace Topo.Model.Attendance
                 EventsCounted = data.Events.Count, EventsLeftOut = data.EventsLeftOut, BreakByPatrol = breakByPatrol
             };
             if (data.Events.Count == 0 || data.Youth.Count == 0)
+            {
                 return report;
+            }
 
             var measures = new List<Measure>();
             foreach (var (kind, label) in Kinds)
             {
                 var count = data.Events.Count(e => e.Kind == kind);
                 if (count > 0)
+                {
                     AddPair(measures, $"{label} ({count})", e => e.Kind == kind, kind == AttendanceKind.UnitCouncil ? (m => m.unit_council) : (m => true));
+                }
             }
             AddPair(measures, $"All events ({data.Events.Count})", e => true, m => true);
             foreach (var (area, label) in Areas)
             {
                 var count = data.Events.Count(e => string.Equals(e.ChallengeArea, area, StringComparison.OrdinalIgnoreCase));
                 if (count > 0)
+                {
                     measures.Add(new Measure
                     {
                         Column = new AttendanceColumn { Group = "Challenge areas", Heading = $"{label} ({count})", IsPercent = true },
                         Counts = e => string.Equals(e.ChallengeArea, area, StringComparison.OrdinalIgnoreCase), IsPercent = true
                     });
+                }
             }
             report.Columns = measures.Select(m => m.Column).ToList();
 
@@ -135,15 +141,21 @@ namespace Topo.Model.Attendance
         private static AttendanceCell Cell(AttendanceData data, MemberListModel member, Measure measure)
         {
             if (!measure.AppliesTo(member))
+            {
                 return new AttendanceCell();
+            }
             // only the events since they joined the section; none at all (joined after them all) leaves the cell blank
             var possible = data.PossibleFor(member, measure.Counts);
             if (possible.Count == 0)
+            {
                 return new AttendanceCell();
+            }
             var key = AttendanceData.Key(member);
             var attended = possible.Count(e => e.Attended.Contains(key));
             if (!measure.IsPercent)
+            {
                 return new AttendanceCell { Text = attended.ToString(), Value = attended };
+            }
             var share = (double)attended / possible.Count;
             return new AttendanceCell { Text = Percent(share), Value = share };
         }
@@ -152,7 +164,9 @@ namespace Topo.Model.Attendance
         {
             var values = cells.Where(c => c.Value != null).Select(c => c.Value!.Value).ToList();
             if (values.Count == 0)
+            {
                 return new AttendanceCell();
+            }
             var mean = values.Average();
             return new AttendanceCell { Text = isPercent ? Percent(mean) : mean.ToString("0.0"), Value = mean };
         }
@@ -172,13 +186,17 @@ namespace Topo.Model.Attendance
             {
                 var cells = rows.Select(r => r.Cells[i]).Where(c => c.Value != null).ToList();
                 if (cells.Count == 0)
+                {
                     continue;
+                }
                 var sorted = cells.Select(c => c.Value!.Value).OrderBy(v => v).ToList();
                 var low = sorted[0];
                 var high = sorted[^1];
                 var middle = Median(sorted);
                 if (high <= low)
+                {
                     continue;
+                }
                 foreach (var cell in cells)
                     cell.Colour = Colour(cell.Value!.Value, low, middle, high);
             }

@@ -12,7 +12,9 @@ namespace Topo
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             if (_spinnerService.IsQuiet)
+            {
                 return await base.SendAsync(request, cancellationToken);
+            }
 
             try
             {

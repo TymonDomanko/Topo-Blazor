@@ -91,7 +91,9 @@ namespace Topo.Controller
         internal async Task DatesChanged()
         {
             if (model.SelectedCalendars == null || model.SelectedCalendars.Length == 0)
+            {
                 return;
+            }
             await _auto.RunAsync(LoadEvents, DateDelayMilliseconds);
         }
 

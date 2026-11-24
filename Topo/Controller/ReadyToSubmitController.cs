@@ -51,7 +51,9 @@ namespace Topo.Controller
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             if (!string.IsNullOrEmpty(_storageService.UnitId))
+            {
                 await UnitChange(_storageService.UnitId);
+            }
         }
 
         internal async Task UnitChange(ChangeEventArgs e) => await UnitChange(e.Value?.ToString() ?? "");
@@ -87,7 +89,9 @@ namespace Topo.Controller
                 }
                 var data = await _readyToSubmitService.LoadAsync(unitId, youth, _storageService.Section, step => { if (loadId == _loadId) { Progress = step; InvokeAsync(StateHasChanged); } }, token);
                 if (loadId != _loadId)
+                {
                     return;
+                }
                 _data = data;
                 Recalculate();
             }
@@ -97,7 +101,9 @@ namespace Topo.Controller
             catch (Exception)
             {
                 if (loadId == _loadId)
+                {
                     model.ErrorMessage = "Couldn't read the badges from Terrain.";
+                }
             }
             finally
             {
@@ -121,7 +127,9 @@ namespace Topo.Controller
         private void Recalculate()
         {
             if (_data == null)
+            {
                 return;
+            }
             Report = ReadyToSubmitBuilder.Build(new ReadyToSubmitInput
             {
                 UnitName = _storageService.UnitName ?? "",
@@ -142,7 +150,9 @@ namespace Topo.Controller
         private async Task Download(OutputType outputType)
         {
             if (Report == null)
+            {
                 return;
+            }
             var groupName = _storageService.GroupName ?? "Group Name";
             var unitName = Report.UnitName;
             var bytes = await _reportService.GetReadyToSubmitReport(groupName, Report.Section, unitName, outputType, JsonConvert.SerializeObject(Report));

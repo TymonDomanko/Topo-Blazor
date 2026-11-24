@@ -109,14 +109,22 @@ namespace Topo.Model.Attendance
             {
                 var evt = item.Event;
                 if (!seen.Add(evt.id))
+                {
                     continue;
+                }
                 // only events that have happened in the period, not cancelled, and for the whole unit
                 if (evt.start_datetime.Date < input.From.Date || evt.start_datetime.Date > input.To.Date || evt.start_datetime > input.AsOf)
+                {
                     continue;
+                }
                 if (evt.status.Contains("cancel", StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
                 if (item.Scope == "patrol" || item.Scope == "member")
+                {
                     continue;
+                }
 
                 var attended = Attendees(evt);
                 if (attended.Count == 0)
@@ -174,12 +182,18 @@ namespace Topo.Model.Attendance
         public static AttendanceKind Classify(GetEventResultModel evt, DayOfWeek? meetingDay)
         {
             if (!IsSingleDay(evt))
+            {
                 return AttendanceKind.Camp;
+            }
             if (IsUnitCouncil(evt))
+            {
                 return AttendanceKind.UnitCouncil;
+            }
             // a hike on the meeting night is that week's Scout night
             if (meetingDay != null && evt.start_datetime.DayOfWeek == meetingDay)
+            {
                 return AttendanceKind.ScoutNight;
+            }
             return IsHike(evt) ? AttendanceKind.Hike : AttendanceKind.Other;
         }
 

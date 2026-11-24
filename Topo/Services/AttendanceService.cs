@@ -70,7 +70,9 @@ namespace Topo.Services
                 }
                 foreach (var member in youth)
                     if (_investedOn.TryGetValue($"{section}/{member.id}", out var date) && date != null)
+                    {
                         invested[member.id] = date.Value;
+                    }
             }
 
             return AttendanceBuilder.Analyse(new AttendanceInput
@@ -86,7 +88,9 @@ namespace Topo.Services
             var unitName = _storageService.GetProfilesResult?.profiles?.FirstOrDefault(p => p.unit?.id == unitId)?.unit?.name;
             var calendar = CalendarMatcher.FindForUnit(calendars, unitName);
             if (calendar == null)
+            {
                 return null;
+            }
 
             // The last ten nights are the ten most recent, so when the shorter look has found that many the longer one would give
             // exactly the same answer and is not read. When it is read it contains the shorter look, so the events already read are
@@ -94,7 +98,9 @@ namespace Topo.Services
             var eventsRead = new Dictionary<string, Topo.Model.Program.GetEventResultModel>();
             var recent = AttendanceBuilder.Recent(await GetAttendance(unitId, DateTime.Today.AddDays(-RecentDaysFirst), DateTime.Today, new[] { calendar }, progress, cancellationToken, eventsRead), nights);
             if (recent.Nights >= nights)
+            {
                 return recent;
+            }
             return AttendanceBuilder.Recent(await GetAttendance(unitId, DateTime.Today.AddDays(-RecentDays), DateTime.Today, new[] { calendar }, progress, cancellationToken, eventsRead), nights);
         }
     }
