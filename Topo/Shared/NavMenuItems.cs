@@ -81,9 +81,9 @@ namespace Topo.Shared
             new("Programming", NavAudience.Leader, new NavItem[]
             {
                 new("Program", "program", "oi-calendar"),
-                new("Sign In Sheet", "signinsheet", "oi-pencil"),
                 new("Program Ideas", "programideas", "oi-lightbulb", SubItems: new NavItem[] { new("Proposed Activities", "programideas/proposed", "oi-comment-square") }),
                 new("Program Builder", "programbuilder", "oi-wrench"),
+                new("Sign In Sheet", "signinsheet", "oi-pencil"),
                 new("Attendance", "attendance", "oi-bar-chart"),
             }),
             new("Group Life", NavAudience.Leader, new NavItem[]
