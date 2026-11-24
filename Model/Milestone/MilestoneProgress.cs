@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
 using Topo.Model.Members;
-using Topo.Model.SiaProgress;
 
 namespace Topo.Model.Milestone
 {
@@ -75,10 +74,29 @@ namespace Topo.Model.Milestone
         public string Credit { get; set; } = string.Empty;
     }
 
+    // A note the Scout wrote about an event
     public class MilestoneReviewAnswer
     {
         public string Question { get; set; } = string.Empty;
         public string Answer { get; set; } = string.Empty;
+    }
+
+    public class MilestoneChoiceState
+    {
+        public string Title { get; set; } = string.Empty;
+        public bool Chosen { get; set; }
+    }
+
+    // One question of the review form as it is printed: filled in with what the Scout wrote or picked, or left blank to be filled in by hand
+    public class MilestoneFormEntry
+    {
+        public string Question { get; set; } = string.Empty;
+        public string Answer { get; set; } = string.Empty;
+        // A question answered by ticking options, listed in Choices with the ones picked marked
+        public bool IsChoice { get; set; }
+        public List<MilestoneChoiceState> Choices { get; set; } = new List<MilestoneChoiceState>();
+        // Nothing has been written or picked yet
+        public bool Blank { get; set; }
     }
 
     // One Scout's page: where they are up to for a milestone, the events that counted, and what they wrote on the review
@@ -96,8 +114,8 @@ namespace Topo.Model.Milestone
         public List<MilestoneAreaProgress> Areas { get; set; } = new List<MilestoneAreaProgress>();
         public MilestoneAreaProgress Leads { get; set; } = new MilestoneAreaProgress { Area = "Leads" };
         public List<MilestoneEventLine> Events { get; set; } = new List<MilestoneEventLine>();
-        // The questions on the review form, as they were worded when it was written, with the answers given
-        public List<MilestoneReviewAnswer> Review { get; set; } = new List<MilestoneReviewAnswer>();
+        // The review form, every question of it in order: as it was worded when the Scout wrote it, if they have, else as Terrain words it now
+        public List<MilestoneFormEntry> Form { get; set; } = new List<MilestoneFormEntry>();
         // What the Scout wrote about the events they led or helped with
         public List<MilestoneReviewAnswer> EventReviews { get; set; } = new List<MilestoneReviewAnswer>();
     }
@@ -136,9 +154,9 @@ namespace Topo.Model.Milestone
         // The unit's youth, in the order the unit is listed
         public List<MilestoneProgressMember> Members { get; set; } = new List<MilestoneProgressMember>();
         public List<MilestoneProgressRecord> Records { get; set; } = new List<MilestoneProgressRecord>();
-        // The review forms the records' answers are on, by MilestoneProgressRecord.FormKey; they are the same shape as the SIA ones,
-        // the questions in order and the wording of the options a Scout picks from
-        public Dictionary<string, SiaTemplate> Forms { get; set; } = new Dictionary<string, SiaTemplate>();
+        // The review forms: the version a record's answers are on, by MilestoneProgressRecord.FormKey, and each milestone's current form, by
+        // MilestoneProgressBuilder.LatestKey, which a Scout who has written nothing is given
+        public Dictionary<string, MilestoneForm> Forms { get; set; } = new Dictionary<string, MilestoneForm>();
         public DateTime GeneratedAt { get; set; }
     }
 
@@ -148,6 +166,9 @@ namespace Topo.Model.Milestone
         public const int AllMilestones = 0;
 
         public static readonly int[] Milestones = { 1, 2, 3 };
+
+        // Where a milestone's current review form is kept in MilestoneProgressInput.Forms
+        public static string LatestKey(string section, int stage) => $"latest|{section.ToLowerInvariant()}|{stage}";
 
         // The one record to use for a Scout's milestone: one that is awarded beats one that is not, then the latest change
         public static MilestoneProgressRecord? RecordFor(IEnumerable<MilestoneProgressRecord> records, string memberId, string section, int stage) =>
@@ -225,16 +246,34 @@ namespace Topo.Model.Milestone
                     .Select(e => new MilestoneEventLine { Date = e.Date, Event = e.EventName, Area = AreaName(e.Area), Credit = CreditText(e.Credit) }).ToList()
             };
 
-            input.Forms.TryGetValue(record.FormKey, out var form);
+            // The form the Scout wrote on, if they have written anything; otherwise the current one, to be printed for them to fill in
+            var wrote = record.Answers.Any(x => !string.IsNullOrWhiteSpace(x.Value) && !IsHousekeeping(x.Key) && EventReviewKind(x.Key, out _) == "");
+            MilestoneForm? form = null;
+            if (wrote && record.FormKey != "")
+                input.Forms.TryGetValue(record.FormKey, out form);
+            if (form == null)
+                input.Forms.TryGetValue(LatestKey(input.Section, record.Stage), out form);
+
             var eventNames = record.Events.Where(e => e.EventId != "").GroupBy(e => e.EventId).ToDictionary(g => g.Key, g => g.First().EventName);
             var asked = new HashSet<string>();
-            // the form's own questions, in the order they are asked and as they were worded for this record, with only what was answered
-            foreach (var question in form?.Questions ?? new List<SiaQuestion>())
+            foreach (var question in form?.Questions ?? new List<MilestoneFormQuestion>())
             {
                 asked.Add(question.Id);
-                var text = AnswerText(record.Answers, question.Id, form?.Options);
-                if (text != "")
-                    page.Review.Add(new MilestoneReviewAnswer { Question = question.Label, Answer = text });
+                record.Answers.TryGetValue(question.Id, out var raw);
+                raw = (raw ?? "").Trim();
+                if (question.IsChoice)
+                {
+                    var picked = raw.Split(',').Select(v => v.Trim()).Where(v => v != "").ToHashSet(StringComparer.Ordinal);
+                    page.Form.Add(new MilestoneFormEntry
+                    {
+                        Question = question.Label,
+                        IsChoice = true,
+                        Blank = picked.Count == 0,
+                        Choices = question.Choices.Select(c => new MilestoneChoiceState { Title = c.Title, Chosen = picked.Contains(c.Id) }).ToList()
+                    });
+                }
+                else
+                    page.Form.Add(new MilestoneFormEntry { Question = question.Label, Answer = raw, Blank = raw == "" });
             }
             foreach (var answer in record.Answers.OrderBy(a => a.Key, StringComparer.Ordinal))
             {
@@ -251,7 +290,7 @@ namespace Topo.Model.Milestone
                 else if (form == null && !asked.Contains(answer.Key) && !string.IsNullOrWhiteSpace(answer.Value) && !IsHousekeeping(answer.Key))
                 {
                     // the form is not known, so the answer is shown under its own name rather than lost
-                    page.Review.Add(new MilestoneReviewAnswer { Question = answer.Key.Replace('_', ' '), Answer = answer.Value.Trim() });
+                    page.Form.Add(new MilestoneFormEntry { Question = answer.Key.Replace('_', ' '), Answer = answer.Value.Trim() });
                 }
             }
             return page;
@@ -272,14 +311,6 @@ namespace Topo.Model.Milestone
 
         private static bool IsHousekeeping(string key) =>
             key is "skipped_on" or "skipped_by" or "skip_notes" or "previous_status" or "supporting_files" or "spices_text_link";
-
-        // An answer as text: a selector's option ids become the options' own wording
-        private static string AnswerText(Dictionary<string, string> answers, string id, Dictionary<string, string>? options)
-        {
-            if (!answers.TryGetValue(id, out var raw) || string.IsNullOrWhiteSpace(raw))
-                return "";
-            return string.Join(", ", raw.Split(',').Select(v => v.Trim()).Where(v => v != "").Select(v => options != null && options.TryGetValue(v, out var title) ? title : v));
-        }
 
         public static string StatusText(MilestoneProgressRecord record) => record.Status switch
         {

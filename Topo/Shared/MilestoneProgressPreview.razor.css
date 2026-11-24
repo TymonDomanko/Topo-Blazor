@@ -63,3 +63,30 @@
 .review .answer {
     white-space: pre-wrap;
 }
+
+/* A question not answered yet is a box to be written in, as it is on the printed page */
+.review .answer.blank {
+    min-height: 3.5rem;
+    padding: 0.2rem 0.5rem;
+    border: 1px dashed #adb5bd;
+    border-radius: 0.25rem;
+    color: #adb5bd;
+}
+
+.review .choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.25rem;
+    margin-top: 0.2rem;
+}
+
+.review .choice {
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.review .choice.chosen {
+    color: inherit;
+    font-weight: bold;
+}

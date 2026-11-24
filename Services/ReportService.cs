@@ -2922,8 +2922,11 @@ namespace Topo.Services
                         sheet.Range[firstEvent - 1, 1, rowNumber, lastColumn].BorderInside();
                     }
 
-                    // What they wrote on the review, then about events
-                    rowNumber = WriteMilestoneAnswers(sheet, rowNumber, lastColumn, charactersAcross, "Review", page.Review, "Nothing has been written on the review yet.");
+                    // The review form on a page of its own, filled in with what they wrote and with blank boxes for what they have not, then what they
+                    // wrote about events
+                    rowNumber += 2;
+                    sheet.HPageBreaks.Add(sheet.Range[rowNumber, 1]);
+                    rowNumber = WriteMilestoneForm(sheet, rowNumber, lastColumn, charactersAcross, page);
                     if (page.EventReviews.Count > 0)
                         rowNumber = WriteMilestoneAnswers(sheet, rowNumber, lastColumn, charactersAcross, "What they wrote about events", page.EventReviews, "");
                 }
@@ -2941,13 +2944,63 @@ namespace Topo.Services
                 sheet.PageSetup.RightMargin = 0.25;
                 sheet.PageSetup.HeaderMargin = 0;
                 sheet.PageSetup.FooterMargin = 0;
-                sheet.PageSetup.IsFitToPage = true;
-                sheet.PageSetup.FitToPagesWide = 1;
-                sheet.PageSetup.FitToPagesTall = 0;
+                // a set zoom rather than fit to a page, so the page break before the form is kept; the columns are about 100 characters wide
+                sheet.PageSetup.IsFitToPage = false;
+                sheet.PageSetup.Zoom = 90;
 
                 worksheetIndex++;
             }
             return workbook;
+        }
+
+        // The review form as it is to be printed: each question in bold with a bordered box under it, holding the answer where there is one and
+        // left empty, tall enough to write in, where there is not. A question of options lists them with [x] against those picked.
+        private int WriteMilestoneForm(IWorksheet sheet, int rowNumber, int lastColumn, int charactersAcross, MilestoneScoutPage page)
+        {
+            sheet.Range[rowNumber, 1].Text = $"Milestone {page.Stage} review: {page.Name}";
+            sheet.Range[rowNumber, 1, rowNumber, lastColumn].CellStyle.Font.Bold = true;
+            sheet.Range[rowNumber, 1, rowNumber, lastColumn].CellStyle.ColorIndex = ExcelKnownColors.Grey_25_percent;
+            sheet.Range[rowNumber, 1, rowNumber, lastColumn].Merge();
+
+            if (page.Form.Count == 0)
+            {
+                rowNumber++;
+                sheet.Range[rowNumber, 1].Text = "The review form could not be read from Terrain.";
+                sheet.Range[rowNumber, 1, rowNumber, lastColumn].Merge();
+            }
+            foreach (var entry in page.Form)
+            {
+                rowNumber += 2;
+                sheet.Range[rowNumber, 1].Text = entry.Question;
+                sheet.Range[rowNumber, 1].CellStyle.Font.Bold = true;
+                sheet.Range[rowNumber, 1, rowNumber, lastColumn].Merge();
+                sheet.Range[rowNumber, 1].CellStyle.WrapText = true;
+                sheet.SetRowHeight(rowNumber, 15 * Math.Max(1, (entry.Question.Length + charactersAcross - 1) / charactersAcross));
+
+                rowNumber++;
+                var box = sheet.Range[rowNumber, 1, rowNumber, lastColumn];
+                box.Merge();
+                sheet.Range[rowNumber, 1].CellStyle.WrapText = true;
+                sheet.Range[rowNumber, 1].CellStyle.VerticalAlignment = ExcelVAlign.VAlignTop;
+                if (entry.IsChoice)
+                {
+                    var text = string.Join("    ", entry.Choices.Select(c => (c.Chosen ? "[x] " : "[ ] ") + c.Title));
+                    sheet.Range[rowNumber, 1].Text = text;
+                    sheet.SetRowHeight(rowNumber, 18 * Math.Max(1, (text.Length + charactersAcross - 1) / charactersAcross) + 4);
+                }
+                else if (entry.Blank)
+                {
+                    sheet.SetRowHeight(rowNumber, 78);
+                }
+                else
+                {
+                    sheet.Range[rowNumber, 1].Text = entry.Answer;
+                    var lines = entry.Answer.Split('\n').Sum(line => Math.Max(1, (line.Length + charactersAcross - 1) / charactersAcross));
+                    sheet.SetRowHeight(rowNumber, Math.Max(48, 15 * lines + 6));
+                }
+                box.BorderAround();
+            }
+            return rowNumber;
         }
 
         // A heading, then each question in bold with its answer under it, wrapped across the page. A merged cell does not size its own row, so the
