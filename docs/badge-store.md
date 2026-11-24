@@ -111,7 +111,7 @@ same store. Nothing about the record format changes; two kinds of record use the
   the section when no event is logged; whole years completed, as on the Wallchart). Only anniversaries on or after the `yos_start` day are
   listed, so badges handed over before Topo kept track do not appear. Of several unrecorded years only the newest is the badge to hand over;
   presenting it records the lower years too, on the same day.
-- Until a leader creates the store event and starts tracking, nothing is listed. Each copy of Topo reads the store only when its leader has
-  turned the setting on (Settings, Years of service), because reading it switches the group calendar on for a moment.
+- Until a leader creates the store event and starts tracking, nothing is listed. Each copy of Topo reads the store unless its leader has
+  turned the setting off (Settings, Years of service); reading it switches the group calendar on for a moment and back.
 - Only youth members are tracked. A record written by someone who is not an adult leader of one of the reader's units is ignored, as above.
 

@@ -38,7 +38,7 @@ namespace Topo.Services
 
     public interface IYearsOfServiceService
     {
-        // Whether this copy of Topo shows years of service (off until the leader turns it on in Settings). While it is off nothing is read
+        // Whether this copy of Topo shows years of service: on unless the leader turns it off in Settings. While it is off nothing is read
         // from the store, because reading it briefly switches the group calendar on in Terrain.
         Task<bool> IsEnabledAsync();
         Task SetEnabledAsync(bool enabled);
@@ -107,7 +107,8 @@ namespace Topo.Services
             }
             if (_enabled == null || _enabledGroup != GroupId)
             {
-                _enabled = await _localStorage.GetItemAsync<bool>(EnabledKey);
+                // On unless the leader has turned it off
+                _enabled = await _localStorage.GetItemAsync<bool?>(EnabledKey) ?? true;
                 _enabledGroup = GroupId;
             }
             return _enabled.Value;
