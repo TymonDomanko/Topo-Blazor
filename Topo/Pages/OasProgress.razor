@@ -27,7 +27,7 @@
 
     <div class="form-group mb-3 row">
         <label for="skill" class="col-sm-2 col-form-label">Select OAS</label>
-        <div class="col-sm-3">
+        <div class="col-sm-6">
             <select id="skill" class="form-select" value="@model.Skill" @onchange="SkillChanged">
                 <option value="">Select OAS</option>
                 <option value="@OasWorksheetSelection.Core">Core (Bushcraft, Bushwalking, Camping)</option>
@@ -41,7 +41,7 @@
 
     <div class="form-group mb-3 row">
         <label for="level" class="col-sm-2 col-form-label">OAS Level</label>
-        <div class="col-sm-3">
+        <div class="col-sm-6">
             <select id="level" class="form-select" value="@model.Level" @onchange="LevelChanged">
                 <option value="@OasWorksheetSelection.OneAboveHighest">One above the highest in the unit</option>
                 @foreach (var level in Levels)
