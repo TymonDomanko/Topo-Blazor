@@ -24,7 +24,9 @@ namespace TopoReportFunctionTest
             for (var row = 1; row <= 12; row++)
                 for (var column = 1; column <= 20; column++)
                     if (!string.IsNullOrEmpty(sheet.Range[row, column].Text))
+                    {
                         cells.Add((row, column, sheet.Range[row, column].Text.Trim()));
+                    }
             return cells;
         }
 

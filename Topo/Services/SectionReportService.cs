@@ -106,7 +106,9 @@ namespace Topo.Services
                     eventsByCalendars[calendarKey] = await _unitReportService.GetEventsForCalendars(request.From, request.To, calendarIds, cancellationToken, step => progress?.Invoke($"{unitName}: {step}"));
                 }
                 if (calendarIds.Length > 0)
+                {
                     input.Events = eventsByCalendars[calendarKey];
+                }
 
                 var youth = members.Where(m => !UnitReportBuilder.IsLeader(m)).ToList();
                 // A unit with no youth (an adults-only team) has no records to read
