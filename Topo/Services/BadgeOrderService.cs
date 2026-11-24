@@ -6,9 +6,10 @@ namespace Topo.Services
 {
     public class BadgeOrderStatus
     {
-        // The group has the store event Topo keeps its records in (the last order's day is kept there)
+        // The group has the store event Topo keeps its records in (each unit's last order is kept there)
         public bool StoreFound { get; set; }
-        public DateTime? LastOrder { get; set; }
+        // The day of the last order for each unit that has had one
+        public Dictionary<string, DateTime> LastOrderByUnit { get; set; } = new Dictionary<string, DateTime>();
         public string Problem { get; set; } = "";
     }
 
@@ -21,12 +22,14 @@ namespace Topo.Services
 
     public interface IBadgeOrderService
     {
-        // Reads the group's store from Terrain: whether it exists and the day of the last order
+        // Reads the group's store from Terrain: whether it exists and the day of each unit's last order
         Task<BadgeOrderStatus> StatusAsync();
-        // The badges awarded in the units (every unit of the group when none are given) from one day to another, as an order for the Scout Shop
-        Task<BadgeOrderResult> BuildAsync(IEnumerable<string> unitIds, DateTime from, DateTime to, Action<string>? progress = null, CancellationToken cancellationToken = default);
-        // Records that an order was placed on a day, so the next one counts from then. Only on a leader's say so: it changes the group's store.
-        Task<BadgeStoreWriteResult> MarkPlacedAsync(DateTime day);
+        // The badges awarded in the units from each one's own day (a unit not in the dictionary has no day, so is left out) to the last day, as an
+        // order for the Scout Shop
+        Task<BadgeOrderResult> BuildAsync(IReadOnlyDictionary<string, DateTime> fromByUnit, DateTime to, Action<string>? progress = null, CancellationToken cancellationToken = default);
+        // Records that an order was placed for the units on a day, so the next one counts each from then. Only on a leader's say so: it changes
+        // the group's store. Stops at the first unit that fails and says which.
+        Task<BadgeStoreWriteResult> MarkPlacedAsync(IEnumerable<string> unitIds, DateTime day);
     }
 
     // The badge order (Model/BadgeOrder): what the group has awarded since its last order, matched to the Scout Shop's products.
@@ -50,7 +53,7 @@ namespace Topo.Services
             try
             {
                 var contents = await ReadStoreAsync();
-                return new BadgeOrderStatus { StoreFound = contents.StoreEvents > 0, LastOrder = BadgeOrderRecords.LastOrder(contents, GroupId) };
+                return new BadgeOrderStatus { StoreFound = contents.StoreEvents > 0, LastOrderByUnit = BadgeOrderRecords.LastOrders(contents, _storageService.Units.Keys) };
             }
             catch (Exception ex)
             {
@@ -58,15 +61,24 @@ namespace Topo.Services
             }
         }
 
-        public async Task<BadgeOrderResult> BuildAsync(IEnumerable<string> unitIds, DateTime from, DateTime to, Action<string>? progress = null, CancellationToken cancellationToken = default)
+        public async Task<BadgeOrderResult> BuildAsync(IReadOnlyDictionary<string, DateTime> fromByUnit, DateTime to, Action<string>? progress = null, CancellationToken cancellationToken = default)
         {
-            var chosen = unitIds.Where(id => _storageService.Units.ContainsKey(id)).Distinct().ToList();
-            var request = new SectionReportRequest { UnitIds = chosen.Count > 0 ? chosen : _storageService.Units.Keys.ToList(), IsGroup = true, From = from.Date, To = to.Date };
+            var units = fromByUnit.Keys.Where(id => _storageService.Units.ContainsKey(id)).ToList();
+            if (units.Count == 0)
+            {
+                return new BadgeOrderResult { From = to.Date, To = to.Date };
+            }
+            var earliest = units.Min(id => fromByUnit[id].Date);
+            var request = new SectionReportRequest
+            {
+                UnitIds = units, IsGroup = true, From = earliest, To = to.Date,
+                FromByUnit = units.ToDictionary(id => id, id => fromByUnit[id].Date)
+            };
             var report = await _sectionReportService.GetSectionReport(request, progress, cancellationToken);
-            return new BadgeOrderResult { From = from.Date, To = to.Date, Lines = BadgeOrderBuilder.Build(report.Report) };
+            return new BadgeOrderResult { From = earliest, To = to.Date, Lines = BadgeOrderBuilder.Build(report.Report) };
         }
 
-        public async Task<BadgeStoreWriteResult> MarkPlacedAsync(DateTime day)
+        public async Task<BadgeStoreWriteResult> MarkPlacedAsync(IEnumerable<string> unitIds, DateTime day)
         {
             HashSet<string> trusted;
             try
@@ -78,7 +90,16 @@ namespace Topo.Services
                 return new BadgeStoreWriteResult { Outcome = BadgeStoreWriteOutcome.Failed, Message = $"The records could not be read. {ex.Message}".Trim() };
             }
             var user = UserId;
-            return await _badgeStoreService.RecordAwardAsync(user, GroupId, GroupId, BadgeOrderRecords.LastOrderAwardId, day.Date, null, id => id == user || trusted.Contains(id));
+            var last = new BadgeStoreWriteResult { Outcome = BadgeStoreWriteOutcome.AlreadyRecorded, Message = "Nothing to record." };
+            foreach (var unitId in unitIds.Where(id => _storageService.Units.ContainsKey(id)).Distinct())
+            {
+                last = await _badgeStoreService.RecordAwardAsync(user, GroupId, unitId, BadgeOrderRecords.LastOrderAwardId, day.Date, null, id => id == user || trusted.Contains(id));
+                if (!last.Succeeded)
+                {
+                    return new BadgeStoreWriteResult { Outcome = last.Outcome, Message = $"{_storageService.Units[unitId]}: {last.Message}" };
+                }
+            }
+            return last;
         }
 
         private async Task<BadgeStoreContents> ReadStoreAsync()

@@ -13,36 +13,17 @@
 
 @if (Status != null && !string.IsNullOrEmpty(Status.Problem))
 {
-    <div class="text-danger mb-3" id="status-problem">The date of the last order could not be read from Terrain: @Status.Problem</div>
+    <div class="text-danger mb-3" id="status-problem">The day of each unit's last order could not be read from Terrain: @Status.Problem</div>
 }
 else if (Status != null && !Status.StoreFound)
 {
-    <div class="alert alert-warning" id="no-store">The group has no records event in Terrain yet, so the day of the last order can't be kept and "Mark order placed" is not available.
+    <div class="alert alert-warning" id="no-store">The group has no records event in Terrain yet, so the day of each unit's last order can't be kept and "Mark order placed" is not available.
         Create it in <a href="settings">Settings</a>, under Years of service.</div>
 }
 
 <div class="card mb-3" id="since">
     <div class="card-body">
-        @if (HasLastOrder && !ChangingDate)
-        {
-            <div class="d-flex align-items-center gap-3">
-                <div><strong>Counting from the last order, @Status!.LastOrder!.Value.ToString("dd/MM/yyyy")</strong></div>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="change-date" @onclick="ChangeDateClick">Change date</button>
-            </div>
-        }
-        else
-        {
-            @if (!HasLastOrder)
-            {
-                <div class="fw-bold mb-1">No order recorded yet</div>
-                <div class="text-muted small mb-2">Choose the day to count awarded badges from. Topo remembers the day once you mark an order as placed.</div>
-            }
-            <div class="d-flex align-items-center gap-2">
-                <label for="from-date" class="mb-0">Count from</label>
-                <input type="date" id="from-date" class="form-control form-control-sm" style="max-width: 11rem" @bind="From" @bind:format="yyyy-MM-dd" />
-            </div>
-        }
-        <div class="mt-2 d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2 mb-2">
             <label for="unit" class="mb-0">Units</label>
             <select id="unit" class="form-select form-select-sm" style="max-width: 14rem" value="@UnitId" @onchange="UnitChange" disabled="@Loading">
                 <option value="">All units</option>
@@ -51,7 +32,41 @@ else if (Status != null && !Status.StoreFound)
                     <option value="@unit.Key">@unit.Value</option>
                 }
             </select>
+        </div>
+        <div class="small mb-2" id="last-orders">
+            @foreach (var unitId in ChosenUnits)
+            {
+                <div>
+                    <strong>@UnitName(unitId)</strong>:
+                    @if (ChangingDate)
+                    {
+                        <span>counting from @From.ToString("dd/MM/yyyy")</span>
+                    }
+                    else if (LastOrderOf(unitId) is { } day)
+                    {
+                        <span>counting from its last order, @day.ToString("dd/MM/yyyy")</span>
+                    }
+                    else
+                    {
+                        <span class="text-muted">no order recorded yet</span>
+                    }
+                </div>
+            }
+        </div>
+        @if (CanPickDate)
+        {
+            <div class="text-muted small mb-1">@(ChangingDate ? "Choose the day to count from for these units." : "Choose the day to count awarded badges from for the units with no order recorded. Topo remembers each unit's day once you mark an order as placed.")</div>
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <label for="from-date" class="mb-0">Count from</label>
+                <input type="date" id="from-date" class="form-control form-control-sm" style="max-width: 11rem" @bind="From" @bind:format="yyyy-MM-dd" />
+            </div>
+        }
+        <div class="d-flex align-items-center gap-2">
             <button type="button" class="btn btn-primary btn-sm" id="show" @onclick="ShowBadgesClick" disabled="@Loading">Show badges</button>
+            @if (!CanPickDate)
+            {
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="change-date" @onclick="ChangeDateClick">Change date</button>
+            }
         </div>
     </div>
 </div>
@@ -62,7 +77,7 @@ else if (Status != null && !Status.StoreFound)
 {
     @if (Lines.Count == 0)
     {
-        <div class="mb-3" id="nothing">Nothing has been awarded since @LinesFrom.ToString("dd/MM/yyyy"), so there is nothing to order.</div>
+        <div class="mb-3" id="nothing">Nothing has been awarded since the last order, so there is nothing to order.</div>
     }
     else
     {
@@ -99,8 +114,11 @@ else if (Status != null && !Status.StoreFound)
             <strong>About $@Total.ToString("0.00") at RRP</strong>
         </div>
 
-        <div class="alert alert-warning py-2" id="signin-note">Sign in to the Scout Shop first, with your Scout Shop account. Some badges can only be bought by an adult leader.
-            The cart link works either way, but checkout may refuse leader-only badges until you are signed in.</div>
+        <div class="alert alert-warning py-2 d-flex align-items-center justify-content-between gap-3" id="signin-note">
+            <span>Sign in to the Scout Shop first, with your Scout Shop account. Some badges can only be bought by an adult leader.
+                The cart link works either way, but checkout may refuse leader-only badges until you are signed in.</span>
+            <a class="btn btn-outline-dark btn-sm text-nowrap" id="shop-login" href="@ScoutShopLoginUrl" target="_blank" rel="noopener">Go to the Scout Shop login</a>
+        </div>
 
         <div class="d-flex flex-wrap align-items-center gap-2">
             @{
@@ -118,7 +136,7 @@ else if (Status != null && !Status.StoreFound)
         {
             <div class="card border-warning mt-3" id="confirm">
                 <div class="card-body">
-                    <p class="mb-2">Record @DateTime.Today.ToString("dd/MM/yyyy") as the day of the last order? The next order will count badges awarded from that day. This adds a record to the group's records event in Terrain.</p>
+                    <p class="mb-2">Record @DateTime.Today.ToString("dd/MM/yyyy") as the day of the last order for @string.Join(", ", LinesUnits.Select(UnitName))? The next order will count badges awarded in each of them from that day. This adds a record for each unit to the group's records event in Terrain.</p>
                     <button type="button" class="btn btn-warning" id="confirm-yes" @onclick="ConfirmPlacedClick" disabled="@Busy">Yes, record it</button>
                     <button type="button" class="btn btn-outline-secondary" id="confirm-cancel" @onclick="CancelPlacedClick" disabled="@Busy">Cancel</button>
                 </div>

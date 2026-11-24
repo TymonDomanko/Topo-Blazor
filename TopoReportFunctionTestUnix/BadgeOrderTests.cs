@@ -161,15 +161,26 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
-        public void ALineWithNoneLeftIsNotInTheCartAndALongOrderIsSplit()
+        public void AnOrderOfAFewDozenLinesIsOneLinkAndALineWithNoneLeftIsNotInIt()
         {
-            var lines = ScoutShopCatalog.All.Take(45).Select(v => new BadgeOrderLine { Group = "x", Name = v.Option, Count = 1, Shop = v }).ToList();
+            var lines = ScoutShopCatalog.All.Take(60).Select(v => new BadgeOrderLine { Group = "x", Name = v.Option, Count = 12, Shop = v }).ToList();
             lines[0].Count = 0;
             var links = BadgeOrderBuilder.CartLinks(lines);
-            Assert.AreEqual(2, links.Count);
-            Assert.AreEqual(40, links[0].Substring("https://scoutshop.com.au/cart/".Length).Split(',').Length);
-            Assert.AreEqual(4, links[1].Substring("https://scoutshop.com.au/cart/".Length).Split(',').Length);
+            Assert.AreEqual(1, links.Count);
+            Assert.IsTrue(links[0].Length < BadgeOrderBuilder.MostLinkLength);
+            Assert.AreEqual(59, links[0].Substring("https://scoutshop.com.au/cart/".Length).Split(',').Length);
             Assert.IsFalse(links[0].Contains(lines[0].Shop!.VariantId.ToString() + ":"));
+        }
+
+        [TestMethod]
+        public void AnOrderTooLongForOneLinkIsSplitAndNoBadgeIsLostOrRepeated()
+        {
+            var lines = ScoutShopCatalog.All.Take(120).Select(v => new BadgeOrderLine { Group = "x", Name = v.Option, Count = 3, Shop = v }).ToList();
+            var links = BadgeOrderBuilder.CartLinks(lines);
+            Assert.IsTrue(links.Count > 1);
+            Assert.IsTrue(links.All(l => l.Length <= BadgeOrderBuilder.MostLinkLength));
+            var entries = links.SelectMany(l => l.Substring("https://scoutshop.com.au/cart/".Length).Split(',')).ToList();
+            CollectionAssert.AreEqual(lines.Select(l => $"{l.Shop!.VariantId}:3").ToList(), entries);
         }
 
         [TestMethod]
@@ -185,20 +196,24 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
-        public void TheLastOrderIsTheLatestRecordAgainstTheGroup()
+        public void EachUnitHasItsOwnLastOrderSoOneSectionsOrderDoesNotMoveTheOthers()
         {
             var contents = new BadgeStoreContents
             {
                 Records =
                 {
-                    new BadgeStoreRecord { MemberId = "group-1", AwardId = "order_last", Awarded = new DateTime(2026, 8, 14) },
-                    new BadgeStoreRecord { MemberId = "someone", AwardId = "order_last", Awarded = new DateTime(2020, 1, 1) },
-                    new BadgeStoreRecord { MemberId = "group-1", AwardId = "yos_start", Awarded = new DateTime(2026, 1, 25) }
+                    new BadgeStoreRecord { MemberId = "scout-unit", AwardId = "order_last", Awarded = new DateTime(2026, 8, 14) },
+                    new BadgeStoreRecord { MemberId = "cub-unit", AwardId = "order_last", Awarded = new DateTime(2026, 5, 2) },
+                    new BadgeStoreRecord { MemberId = "scout-unit", AwardId = "yos_start", Awarded = new DateTime(2026, 1, 25) }
                 }
             };
-            Assert.AreEqual(new DateTime(2026, 8, 14), BadgeOrderRecords.LastOrder(contents, "group-1"));
-            Assert.IsNull(BadgeOrderRecords.LastOrder(contents, "another-group"));
-            Assert.IsNull(BadgeOrderRecords.LastOrder(new BadgeStoreContents(), "group-1"));
+            Assert.AreEqual(new DateTime(2026, 8, 14), BadgeOrderRecords.LastOrder(contents, "scout-unit"));
+            Assert.AreEqual(new DateTime(2026, 5, 2), BadgeOrderRecords.LastOrder(contents, "cub-unit"));
+            Assert.IsNull(BadgeOrderRecords.LastOrder(contents, "joey-unit"));
+            var days = BadgeOrderRecords.LastOrders(contents, new[] { "joey-unit", "cub-unit", "scout-unit" });
+            Assert.AreEqual(2, days.Count);
+            Assert.IsFalse(days.ContainsKey("joey-unit"));
+            Assert.IsNull(BadgeOrderRecords.LastOrder(new BadgeStoreContents(), "scout-unit"));
         }
 
         [TestMethod]

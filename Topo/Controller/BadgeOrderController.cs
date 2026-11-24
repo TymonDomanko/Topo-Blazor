@@ -24,27 +24,35 @@ namespace Topo.Controller
         public Dictionary<string, string> Units = new Dictionary<string, string>();
         public string UnitId = "";
         public BadgeOrderStatus? Status;
-        // The day to count from: the last order's, or one the leader picks when no order has been recorded
+        // The day to count from for a unit with no order recorded (or for every unit chosen, when the leader changes the date)
         public DateTime From = DateTime.Today.AddMonths(-3);
         public bool ChangingDate;
         public bool Loading;
         public string Progress = "";
         public string? Error;
         public List<BadgeOrderLine>? Lines;
-        // The day the lines were worked out from
-        public DateTime LinesFrom;
+        // The units the lines are for, which "Mark order placed" records
+        public List<string> LinesUnits = new List<string>();
         public bool ConfirmPlaced;
         public bool Busy;
         public string Message = "";
         public bool MessageIsError;
 
-        public bool HasLastOrder => Status?.LastOrder != null;
-        // The date can be typed when there is no last order, or when the leader has asked to change it
-        public bool CanPickDate => !HasLastOrder || ChangingDate;
+        // The units the order is for: the one chosen, or every unit
+        public List<string> ChosenUnits => UnitId.Length > 0 && Units.ContainsKey(UnitId) ? new List<string> { UnitId } : Units.Keys.ToList();
+        public DateTime? LastOrderOf(string unitId) => Status != null && Status.LastOrderByUnit.TryGetValue(unitId, out var day) ? day : null;
+        public List<string> ChosenUnitsWithoutOrder => ChosenUnits.Where(u => LastOrderOf(u) == null).ToList();
+        // The date can be typed for units with no order, or for them all when the leader asks to change it
+        public bool CanPickDate => ChangingDate || ChosenUnitsWithoutOrder.Count > 0;
+        // The day a unit is counted from
+        public DateTime FromFor(string unitId) => ChangingDate ? From : LastOrderOf(unitId) ?? From;
+        public string UnitName(string unitId) => Units.TryGetValue(unitId, out var name) ? name : unitId;
         public int InShopCount => Lines?.Where(l => l.InShop).Sum(l => l.Count) ?? 0;
         public int ByHandCount => Lines?.Where(l => !l.InShop).Sum(l => l.Count) ?? 0;
         public decimal Total => Lines?.Sum(l => l.Cost) ?? 0;
         public List<string> CartLinks => Lines == null ? new List<string>() : BadgeOrderBuilder.CartLinks(Lines);
+        // Where a leader signs in to the Scout Shop (Topo never signs in for them)
+        public const string ScoutShopLoginUrl = ScoutShopCatalog.ShopUrl + "account/login";
 
         protected override async Task OnInitializedAsync()
         {
@@ -56,15 +64,11 @@ namespace Topo.Controller
             GroupName = _storageService.GroupNameDisplay;
             Units = _storageService.Units ?? new Dictionary<string, string>();
             Status = await _badgeOrderService.StatusAsync();
-            if (Status.LastOrder.HasValue)
-            {
-                From = Status.LastOrder.Value;
-            }
         }
 
         internal async Task ShowBadgesClick()
         {
-            if (From.Date > DateTime.Today)
+            if (CanPickDate && From.Date > DateTime.Today)
             {
                 Error = "The day to count from can't be in the future.";
                 return;
@@ -77,13 +81,14 @@ namespace Topo.Controller
             Progress = "";
             try
             {
-                var result = await _badgeOrderService.BuildAsync(UnitId.Length > 0 ? new[] { UnitId } : Units.Keys, From, DateTime.Today, step =>
+                var units = ChosenUnits;
+                var result = await _badgeOrderService.BuildAsync(units.ToDictionary(u => u, FromFor), DateTime.Today, step =>
                 {
                     Progress = step;
                     InvokeAsync(StateHasChanged);
                 });
                 Lines = result.Lines;
-                LinesFrom = result.From;
+                LinesUnits = units;
             }
             catch (Exception ex)
             {
@@ -98,6 +103,7 @@ namespace Topo.Controller
             // What was worked out was for the other units
             Lines = null;
             ConfirmPlaced = false;
+            ChangingDate = false;
             Message = "";
         }
 
@@ -124,16 +130,16 @@ namespace Topo.Controller
 
         internal void CancelPlacedClick() => ConfirmPlaced = false;
 
-        // Records today as the day of the last order, in the group's store (after the leader has confirmed)
+        // Records today as the day of the last order for the units the lines are for, in the group's store (after the leader has confirmed)
         internal async Task ConfirmPlacedClick()
         {
             Busy = true;
-            var result = await _badgeOrderService.MarkPlacedAsync(DateTime.Today);
+            var result = await _badgeOrderService.MarkPlacedAsync(LinesUnits, DateTime.Today);
             ConfirmPlaced = false;
             if (result.Succeeded)
             {
                 Status = await _badgeOrderService.StatusAsync();
-                Message = $"Recorded {DateTime.Today:dd/MM/yyyy} as the day of the last order. The next one counts from then.";
+                Message = $"Recorded {DateTime.Today:dd/MM/yyyy} as the day of the last order for {string.Join(", ", LinesUnits.Select(UnitName))}. The next order counts each of them from then.";
                 MessageIsError = false;
                 ChangingDate = false;
             }

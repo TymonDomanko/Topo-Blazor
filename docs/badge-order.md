@@ -15,14 +15,21 @@ left out of the cart link.
 
 ## The day it counts from
 
-The day of the last order is a store record against the group's own id (`order_last`, its "awarded" day), written by "Mark order placed" after a
-confirm step, so every leader's copy of Topo counts from the same day. When none has been recorded the leader picks a day. "Mark order placed" needs the
-group's store event (Settings, Years of service, "Create the records event").
+Each unit has its own last order day, a store record against the unit's id (`order_last`, its "awarded" day), written by "Mark order placed" after a
+confirm step, so every leader's copy of Topo counts from the same days. Because it is kept for each unit:
+
+- an order for one section moves only that section's day, so the other sections' badges are still counted for the next order;
+- an order for the whole group counts each section from its own last order, so badges already ordered for a section are not ordered again;
+- "Mark order placed" records the day for the units the order was for.
+
+A unit with no order recorded counts from a day the leader picks. "Change date" replaces every chosen unit's day for that order. The records need
+the group's store event (Settings, Years of service, "Create the records event"). Topo cannot see the shop, so an order that is placed but not marked
+as placed will be counted again by the next person.
 
 ## The cart link
 
 `https://scoutshop.com.au/cart/<variant id>:<quantity>,<variant id>:<quantity>` adds each badge to a cart and goes to the shop's checkout, with nothing
-paid. An order of more than 40 lines is split into several links. Topo never signs in to the shop or pays: the leader signs in to the Scout Shop with
+paid. An order is one link unless it would be longer than about 2,000 characters (some 100 lines), when it is split. Topo never signs in to the shop or pays: the leader signs in to the Scout Shop with
 their own account, and some badges can only be bought by an adult leader.
 
 ## Keeping the shop list up to date

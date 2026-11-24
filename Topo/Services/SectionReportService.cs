@@ -13,6 +13,8 @@ namespace Topo.Services
         public bool IsGroup { get; set; }
         public DateTime From { get; set; }
         public DateTime To { get; set; }
+        // A day to count from for a unit, in place of From (a badge order counts each unit from its own last order). From should be the earliest.
+        public Dictionary<string, DateTime> FromByUnit { get; set; } = new Dictionary<string, DateTime>();
         // The calendars to read each unit's events from
         public Dictionary<string, string[]> CalendarIdsByUnit { get; set; } = new Dictionary<string, string[]>();
         // The roster saved by each unit's last report, if there is one
@@ -89,12 +91,20 @@ namespace Topo.Services
                 progress?.Invoke($"{unitName}: members");
                 var members = await _membersService.GetMembersAsync(unitId);
 
+                // A unit may be counted from its own day (a badge order), with the same To
+                var unitFrom = request.FromByUnit.TryGetValue(unitId, out var ownFrom) ? ownFrom : request.From;
+                var unitRequest = request.FromByUnit.Count == 0 ? request : new SectionReportRequest
+                {
+                    UnitIds = request.UnitIds, IsGroup = request.IsGroup, From = unitFrom, To = request.To,
+                    CalendarIdsByUnit = request.CalendarIdsByUnit, PreviousRosters = request.PreviousRosters
+                };
+
                 var input = new SectionReportInput
                 {
                     UnitId = unitId,
                     UnitName = unitName,
                     Section = section,
-                    From = request.From,
+                    From = unitFrom,
                     To = request.To,
                     AsOf = now,
                     CurrentMembers = members,
@@ -125,7 +135,7 @@ namespace Topo.Services
                     var badges = await BadgesOf(unitId, badgesByUnit);
                     cancellationToken.ThrowIfCancellationRequested();
                     foreach (var member in youth)
-                        input.Records[member.id] = await GetRecords(member.id, intros, badges, section, request, records);
+                        input.Records[member.id] = await GetRecords(member.id, intros, badges, section, unitRequest, records);
                 }
 
                 progress?.Invoke($"{unitName}: additional awards");
@@ -144,7 +154,7 @@ namespace Topo.Services
                         input.NextSectionMembers.Add(new NextSectionMember
                         {
                             Person = new RosterPerson { Id = next.id, MemberNumber = next.member_number, Name = $"{next.first_name} {next.last_name}".Trim() },
-                            Records = await GetRecords(next.id, nextIntros!, null, nextSection, request, records)
+                            Records = await GetRecords(next.id, nextIntros!, null, nextSection, unitRequest, records)
                         });
                     }
                 }

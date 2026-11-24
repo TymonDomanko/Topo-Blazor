@@ -156,14 +156,33 @@ namespace Topo.Model.BadgeOrder
         }
 
         // The Scout Shop's cart links for the lines in the shop: a link adds each badge, in the quantity asked for, to a cart and goes to checkout.
-        // A long order is split into several links so each stays short.
-        public static List<string> CartLinks(IEnumerable<BadgeOrderLine> lines, int perLink = 40)
+        // The whole order is one link unless it would be longer than a browser or server can be trusted to take (about 2,000 characters, which is
+        // some 100 lines), when it is split so that each link stays under that.
+        public const int MostLinkLength = 1900;
+
+        public static List<string> CartLinks(IEnumerable<BadgeOrderLine> lines, int maxLength = MostLinkLength)
         {
-            var inShop = lines.Where(l => l.Shop != null && l.Count > 0).ToList();
+            var prefix = ScoutShopCatalog.ShopUrl + "cart/";
             var links = new List<string>();
-            for (var i = 0; i < inShop.Count; i += perLink)
+            var current = new List<string>();
+            var length = prefix.Length;
+            foreach (var entry in lines.Where(l => l.Shop != null && l.Count > 0).Select(l => $"{l.Shop!.VariantId}:{l.Count.ToString(CultureInfo.InvariantCulture)}"))
             {
-                links.Add(ScoutShopCatalog.ShopUrl + "cart/" + string.Join(",", inShop.Skip(i).Take(perLink).Select(l => $"{l.Shop!.VariantId}:{l.Count.ToString(CultureInfo.InvariantCulture)}")));
+                // the comma that separates it from the one before
+                var added = entry.Length + (current.Count > 0 ? 1 : 0);
+                if (current.Count > 0 && length + added > maxLength)
+                {
+                    links.Add(prefix + string.Join(",", current));
+                    current.Clear();
+                    length = prefix.Length;
+                    added = entry.Length;
+                }
+                current.Add(entry);
+                length += added;
+            }
+            if (current.Count > 0)
+            {
+                links.Add(prefix + string.Join(",", current));
             }
             return links;
         }
