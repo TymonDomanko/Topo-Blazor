@@ -36,19 +36,12 @@
             {
                 foreach (var item in group.Items.Where(i => NavMenuItems.IsShownTo(i.Audience, viewer)))
                 {
-                    var text = item.TitleText(_storageService);
-                    <div class="nav-item px-3">
-                        @if (item.IsExternal)
-                        {
-                            <a class="nav-link" href="@item.Href" target="_blank" title="@text"><span class="oi @item.Icon" aria-hidden="true"></span> <span class="nav-text">@text</span></a>
-                        }
-                        else
-                        {
-                            <NavLink class="@LinkClass(item)" href="@item.Href" Match="item.Match" title="@text">
-                                <span class="oi @item.Icon" aria-hidden="true"></span> <span class="nav-text">@text</span>
-                            </NavLink>
-                        }
-                    </div>
+                    @NavLinkFor(item, false)
+                    @* pages that belong to this one sit indented beneath it *@
+                    foreach (var sub in (item.SubItems ?? Array.Empty<NavItem>()).Where(i => NavMenuItems.IsShownTo(i.Audience, viewer)))
+                    {
+                        @NavLinkFor(sub, true)
+                    }
                 }
             }
         }
@@ -63,6 +56,21 @@
 
 @code {
     private bool collapseNavMenu = true;
+
+    // One link: an item of a group, or (sub) a page that belongs to the item above it
+    private RenderFragment NavLinkFor(NavItem item, bool sub) => @<div class="nav-item px-3@(sub ? " nav-sub" : "")">
+        @if (item.IsExternal)
+        {
+            <a class="nav-link" href="@item.Href" target="_blank" title="@item.TitleText(_storageService)"><span class="oi @item.Icon" aria-hidden="true"></span> <span class="nav-text">@item.TitleText(_storageService)</span></a>
+        }
+        else
+        {
+            <NavLink class="@LinkClass(item)" href="@item.Href" Match="item.Match" title="@item.TitleText(_storageService)">
+                <span class="oi @item.Icon" aria-hidden="true"></span> <span class="nav-text">@item.TitleText(_storageService)</span>
+            </NavLink>
+        }
+    </div>;
+
 
     // which collapsible groups have been opened or closed; a group not in here uses its default
     private readonly Dictionary<string, bool> groupOpen = new();
