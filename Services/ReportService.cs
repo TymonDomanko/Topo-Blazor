@@ -2675,12 +2675,14 @@ namespace Topo.Services
 
         }
 
-        // The OAS summary: a row for each Scout, and for each of the nine skills two columns, the highest stage awarded and the stage
-        // being worked on (shaded by where it is up to, and marked R or A so the difference shows on a black and white print)
+        // The OAS summary: a row for each Scout and, for each column (a skill, or a branch of one), two columns of the sheet: the highest
+        // stage awarded and the stage being worked on (shaded by where it is up to, and marked R or A so the difference shows on a black
+        // and white print)
         public IWorkbook GenerateOasSummaryWorkbook(OasSummaryReport report, string groupName, string section, string unitName)
         {
-            var streams = OasSummaryLayout.Streams;
-            var lastColumn = 1 + streams.Length * 2;
+            var columns = report.Columns.Count > 0 ? report.Columns : OasSummaryLayout.SkillColumns();
+            var lastColumn = 1 + columns.Count * 2;
+            var branches = OasSummaryLayout.HasBranchHeadings(columns);
             var sheets = report.Sheets.Count == 0 ? new List<OasSummarySheet> { new OasSummarySheet() } : report.Sheets;
             var workbook = CreateWorkbookWithSheets(sheets.Count);
             var worksheetIndex = 0;
@@ -2704,10 +2706,10 @@ namespace Topo.Services
                 sheet.Range[rowNumber, 2, rowNumber, lastColumn].Merge();
                 sheet.SetRowHeight(rowNumber, 25);
 
-                // The groups, then the skills, then Awarded and Working on under each skill
+                // The groups, then the skills, then (when split) the branches, then Awarded and Working on under each
                 rowNumber++;
                 var column = 2;
-                foreach (var group in OasSummaryLayout.Groups)
+                foreach (var group in OasSummaryLayout.GroupSpans(columns))
                 {
                     sheet.Range[rowNumber, column].Text = group.Heading;
                     sheet.Range[rowNumber, column, rowNumber, column + group.Span * 2 - 1].Merge();
@@ -2719,21 +2721,40 @@ namespace Topo.Services
 
                 rowNumber++;
                 column = 2;
-                foreach (var stream in streams)
+                foreach (var stream in OasSummaryLayout.StreamSpans(columns))
                 {
+                    var width = stream.Span * 2;
                     sheet.Range[rowNumber, column].Text = stream.Heading;
-                    sheet.Range[rowNumber, column, rowNumber, column + 1].Merge();
-                    sheet.Range[rowNumber, column, rowNumber, column + 1].CellStyle.Color = Colour(stream.Colour);
-                    sheet.Range[rowNumber, column, rowNumber, column + 1].BorderAround();
-                    column += 2;
+                    sheet.Range[rowNumber, column, rowNumber, column + width - 1].Merge();
+                    sheet.Range[rowNumber, column, rowNumber, column + width - 1].CellStyle.Color = Colour(stream.Colour);
+                    sheet.Range[rowNumber, column, rowNumber, column + width - 1].BorderAround();
+                    column += width;
                 }
                 sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
                 sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.Font.Bold = true;
 
+                if (branches)
+                {
+                    rowNumber++;
+                    column = 2;
+                    foreach (var branch in columns)
+                    {
+                        sheet.Range[rowNumber, column].Text = branch.Heading;
+                        sheet.Range[rowNumber, column, rowNumber, column + 1].Merge();
+                        sheet.Range[rowNumber, column, rowNumber, column + 1].CellStyle.Color = Colour(branch.Colour);
+                        sheet.Range[rowNumber, column, rowNumber, column + 1].BorderAround();
+                        column += 2;
+                    }
+                    sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                    sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.WrapText = true;
+                    sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.Font.Bold = true;
+                    sheet.SetRowHeight(rowNumber, 32);
+                }
+
                 rowNumber++;
                 sheet.Range[rowNumber, 1].Text = "Name";
                 column = 2;
-                foreach (var stream in streams)
+                foreach (var _ in columns)
                 {
                     sheet.Range[rowNumber, column].Text = "Awarded";
                     sheet.Range[rowNumber, column + 1].Text = "Working on";
@@ -2746,18 +2767,17 @@ namespace Topo.Services
                 sheet.Range[rowNumber, 1, rowNumber, lastColumn].BorderAround();
                 sheet.Range[rowNumber, 1, rowNumber, lastColumn].BorderInside();
 
-                var firstRow = rowNumber + 1;
                 foreach (var row in oasSheet.Rows)
                 {
                     rowNumber++;
                     sheet.Range[rowNumber, 1].Text = row.Name;
                     column = 2;
-                    for (var i = 0; i < streams.Length; i++)
+                    for (var i = 0; i < columns.Count; i++)
                     {
-                        var cell = i < row.Streams.Count ? row.Streams[i] : new OasSummaryCell();
+                        var cell = i < row.Cells.Count ? row.Cells[i] : new OasSummaryCell();
                         if (cell.Awarded > 0)
                             sheet.Range[rowNumber, column].Number = cell.Awarded;
-                        sheet.Range[rowNumber, column].CellStyle.Color = Colour(streams[i].Colour);
+                        sheet.Range[rowNumber, column].CellStyle.Color = Colour(columns[i].Colour);
                         if (cell.State != OasWorking.None)
                         {
                             sheet.Range[rowNumber, column + 1].Text = OasSummaryLayout.WorkingText(cell);
