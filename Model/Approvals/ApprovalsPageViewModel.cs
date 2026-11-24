@@ -11,7 +11,7 @@ namespace Topo.Model.Approvals
         public DateTime ApprovalSearchFromDate { get; set; } = DateTime.Now;
         public DateTime ApprovalSearchToDate { get; set; } = DateTime.Now;
         public string DateErrorMessage { get; set; } = string.Empty;
-        public bool ToBePresented { get; set; }
+        public bool ToBePresented { get; set; } = true;
         public bool IsPresented { get; set; }
         public string GroupName { get; set; } = string.Empty;
         public bool ShowRejected { get; set; }
