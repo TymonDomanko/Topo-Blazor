@@ -154,5 +154,42 @@ namespace TopoReportFunctionTest
             Assert.AreEqual(new DateTime(2026, 3, 1), recorded.Single(r => r.MemberId == "b").Day);
             Assert.AreEqual("Scout 3 Years of Service", recorded.Single(r => r.MemberId == "a").AwardName);
         }
+
+        [TestMethod]
+        public void TheFirstCheckIsDueAsSoonAsItIsTurnedOnAndThenOnceADay()
+        {
+            var now = new DateTime(2026, 11, 25, 9, 0, 0, DateTimeKind.Utc);
+            Assert.IsFalse(YearsOfServiceSchedule.IsDue(new YearsOfServiceScanCache(), false, now));
+            Assert.IsTrue(YearsOfServiceSchedule.IsDue(new YearsOfServiceScanCache(), true, now));
+            Assert.IsFalse(YearsOfServiceSchedule.IsDue(new YearsOfServiceScanCache { ScannedAtUtc = now.AddHours(-23) }, true, now));
+            Assert.IsTrue(YearsOfServiceSchedule.IsDue(new YearsOfServiceScanCache { ScannedAtUtc = now.AddHours(-25) }, true, now));
+        }
+
+        [TestMethod]
+        public void ACheckThatStoppedIsTriedAgainAfterAFewMinutesNotAtOnce()
+        {
+            var now = new DateTime(2026, 11, 25, 9, 0, 0, DateTimeKind.Utc);
+            Assert.IsFalse(YearsOfServiceSchedule.IsDue(new YearsOfServiceScanCache { AttemptedAtUtc = now.AddMinutes(-2) }, true, now));
+            Assert.IsTrue(YearsOfServiceSchedule.IsDue(new YearsOfServiceScanCache { AttemptedAtUtc = now.AddMinutes(-6) }, true, now));
+        }
+
+        [TestMethod]
+        public void TheKeptCheckSurvivesBeingSavedInTheBrowserAndGivesTheSameList()
+        {
+            var cache = new YearsOfServiceScanCache
+            {
+                ScannedAtUtc = new DateTime(2026, 11, 25, 1, 0, 0, DateTimeKind.Utc),
+                Members = { Member("a", new DateTime(2023, 6, 1)) },
+                Store = new BadgeStoreContents { StoreEvents = 1, Records = { Record("group-1", "yos_start", "2025-01-01"), Record("a", "yos_scout_2", "2025-06-01", "2025-06-10") } }
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(cache);
+            var back = System.Text.Json.JsonSerializer.Deserialize<YearsOfServiceScanCache>(json)!;
+            Assert.AreEqual(new DateTime(2025, 1, 1), YearsOfServiceAwards.StartedFrom(back.Store!, "group-1"));
+            var rows = YearsOfServiceAwards.Pending(YearsOfServiceAwards.Reached(back.Members, "scout", new DateTime(2025, 1, 1), new DateTime(2026, 11, 25)), YearsOfServiceAwards.RecordKeys(back.Store!));
+            // year 2 is recorded, so the newest unrecorded year, 3, is the badge to hand over
+            Assert.AreEqual(1, rows.Count);
+            Assert.AreEqual("yos_scout_3", rows[0].AwardId);
+            Assert.AreEqual(1, back.Store!.StoreEvents);
+        }
     }
 }

@@ -22,6 +22,19 @@ namespace Topo.Services
         public int Recorded { get; set; }
         public int IgnoredRecords { get; set; }
         public bool Active => StoreFound && StartedFrom.HasValue;
+        // When the background check last finished (null if it has not yet), and how many Scouts it found
+        public DateTime? ScannedAtUtc { get; set; }
+        public int Scouts { get; set; }
+    }
+
+    public class YearsOfServiceScanResult
+    {
+        public bool Skipped { get; set; }
+        // Stopped because a page needed Terrain; it will try again shortly
+        public bool Stopped { get; set; }
+        public int Units { get; set; }
+        public int Scouts { get; set; }
+        public string Problem { get; set; } = "";
     }
 
     public interface IYearsOfServiceService
@@ -30,12 +43,17 @@ namespace Topo.Services
         // from the store, because reading it briefly switches the group calendar on in Terrain.
         Task<bool> IsEnabledAsync();
         Task SetEnabledAsync(bool enabled);
-        // Reads the group's store (from a copy kept for a few minutes unless refresh is asked for)
+        // Whether the background check is due: turned on, and none has finished in the last day
+        Task<bool> IsScanDueAsync();
+        // The background check. Reads the group's store and each unit's records (one unit at a time, in gaps between the leader's own requests
+        // when pacing is given) and keeps what it finds; the pages read that, not Terrain.
+        Task<YearsOfServiceScanResult> ScanAsync(ICheckPacing? pacing);
+        // Where tracking stands, from the last check (or from Terrain itself when refresh is asked for)
         Task<YearsOfServiceStatus> StatusAsync(bool refresh = false);
         // The years of service to hand over for the unit's youth: the anniversaries passed since tracking started that the store has no record of.
-        // Empty when tracking has not been started, and when the store cannot be read.
+        // Worked out from the last check, with no call to Terrain. Empty until a check has run, and when tracking has not been started.
         Task<List<AwardRow>> PendingAsync(string unitId);
-        // The years of service the store holds a record of for the unit's youth
+        // The years of service the store held a record of at the last check, for the unit's youth
         Task<List<RecordedAward>> RecordedAsync(string unitId);
         // Records the years of service in the store as awarded and presented on a day, with the lower years each covers. A year already
         // recorded is skipped. The caller has already confirmed.
@@ -47,13 +65,10 @@ namespace Topo.Services
     }
 
     // Years of service badges, one for each year in each section (Model/YearsOfService). Terrain has nowhere to record them, so the records are
-    // kept in the group's badge store (docs/badge-store.md), and the list of what to hand over is worked out each time from Terrain's own
-    // records of when each member's service began.
+    // kept in the group's badge store (docs/badge-store.md). A background check, run with the Camper and Walkabout one, reads Terrain's own
+    // records of when each member's service began and the store; the pages then work out what to hand over from that.
     public class YearsOfServiceService : IYearsOfServiceService
     {
-        private static readonly TimeSpan StoreCacheFor = TimeSpan.FromMinutes(10);
-        private static readonly TimeSpan MembersCacheFor = TimeSpan.FromMinutes(30);
-
         private readonly StorageService _storageService;
         private readonly ITerrainAPIService _terrainAPIService;
         private readonly IMembersService _membersService;
@@ -62,44 +77,132 @@ namespace Topo.Services
 
         // The store is read one call at a time: reading it switches the group calendar on and puts it back
         private readonly SemaphoreSlim _storeGate = new SemaphoreSlim(1, 1);
-        private BadgeStoreContents? _store;
-        private string _storeProblem = "";
-        private DateTime _storeReadAt = DateTime.MinValue;
+        private YearsOfServiceScanCache? _cache;
+        private string _cacheGroup = "";
+        private bool? _enabled;
         private HashSet<string> _trusted = new HashSet<string>();
-        private readonly Dictionary<string, (List<ServiceMember> members, DateTime readAt)> _membersCache = new();
 
         public YearsOfServiceService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, IBadgeStoreService badgeStoreService, ILocalStorageService localStorage)
         {
-            _localStorage = localStorage;
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
             _membersService = membersService;
             _badgeStoreService = badgeStoreService;
+            _localStorage = localStorage;
         }
 
         private string EnabledKey => $"TopoYearsOfService:{GroupId}";
+        private string CacheKey => $"TopoYosScan:{GroupId}";
 
-        public async Task<bool> IsEnabledAsync() => !string.IsNullOrEmpty(GroupId) && await _localStorage.GetItemAsync<bool>(EnabledKey);
+        public async Task<bool> IsEnabledAsync()
+        {
+            if (string.IsNullOrEmpty(GroupId))
+            {
+                return false;
+            }
+            _enabled ??= await _localStorage.GetItemAsync<bool>(EnabledKey);
+            return _enabled.Value;
+        }
 
         public async Task SetEnabledAsync(bool enabled)
         {
+            _enabled = enabled;
             await _localStorage.SetItemAsync(EnabledKey, enabled);
-            _store = null;
+            // Turning it on starts afresh, so the first check is due at once
+            var cache = await LoadCacheAsync();
+            if (enabled)
+            {
+                cache.ScannedAtUtc = null;
+                cache.AttemptedAtUtc = null;
+                await SaveCacheAsync();
+            }
+        }
+
+        public async Task<bool> IsScanDueAsync() =>
+            await IsEnabledAsync() && YearsOfServiceSchedule.IsDue(await LoadCacheAsync(), true, DateTime.UtcNow);
+
+        public async Task<YearsOfServiceScanResult> ScanAsync(ICheckPacing? pacing)
+        {
+            var result = new YearsOfServiceScanResult();
+            if (!await IsEnabledAsync())
+            {
+                result.Skipped = true;
+                return result;
+            }
+            var cache = await LoadCacheAsync();
+            cache.AttemptedAtUtc = DateTime.UtcNow;
+            await SaveCacheAsync();
+            try
+            {
+                await WaitForGapAsync(pacing);
+                var store = await ReadStoreAsync();
+
+                var members = new List<ServiceMember>();
+                foreach (var unitId in _storageService.Units.Keys)
+                {
+                    if (SectionOf(unitId).Length == 0)
+                    {
+                        continue;
+                    }
+                    await WaitForGapAsync(pacing);
+                    members.AddRange(await ReadUnitAsync(unitId));
+                    result.Units++;
+                }
+
+                cache.Store = store;
+                cache.Members = members;
+                cache.ScannedAtUtc = DateTime.UtcNow;
+                cache.Problem = "";
+                result.Scouts = members.Count;
+            }
+            catch (OperationCanceledException)
+            {
+                result.Stopped = true;
+            }
+            catch (Exception ex)
+            {
+                cache.Problem = ex.Message;
+                result.Problem = ex.Message;
+            }
+            await SaveCacheAsync();
+            return result;
+        }
+
+        private static async Task WaitForGapAsync(ICheckPacing? pacing)
+        {
+            if (pacing != null)
+            {
+                await pacing.WaitForGapAsync();
+                pacing.ThrowIfPageNeedsTerrain();
+            }
         }
 
         public async Task<YearsOfServiceStatus> StatusAsync(bool refresh = false)
         {
-            var contents = await ReadStoreAsync(refresh);
-            if (contents == null)
+            var cache = await LoadCacheAsync();
+            if (refresh)
             {
-                return new YearsOfServiceStatus { Problem = _storeProblem };
+                try
+                {
+                    cache.Store = await ReadStoreAsync();
+                    cache.Problem = "";
+                    await SaveCacheAsync();
+                }
+                catch (Exception ex)
+                {
+                    return new YearsOfServiceStatus { Problem = ex.Message, ScannedAtUtc = cache.ScannedAtUtc, Scouts = cache.Members.Count };
+                }
             }
+            var contents = cache.Store;
             return new YearsOfServiceStatus
             {
-                StoreFound = contents.StoreEvents > 0,
-                StartedFrom = YearsOfServiceAwards.StartedFrom(contents, GroupId),
-                Recorded = YearsOfServiceAwards.RecordKeys(contents).Count,
-                IgnoredRecords = contents.IgnoredUntrustedAuthor + contents.IgnoredUnreadable + contents.IgnoredNewerVersion
+                StoreFound = contents != null && contents.StoreEvents > 0,
+                StartedFrom = contents == null ? null : YearsOfServiceAwards.StartedFrom(contents, GroupId),
+                Recorded = contents == null ? 0 : YearsOfServiceAwards.RecordKeys(contents).Count,
+                IgnoredRecords = contents == null ? 0 : contents.IgnoredUntrustedAuthor + contents.IgnoredUnreadable + contents.IgnoredNewerVersion,
+                Problem = cache.Problem,
+                ScannedAtUtc = cache.ScannedAtUtc,
+                Scouts = cache.Members.Count
             };
         }
 
@@ -109,13 +212,13 @@ namespace Topo.Services
             {
                 return new List<AwardRow>();
             }
-            var contents = await ReadStoreAsync(false);
-            var from = contents == null ? null : YearsOfServiceAwards.StartedFrom(contents, GroupId);
-            if (contents == null || contents.StoreEvents == 0 || from == null)
+            var cache = await LoadCacheAsync();
+            var from = cache.Store == null ? null : YearsOfServiceAwards.StartedFrom(cache.Store, GroupId);
+            if (cache.Store == null || cache.Store.StoreEvents == 0 || from == null)
             {
                 return new List<AwardRow>();
             }
-            return PendingFor(await MembersAsync(unitId), unitId, from.Value, contents);
+            return PendingFor(cache.Members, unitId, from.Value, cache.Store);
         }
 
         public async Task<List<RecordedAward>> RecordedAsync(string unitId)
@@ -124,35 +227,47 @@ namespace Topo.Services
             {
                 return new List<RecordedAward>();
             }
-            var contents = await ReadStoreAsync(false);
-            if (contents == null || contents.StoreEvents == 0)
+            var cache = await LoadCacheAsync();
+            if (cache.Store == null || cache.Store.StoreEvents == 0)
             {
                 return new List<RecordedAward>();
             }
-            return YearsOfServiceAwards.Recorded(contents, await MembersAsync(unitId));
+            return YearsOfServiceAwards.Recorded(cache.Store, cache.Members.Where(m => m.UnitId == unitId));
         }
 
         public async Task<AwardWriteSummary> PresentAsync(IEnumerable<AwardRow> rows, DateTime presented)
         {
             var summary = new AwardWriteSummary();
+            var cache = await LoadCacheAsync();
             // Read fresh just before writing, so a year a leader on another copy of Topo has just recorded is not recorded twice
-            var contents = await ReadStoreAsync(true);
-            var from = contents == null ? null : YearsOfServiceAwards.StartedFrom(contents, GroupId);
-            if (contents == null || contents.StoreEvents == 0 || from == null)
+            BadgeStoreContents contents;
+            try
             {
-                summary.Failures.Add(contents == null ? $"The years of service records could not be read. {_storeProblem}".Trim() : "Years of service tracking has not been started for the group.");
+                contents = await ReadStoreAsync();
+            }
+            catch (Exception ex)
+            {
+                summary.Failures.Add($"The years of service records could not be read. {ex.Message}".Trim());
+                return summary;
+            }
+            cache.Store = contents;
+            var from = YearsOfServiceAwards.StartedFrom(contents, GroupId);
+            if (contents.StoreEvents == 0 || from == null)
+            {
+                summary.Failures.Add("Years of service tracking has not been started for the group.");
                 return summary;
             }
 
             foreach (var unit in rows.Where(r => YearsOfServiceAwards.IsYearsOfService(r.AwardId)).GroupBy(r => r.UnitId))
             {
-                var pending = PendingFor(await MembersAsync(unit.Key), unit.Key, from.Value, contents);
+                var pending = PendingFor(cache.Members, unit.Key, from.Value, contents);
                 foreach (var row in unit)
                 {
                     // The years this one covers were not the badge handed over, so they are recorded the same day
                     foreach (var level in new[] { row }.Concat(AwardCheckRows.CoveredBy(row, pending)))
                     {
-                        var result = await _badgeStoreService.RecordAwardAsync(GetUser(), GroupId, level.MemberId, level.AwardId, (level.Earned ?? presented).Date, presented.Date, IsTrusted);
+                        var awarded = (level.Earned ?? presented).Date;
+                        var result = await _badgeStoreService.RecordAwardAsync(GetUser(), GroupId, level.MemberId, level.AwardId, awarded, presented.Date, IsTrusted);
                         if (result.Outcome == BadgeStoreWriteOutcome.AlreadyRecorded)
                         {
                             summary.Skipped++;
@@ -160,6 +275,8 @@ namespace Topo.Services
                         else if (result.Succeeded)
                         {
                             summary.Done++;
+                            // So the lists are right straight away, before the next check reads the store again
+                            Remember(contents, level.MemberId, level.AwardId, awarded, presented.Date);
                         }
                         else
                         {
@@ -168,65 +285,75 @@ namespace Topo.Services
                     }
                 }
             }
-            _store = null;
+            await SaveCacheAsync();
             return summary;
         }
 
         public async Task<BadgeStoreWriteResult> CreateStoreAsync()
         {
             var result = await _badgeStoreService.CreateStoreEventAsync(GetUser(), GetUserName(), GroupId);
-            _store = null;
+            if (result.Succeeded)
+            {
+                var cache = await LoadCacheAsync();
+                cache.Store ??= new BadgeStoreContents();
+                cache.Store.StoreEvents = Math.Max(1, cache.Store.StoreEvents);
+                await SaveCacheAsync();
+            }
             return result;
         }
 
         public async Task<BadgeStoreWriteResult> StartAsync(DateTime from)
         {
-            await ReadStoreAsync(true);
+            var cache = await LoadCacheAsync();
+            BadgeStoreContents current;
+            try
+            {
+                current = await ReadStoreAsync();
+            }
+            catch (Exception ex)
+            {
+                return new BadgeStoreWriteResult { Outcome = BadgeStoreWriteOutcome.Failed, Message = $"The records could not be read. {ex.Message}".Trim() };
+            }
+            cache.Store = current;
             var result = await _badgeStoreService.RecordAwardAsync(GetUser(), GroupId, GroupId, YearsOfServiceAwards.StartAwardId, from.Date, null, IsTrusted);
-            _store = null;
+            if (result.Succeeded)
+            {
+                Remember(current, GroupId, YearsOfServiceAwards.StartAwardId, from.Date, null);
+            }
+            await SaveCacheAsync();
             return result;
         }
 
-        private List<AwardRow> PendingFor(List<ServiceMember> members, string unitId, DateTime from, BadgeStoreContents contents)
+        // Puts a record just written into the kept copy of the store (the latest for a member and award wins)
+        private static void Remember(BadgeStoreContents contents, string memberId, string awardId, DateTime awarded, DateTime? presented)
+        {
+            contents.Records.RemoveAll(r => r.MemberId == memberId && r.AwardId == awardId);
+            contents.Records.Add(new BadgeStoreRecord { MemberId = memberId, AwardId = awardId, Awarded = awarded, Presented = presented, RecordedAt = DateTime.UtcNow });
+        }
+
+        private List<AwardRow> PendingFor(IEnumerable<ServiceMember> members, string unitId, DateTime from, BadgeStoreContents contents)
         {
             var section = SectionOf(unitId);
             if (section.Length == 0)
             {
                 return new List<AwardRow>();
             }
-            var reached = YearsOfServiceAwards.Reached(members, section, from, DateTime.Today);
+            var reached = YearsOfServiceAwards.Reached(members.Where(m => m.UnitId == unitId), section, from, DateTime.Today);
             return YearsOfServiceAwards.Pending(reached, YearsOfServiceAwards.RecordKeys(contents));
         }
 
-        // The group's store, or null when it could not be read (and why, in _storeProblem)
-        private async Task<BadgeStoreContents?> ReadStoreAsync(bool refresh)
+        // The group's store from Terrain, one read at a time. Throws when Terrain cannot be read.
+        private async Task<BadgeStoreContents> ReadStoreAsync()
         {
             await _storeGate.WaitAsync();
             try
             {
-                if (!refresh && _store != null && DateTime.UtcNow - _storeReadAt < StoreCacheFor)
-                {
-                    return _store;
-                }
                 if (string.IsNullOrEmpty(GroupId) || string.IsNullOrEmpty(GetUser()))
                 {
-                    _storeProblem = "Not signed in to a group.";
-                    return null;
+                    throw new InvalidOperationException("Not signed in to a group.");
                 }
-                try
-                {
-                    _trusted = await AdultLeaderIdsAsync();
-                    _store = await _badgeStoreService.ReadAsync(GetUser(), GroupId, IsTrusted);
-                    _storeProblem = "";
-                    _storeReadAt = DateTime.UtcNow;
-                    return _store;
-                }
-                catch (Exception ex)
-                {
-                    _store = null;
-                    _storeProblem = ex.Message;
-                    return null;
-                }
+                _trusted = await AdultLeaderIdsAsync();
+                return await _badgeStoreService.ReadAsync(GetUser(), GroupId, IsTrusted);
             }
             finally
             {
@@ -251,12 +378,8 @@ namespace Topo.Services
         }
 
         // The unit's youth and the day each one's service in the section began (from the whole unit's records, read once)
-        private async Task<List<ServiceMember>> MembersAsync(string unitId)
+        private async Task<List<ServiceMember>> ReadUnitAsync(string unitId)
         {
-            if (_membersCache.TryGetValue(unitId, out var cached) && DateTime.UtcNow - cached.readAt < MembersCacheFor)
-            {
-                return cached.members;
-            }
             var section = SectionOf(unitId);
             var unitName = _storageService.Units.TryGetValue(unitId, out var name) ? name : "";
             var milestonesRead = _terrainAPIService.GetUnitAchievementsOfType<GetMilestoneResultModel>(unitId, "milestone");
@@ -283,8 +406,27 @@ namespace Topo.Services
                     Start = firstEvent ?? introDate
                 });
             }
-            _membersCache[unitId] = (members, DateTime.UtcNow);
             return members;
+        }
+
+        private async Task<YearsOfServiceScanCache> LoadCacheAsync()
+        {
+            var group = GroupId;
+            if (_cache == null || _cacheGroup != group)
+            {
+                _cache = string.IsNullOrEmpty(group) ? new YearsOfServiceScanCache() : await _localStorage.GetItemAsync<YearsOfServiceScanCache>(CacheKey) ?? new YearsOfServiceScanCache();
+                _cacheGroup = group;
+                _enabled = null;
+            }
+            return _cache;
+        }
+
+        private async Task SaveCacheAsync()
+        {
+            if (_cache != null && !string.IsNullOrEmpty(GroupId))
+            {
+                await _localStorage.SetItemAsync(CacheKey, _cache);
+            }
         }
 
         private string GroupId => _storageService.GroupId ?? "";

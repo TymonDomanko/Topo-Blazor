@@ -146,3 +146,28 @@ namespace Topo.Model.YearsOfService
                 }).ToList();
     }
 }
+
+namespace Topo.Model.YearsOfService
+{
+    // What the last background check found, kept in the browser between visits so the pages need no calls to Terrain: where each member's
+    // service in their section began, and the group's store as it was then. What is to be handed over is worked out from it each time, against
+    // today's date, so an anniversary that arrives between checks is listed without waiting for the next one.
+    public class YearsOfServiceScanCache
+    {
+        public DateTime? ScannedAtUtc { get; set; }
+        public DateTime? AttemptedAtUtc { get; set; }
+        public List<ServiceMember> Members { get; set; } = new List<ServiceMember>();
+        // Null until the store has been read
+        public BadgeStoreContents? Store { get; set; }
+        // Why the last check could not finish, when it could not
+        public string Problem { get; set; } = "";
+    }
+
+    public static class YearsOfServiceSchedule
+    {
+        // A check runs about once a day while Topo is open, and again shortly after one that stopped or failed. The first one is due as soon as
+        // the leader has turned years of service on.
+        public static bool IsDue(YearsOfServiceScanCache cache, bool enabled, DateTime nowUtc) =>
+            AutoAwardSchedule.IsDue(new AutoAwardSettings { Enabled = enabled, LastRunUtc = cache.ScannedAtUtc, LastAttemptUtc = cache.AttemptedAtUtc }, nowUtc);
+    }
+}
