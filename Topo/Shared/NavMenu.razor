@@ -36,12 +36,7 @@
             {
                 foreach (var item in group.Items.Where(i => NavMenuItems.IsShownTo(i.Audience, viewer)))
                 {
-                    @NavLinkFor(item, false)
-                    @* pages that belong to this one sit indented beneath it *@
-                    foreach (var sub in (item.SubItems ?? Array.Empty<NavItem>()).Where(i => NavMenuItems.IsShownTo(i.Audience, viewer)))
-                    {
-                        @NavLinkFor(sub, true)
-                    }
+                    @NavLinkFor(item)
                 }
             }
         }
@@ -57,8 +52,8 @@
 @code {
     private bool collapseNavMenu = true;
 
-    // One link: an item of a group, or (sub) a page that belongs to the item above it
-    private RenderFragment NavLinkFor(NavItem item, bool sub) => @<div class="nav-item px-3@(sub ? " nav-sub" : "")">
+    // One link in the sidebar. A page's sub pages are not here: they show as tabs across the top of the page (NavTabs).
+    private RenderFragment NavLinkFor(NavItem item) => @<div class="nav-item px-3">
         @if (item.IsExternal)
         {
             <a class="nav-link" href="@item.Href" target="_blank" title="@item.TitleText(_storageService)"><span class="oi @item.Icon" aria-hidden="true"></span> <span class="nav-text">@item.TitleText(_storageService)</span></a>

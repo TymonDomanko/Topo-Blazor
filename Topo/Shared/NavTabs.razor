@@ -1,0 +1,22 @@
+@* The tabs across the top of a page that has sub pages (SIA and SIA Progress, Program Ideas and Proposed Activities ...), from the menu list in
+   NavMenuItems.cs, so a page's sub pages are listed in one place. Shows nothing on a page that has none. Each tab matches its own address
+   exactly, so the Program Ideas tab is not lit on Proposed Activities. *@
+@inject Topo.Services.StorageService _storageService
+@inject NavigationManager NavigationManager
+
+@if (Tabs.Count > 0)
+{
+    <ul class="nav nav-tabs mb-3">
+        @foreach (var tab in Tabs)
+        {
+            <li class="nav-item">
+                <NavLink class="nav-link" href="@tab.Href" Match="NavLinkMatch.All">@tab.Title</NavLink>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private IReadOnlyList<Topo.Shared.NavItem> Tabs =>
+        Topo.Shared.NavMenuItems.TabsFor(NavigationManager.ToBaseRelativePath(NavigationManager.Uri), Topo.Shared.NavMenuItems.AudienceFor(_storageService));
+}
