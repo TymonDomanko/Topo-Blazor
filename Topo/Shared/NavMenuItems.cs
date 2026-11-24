@@ -66,6 +66,7 @@ namespace Topo.Shared
             new("Badgework", NavAudience.Leader, new NavItem[]
             {
                 new("OAS", "oas", "oi-compass"),
+                new("OAS Progress", "oasprogress", "oi-task"),
                 new("SIA", "sia", "oi-clipboard"),
                 new("SIA Progress", "siaprogress", "oi-task"),
                 new("Milestone", "milestone", "oi-flag"),

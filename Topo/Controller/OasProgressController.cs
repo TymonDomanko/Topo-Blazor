@@ -12,7 +12,7 @@ using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class OASController : ComponentBase
+    public class OasProgressController : ComponentBase
     {
         [Inject]
         public StorageService _storageService { get; set; }
