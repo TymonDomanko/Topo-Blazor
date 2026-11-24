@@ -184,7 +184,9 @@ namespace Topo.Model.Milestone
         public static bool RequirementMet(MilestoneProgressRecord record)
         {
             if (record.RequirementStatus != "")
+            {
                 return record.RequirementStatus == "complete";
+            }
             var target = MilestoneTargets.Participates(record.Stage);
             var p = record.Participant;
             return new[] { p.Community, p.Outdoors, p.Creative, p.PersonalGrowth }.All(c => c >= target) && Leads(record) >= MilestoneTargets.Leads(record.Stage);
@@ -212,10 +214,14 @@ namespace Topo.Model.Milestone
                 {
                     var record = RecordFor(input.Records, member.MemberId, input.Section, stage);
                     if (record == null)
+                    {
                         continue;
+                    }
                     report.ScoutsWithTheMilestone++;
                     if (input.OnlyReady && !IsReady(record))
+                    {
                         continue;
+                    }
                     report.Pages.Add(PageFor(member, names[member], record, input));
                 }
             return report;
@@ -250,9 +256,13 @@ namespace Topo.Model.Milestone
             var wrote = record.Answers.Any(x => !string.IsNullOrWhiteSpace(x.Value) && !IsHousekeeping(x.Key) && EventReviewKind(x.Key, out _) == "");
             MilestoneForm? form = null;
             if (wrote && record.FormKey != "")
+            {
                 input.Forms.TryGetValue(record.FormKey, out form);
+            }
             if (form == null)
+            {
                 input.Forms.TryGetValue(LatestKey(input.Section, record.Stage), out form);
+            }
 
             var eventNames = record.Events.Where(e => e.EventId != "").GroupBy(e => e.EventId).ToDictionary(g => g.Key, g => g.First().EventName);
             var asked = new HashSet<string>();
@@ -273,7 +283,9 @@ namespace Topo.Model.Milestone
                     });
                 }
                 else
+                {
                     page.Form.Add(new MilestoneFormEntry { Question = question.Label, Answer = raw, Blank = raw == "" });
+                }
             }
             foreach (var answer in record.Answers.OrderBy(a => a.Key, StringComparer.Ordinal))
             {
@@ -281,11 +293,13 @@ namespace Topo.Model.Milestone
                 if (kind != "")
                 {
                     if (!string.IsNullOrWhiteSpace(answer.Value))
+                    {
                         page.EventReviews.Add(new MilestoneReviewAnswer
                         {
                             Question = $"{kind}: {(eventNames.TryGetValue(eventId, out var eventName) ? eventName : "an event")}",
                             Answer = answer.Value.Trim()
                         });
+                    }
                 }
                 else if (form == null && !asked.Contains(answer.Key) && !string.IsNullOrWhiteSpace(answer.Value) && !IsHousekeeping(answer.Key))
                 {
@@ -344,7 +358,9 @@ namespace Topo.Model.Milestone
             {
                 using var document = JsonDocument.Parse(json);
                 if (document.RootElement.ValueKind != JsonValueKind.Object || !document.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
+                {
                     return records;
+                }
                 foreach (var item in results.EnumerateArray())
                 {
                     var record = new MilestoneProgressRecord
@@ -360,7 +376,9 @@ namespace Topo.Model.Milestone
                         Stage = item.TryGetProperty("achievement_meta", out var meta) ? Number(meta, "stage") : 0
                     };
                     if (DateTime.TryParse(Text(item, "status_updated"), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var updated))
+                    {
                         record.StatusUpdated = ReportDate.ForReport(updated);
+                    }
                     if (item.TryGetProperty("event_count", out var counts) && counts.ValueKind == JsonValueKind.Object)
                     {
                         record.Participant = Counts(counts, "participant");
@@ -368,6 +386,7 @@ namespace Topo.Model.Milestone
                         record.Leader = Counts(counts, "leader");
                     }
                     if (item.TryGetProperty("event_log", out var log) && log.ValueKind == JsonValueKind.Array)
+                    {
                         foreach (var entry in log.EnumerateArray())
                         {
                             var credit = new MilestoneEventCredit
@@ -378,9 +397,12 @@ namespace Topo.Model.Milestone
                                 EventName = Text(entry, "event_name")
                             };
                             if (DateTime.TryParse(Text(entry, "event_start_datetime"), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var start))
+                            {
                                 credit.Date = ReportDate.ForReport(start);
+                            }
                             record.Events.Add(credit);
                         }
+                    }
                     records.Add(record);
                 }
             }
@@ -394,7 +416,9 @@ namespace Topo.Model.Milestone
         {
             var result = new MilestoneAreaCounts();
             if (!counts.TryGetProperty(name, out var area) || area.ValueKind != JsonValueKind.Object)
+            {
                 return result;
+            }
             result.Community = Number(area, "community");
             result.Outdoors = Number(area, "outdoors");
             result.Creative = Number(area, "creative");
@@ -407,7 +431,9 @@ namespace Topo.Model.Milestone
         {
             var values = new Dictionary<string, string>();
             if (!item.TryGetProperty("answers", out var answers) || answers.ValueKind != JsonValueKind.Object)
+            {
                 return values;
+            }
             foreach (var property in answers.EnumerateObject())
                 switch (property.Value.ValueKind)
                 {

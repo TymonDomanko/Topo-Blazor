@@ -53,7 +53,9 @@ namespace Topo.Controller
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             if (!string.IsNullOrEmpty(_storageService.UnitId))
+            {
                 await UnitChange(_storageService.UnitId);
+            }
         }
 
         internal async Task UnitChange(ChangeEventArgs e) => await UnitChange(e.Value?.ToString() ?? "");
@@ -86,7 +88,9 @@ namespace Topo.Controller
                 // The Unit Leader, Patrol Leaders and Assistant Patrol Leaders are youth; the unit is listed in the order the reports use
                 var youth = ReadyToSubmitBuilder.InPatrolOrder((await _membersService.GetMembersAsync(unitId)).Where(m => m.isAdultLeader == 0).ToList());
                 if (loadId != _loadId)
+                {
                     return;
+                }
                 if (youth.Count == 0)
                 {
                     NoYouth = true;
@@ -95,7 +99,9 @@ namespace Topo.Controller
                 var data = await _milestoneProgressService.LoadAsync(unitId, _storageService.Section,
                     step => { if (loadId == _loadId) { Progress = step; InvokeAsync(StateHasChanged); } }, token);
                 if (loadId != _loadId)
+                {
                     return;
+                }
                 _members = youth.Select(m => new MilestoneProgressMember { MemberId = m.id, FirstName = m.first_name, LastName = m.last_name, Patrol = m.patrol_name }).ToList();
                 _data = data;
                 Recalculate();
@@ -106,7 +112,9 @@ namespace Topo.Controller
             catch (Exception)
             {
                 if (loadId == _loadId)
+                {
                     model.ErrorMessage = "Couldn't read the milestones from Terrain.";
+                }
             }
             finally
             {
@@ -126,12 +134,16 @@ namespace Topo.Controller
             get
             {
                 if (Report == null)
+                {
                     return "";
+                }
                 var all = Report.Stage == MilestoneProgressBuilder.AllMilestones;
                 if (Report.Pages.Count == 0)
+                {
                     return Report.OnlyReady
                         ? $"No Scouts are ready for {Which} yet. Untick the box above to see them all ({Report.ScoutsWithTheMilestone})."
                         : $"No Scouts have a record for {Which}.";
+                }
                 return all
                     ? $"{Report.Pages.Count} of the {Report.ScoutsWithTheMilestone} milestones the Scouts have, across Milestones 1, 2 and 3."
                     : $"{Report.Pages.Count} of {Report.ScoutsWithTheMilestone} {(Report.ScoutsWithTheMilestone == 1 ? "Scout" : "Scouts")} with Milestone {Report.Stage}.";
@@ -150,7 +162,9 @@ namespace Topo.Controller
         private void Recalculate()
         {
             if (_members == null || _data == null)
+            {
                 return;
+            }
             Report = MilestoneProgressBuilder.Build(new MilestoneProgressInput
             {
                 UnitName = _storageService.UnitName ?? "",
@@ -173,7 +187,9 @@ namespace Topo.Controller
         private async Task Download(OutputType outputType, string extension, string contentType)
         {
             if (Report == null || Report.Pages.Count == 0)
+            {
                 return;
+            }
             try
             {
                 var groupName = _storageService.GroupName ?? "";
