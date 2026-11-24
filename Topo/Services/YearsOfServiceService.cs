@@ -394,7 +394,7 @@ namespace Topo.Services
                 {
                     throw new InvalidOperationException("Not signed in to a group.");
                 }
-                _trusted = await AdultLeaderIdsAsync();
+                _trusted = await TrustedLeaders.AdultLeaderIdsAsync(_storageService, _membersService);
                 return await _badgeStoreService.ReadAsync(GetUser(), GroupId, IsTrusted);
             }
             finally
@@ -405,19 +405,6 @@ namespace Topo.Services
 
         // The store event can be opened by everyone in the group, so only a record written by an adult leader of one of the leader's units counts
         private bool IsTrusted(string memberId) => memberId == GetUser() || _trusted.Contains(memberId);
-
-        private async Task<HashSet<string>> AdultLeaderIdsAsync()
-        {
-            var ids = new HashSet<string>();
-            foreach (var unitId in _storageService.Units.Keys)
-            {
-                foreach (var member in (await _membersService.GetMembersAsync(unitId)).Where(m => m.isAdultLeader == 1))
-                {
-                    ids.Add(member.id);
-                }
-            }
-            return ids;
-        }
 
         // The unit's youth and the day each one's service in the section began (from the whole unit's records, read once)
         private async Task<List<ServiceMember>> ReadUnitAsync(string unitId)

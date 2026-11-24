@@ -23,7 +23,7 @@ namespace Topo.Model.UnitReport
                 .OrderBy(a => a.family.Length > 0 ? a.family : a.Key, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(a => a.threshold)
                 .ThenBy(a => a.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(a => new UnitBadgeCount { Name = a.Key, Count = a.Value })
+                .Select(a => new UnitBadgeCount { Name = a.Key, Count = a.Value, Id = idByName.TryGetValue(a.Key, out var awardId) ? awardId : "" })
                 .ToList();
     }
 }

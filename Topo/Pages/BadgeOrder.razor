@@ -1,0 +1,126 @@
+@page "/badgeorder"
+@inherits Controller.BadgeOrderController
+@using Topo.Model.BadgeOrder
+
+<PageTitle>Topo / Badge Order</PageTitle>
+
+<div class="mt-3 mb-3 row">
+    <h2>Badge Order @GroupName</h2>
+</div>
+
+<p class="text-muted">The badges the group has awarded since its last order, ready to put in a cart at the national Scout Shop. It counts what was awarded
+    (and presented, for years of service) in every unit, the same way as the Section/Group Report.</p>
+
+@if (Status != null && !string.IsNullOrEmpty(Status.Problem))
+{
+    <div class="text-danger mb-3" id="status-problem">The date of the last order could not be read from Terrain: @Status.Problem</div>
+}
+else if (Status != null && !Status.StoreFound)
+{
+    <div class="alert alert-warning" id="no-store">The group has no records event in Terrain yet, so the day of the last order can't be kept and "Mark order placed" is not available.
+        Create it in <a href="settings">Settings</a>, under Years of service.</div>
+}
+
+<div class="card mb-3" id="since">
+    <div class="card-body">
+        @if (HasLastOrder && !ChangingDate)
+        {
+            <div class="d-flex align-items-center gap-3">
+                <div><strong>Counting from the last order, @Status!.LastOrder!.Value.ToString("dd/MM/yyyy")</strong></div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="change-date" @onclick="ChangeDateClick">Change date</button>
+            </div>
+        }
+        else
+        {
+            @if (!HasLastOrder)
+            {
+                <div class="fw-bold mb-1">No order recorded yet</div>
+                <div class="text-muted small mb-2">Choose the day to count awarded badges from. Topo remembers the day once you mark an order as placed.</div>
+            }
+            <div class="d-flex align-items-center gap-2">
+                <label for="from-date" class="mb-0">Count from</label>
+                <input type="date" id="from-date" class="form-control form-control-sm" style="max-width: 11rem" @bind="From" @bind:format="yyyy-MM-dd" />
+            </div>
+        }
+        <div class="mt-2 d-flex align-items-center gap-3">
+            <button type="button" class="btn btn-primary btn-sm" id="show" @onclick="ShowBadgesClick" disabled="@Loading">Show badges</button>
+            <span class="text-muted small">Units: @string.Join(", ", UnitNames)</span>
+        </div>
+    </div>
+</div>
+
+<PageStatus Loading="Loading" Progress="@Progress" Error="@Error" />
+
+@if (Lines != null)
+{
+    @if (Lines.Count == 0)
+    {
+        <div class="mb-3" id="nothing">Nothing has been awarded since @LinesFrom.ToString("dd/MM/yyyy"), so there is nothing to order.</div>
+    }
+    else
+    {
+        <div class="card mb-3" id="lines">
+            @foreach (var group in Lines.GroupBy(l => l.Group))
+            {
+                <div class="bg-light px-3 py-1 small fw-bold text-muted border-top">@group.Key</div>
+                @foreach (var line in group)
+                {
+                    <div class="d-flex align-items-center gap-3 px-3 py-1 border-top">
+                        <div class="flex-grow-1">@line.Name</div>
+                        <div class="text-end small" style="min-width: 14rem">
+                            @if (line.InShop)
+                            {
+                                <span class="text-muted">$@line.Shop!.Price.ToString("0.00") each</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning text-dark">Not in the shop, order by hand</span>
+                            }
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" aria-label="Fewer" @onclick="() => Change(line, -1)">-</button>
+                            <span class="text-center fw-bold" style="min-width: 1.75rem">@line.Count</span>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" aria-label="More" @onclick="() => Change(line, 1)">+</button>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="d-flex justify-content-between mb-2" id="summary">
+            <span>@InShopCount @(InShopCount == 1 ? "badge" : "badges") for the cart@(ByHandCount > 0 ? $", {ByHandCount} to order by hand" : "")</span>
+            <strong>About $@Total.ToString("0.00") at RRP</strong>
+        </div>
+
+        <div class="alert alert-warning py-2" id="signin-note">Sign in to the Scout Shop first, with your Scout Shop account. Some badges can only be bought by an adult leader.
+            The cart link works either way, but checkout may refuse leader-only badges until you are signed in.</div>
+
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            @{
+                var links = CartLinks;
+            }
+            @for (var i = 0; i < links.Count; i++)
+            {
+                <a class="btn btn-dark" id="@("open-" + i)" href="@links[i]" target="_blank" rel="noopener">@(links.Count == 1 ? "Open in Scout Shop" : $"Open in Scout Shop ({i + 1} of {links.Count})")</a>
+            }
+            <button type="button" class="btn btn-outline-secondary" id="copy" @onclick="CopyClick">Copy list</button>
+            <button type="button" class="btn btn-outline-secondary" id="placed" @onclick="MarkPlacedClick" disabled="@(Busy || Status == null || !Status.StoreFound)">Mark order placed</button>
+        </div>
+
+        @if (ConfirmPlaced)
+        {
+            <div class="card border-warning mt-3" id="confirm">
+                <div class="card-body">
+                    <p class="mb-2">Record @DateTime.Today.ToString("dd/MM/yyyy") as the day of the last order? The next order will count badges awarded from that day. This adds a record to the group's records event in Terrain.</p>
+                    <button type="button" class="btn btn-warning" id="confirm-yes" @onclick="ConfirmPlacedClick" disabled="@Busy">Yes, record it</button>
+                    <button type="button" class="btn btn-outline-secondary" id="confirm-cancel" @onclick="CancelPlacedClick" disabled="@Busy">Cancel</button>
+                </div>
+            </div>
+        }
+    }
+}
+
+@if (!string.IsNullOrEmpty(Message))
+{
+    <div class="mt-3 @(MessageIsError ? "text-danger" : "text-muted")" id="message">@Message</div>
+}
