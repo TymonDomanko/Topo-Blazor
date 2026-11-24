@@ -110,22 +110,6 @@
         line-height: 3rem;
     }
 
-/* A page that belongs to the one above it (SIA Progress under SIA) sits indented under it, a little smaller */
-.nav-sub {
-    padding-bottom: 0.25rem;
-}
-
-.nav-sub:first-of-type {
-    padding-top: 0;
-}
-
-.nav-item.nav-sub ::deep a {
-    height: 2.4rem;
-    line-height: 2.4rem;
-    padding-left: 1.5rem;
-    font-size: 0.85rem;
-}
-
 /* A long name (Section/Group Report) wraps onto two lines, so its lines sit close together and stay centred beside the icon
    instead of each taking the link's full 3rem line height */
 .nav-text {
@@ -197,10 +181,6 @@
     justify-content: center;
 }
 
-/* In icon mode there is no room to indent, so a sub page is just its own icon under its page's */
-.icon-only .nav-item.nav-sub ::deep a {
-    padding-left: 0;
-}
 
 /* The bar is only 4rem wide and the scrollbar's gutters take 20px of it, so the usual 1rem each side would leave the icon
    less room than its own width and push it off centre */

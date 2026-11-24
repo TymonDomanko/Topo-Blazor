@@ -18,7 +18,8 @@ namespace Topo.Shared
     // One link in the menu. Icon is an Open Iconic class (oi-home). A link whose Href starts with http opens in a new tab.
     // ActivePrefix keeps the link highlighted on any page whose path starts with it (Scouting History has two pages).
     // TitleFor replaces Title when the text depends on state (Enable Logging / Stop Logging).
-    // SubItems are pages that belong to this one (SIA Progress under SIA): shown indented beneath it, one level deep.
+    // SubItems are pages that belong to this one (SIA Progress under SIA), one level deep. They are not in the sidebar: they show as tabs
+    // across the top of this page and of each other (the NavTabs component).
     public record NavItem(
         string Title,
         string Href,
@@ -110,6 +111,26 @@ namespace Topo.Shared
                     TitleFor: storage => storage.LogToQueue ? "Stop Logging" : "Enable Logging"),
             }, OpenByDefault: false),
         };
+
+        // The tabs to show across the top of a page that has sub pages: the page and its sub pages, in the menu's order, when the path (such as
+        // "oas" or "programideas/proposed") is one of them. Empty for any other page. Only links the viewer is shown count, so a Scout on SIA
+        // Progress (a top level link for them) gets no tabs.
+        public static IReadOnlyList<NavItem> TabsFor(string path, NavAudience viewer)
+        {
+            var wanted = (path ?? "").Split('?', '#')[0].Trim('/');
+            foreach (var group in Groups.Where(g => IsShownTo(g.Audience, viewer)))
+            {
+                foreach (var item in group.Items.Where(i => IsShownTo(i.Audience, viewer) && i.SubItems is { Count: > 0 }))
+                {
+                    var tabs = new[] { item }.Concat(item.SubItems!.Where(s => IsShownTo(s.Audience, viewer))).ToList();
+                    if (tabs.Any(t => string.Equals(t.Href.Trim('/'), wanted, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return tabs;
+                    }
+                }
+            }
+            return Array.Empty<NavItem>();
+        }
 
         // The audience the current user belongs to
         public static NavAudience AudienceFor(StorageService storage) =>
