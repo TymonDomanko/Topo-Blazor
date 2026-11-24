@@ -7,7 +7,7 @@
 {
     <div class="scout-page">
         <div class="scout-heading">
-            <h4 class="mb-0">@scout.Name</h4>
+            <h4 class="mb-0">@scout.Name@(Report.Stage == MilestoneProgressBuilder.AllMilestones ? $" - Milestone {scout.Stage}" : "")</h4>
             <span class="status @(scout.Ready ? "ready" : "")">@scout.Status</span>
             @if (scout.Patrol != "")
             {

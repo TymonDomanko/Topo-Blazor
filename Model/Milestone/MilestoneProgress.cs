@@ -87,6 +87,8 @@ namespace Topo.Model.Milestone
         public string MemberId { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string Patrol { get; set; } = string.Empty;
+        // The milestone the page is for, 1 to 3
+        public int Stage { get; set; }
         // In words: Ready, In progress, Review drafted, In review, Approved, Awarded
         public string Status { get; set; } = string.Empty;
         // The Participates and Leads are in and the milestone is not awarded yet
@@ -104,11 +106,13 @@ namespace Topo.Model.Milestone
     {
         public string UnitName { get; set; } = string.Empty;
         public string Section { get; set; } = string.Empty;
+        // 1 to 3, or MilestoneProgressBuilder.AllMilestones for all three
         public int Stage { get; set; }
         public DateTime GeneratedAt { get; set; }
         public bool OnlyReady { get; set; }
+        // In order of milestone, then in the order the unit is listed
         public List<MilestoneScoutPage> Pages { get; set; } = new List<MilestoneScoutPage>();
-        // How many Scouts have a record for the milestone, so the page can say how many were left out
+        // How many Scouts' milestones there are to choose from (a Scout with all three counts three), so the page can say how many were left out
         public int ScoutsWithTheMilestone { get; set; }
     }
 
@@ -124,6 +128,7 @@ namespace Topo.Model.Milestone
     {
         public string UnitName { get; set; } = string.Empty;
         public string Section { get; set; } = string.Empty;
+        // 1 to 3, or MilestoneProgressBuilder.AllMilestones
         public int Stage { get; set; }
         // Only the Scouts whose Participates and Leads are in and whose milestone is not awarded yet
         public bool OnlyReady { get; set; } = true;
@@ -139,6 +144,11 @@ namespace Topo.Model.Milestone
 
     public static class MilestoneProgressBuilder
     {
+        // The choice of every milestone: a page for each Scout for each of the three
+        public const int AllMilestones = 0;
+
+        public static readonly int[] Milestones = { 1, 2, 3 };
+
         // The one record to use for a Scout's milestone: one that is awarded beats one that is not, then the latest change
         public static MilestoneProgressRecord? RecordFor(IEnumerable<MilestoneProgressRecord> records, string memberId, string section, int stage) =>
             records
@@ -175,16 +185,18 @@ namespace Topo.Model.Milestone
                 OnlyReady = input.OnlyReady
             };
             var names = MemberNames.GetDisplayNames(input.Members, m => m.FirstName, m => m.LastName, input.UseFullNames);
-            foreach (var member in input.Members)
-            {
-                var record = RecordFor(input.Records, member.MemberId, input.Section, input.Stage);
-                if (record == null)
-                    continue;
-                report.ScoutsWithTheMilestone++;
-                if (input.OnlyReady && !IsReady(record))
-                    continue;
-                report.Pages.Add(PageFor(member, names[member], record, input));
-            }
+            // one milestone, or all three in turn so the pages for Milestone 1 come first
+            foreach (var stage in input.Stage == AllMilestones ? Milestones : new[] { input.Stage })
+                foreach (var member in input.Members)
+                {
+                    var record = RecordFor(input.Records, member.MemberId, input.Section, stage);
+                    if (record == null)
+                        continue;
+                    report.ScoutsWithTheMilestone++;
+                    if (input.OnlyReady && !IsReady(record))
+                        continue;
+                    report.Pages.Add(PageFor(member, names[member], record, input));
+                }
             return report;
         }
 
@@ -198,6 +210,7 @@ namespace Topo.Model.Milestone
                 MemberId = member.MemberId,
                 Name = name,
                 Patrol = member.Patrol,
+                Stage = record.Stage,
                 Ready = IsReady(record),
                 Status = StatusText(record),
                 Areas = new List<MilestoneAreaProgress>
