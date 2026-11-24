@@ -510,6 +510,15 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public void ToBePresentedIgnoresTheDateRangeSoAnOlderApprovalStillShows()
+        {
+            var rows = ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 11, 24), new DateTime(2026, 11, 24), true, false, true);
+            Assert.AreEqual(1, rows.Count(r => r.achievement_name == "OAS Camping 2"), "approved in October, still not presented");
+            Assert.AreEqual(3, rows.Count(r => r.achievement_type == "additional_award"));
+            Assert.AreEqual(0, ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 11, 24), new DateTime(2026, 11, 24), false, false, true).Count(r => r.achievement_type != "additional_award"), "unticked, the range still applies");
+        }
+
+        [TestMethod]
         public void HasBeenPresentedLeavesOutTheBadgesStillToHandOver()
         {
             var rows = ApprovalsFilter.Apply(Mixed(), new DateTime(2026, 6, 1), new DateTime(2026, 10, 31), false, true, true);
