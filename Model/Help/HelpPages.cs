@@ -69,10 +69,14 @@ namespace Topo.Model.Help
         {
             var key = Normalise(path);
             if (Pages.TryGetValue(key, out var page))
+            {
                 return page;
+            }
             foreach (var (prefix, prefixPage) in Prefixes)
                 if (key.Length > prefix.Length && key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
                     return prefixPage;
+                }
             return null;
         }
 
@@ -87,7 +91,9 @@ namespace Topo.Model.Help
             var key = path ?? "";
             var cut = key.IndexOfAny(new[] { '?', '#' });
             if (cut >= 0)
+            {
                 key = key.Substring(0, cut);
+            }
             return key.Trim().Trim('/');
         }
     }
