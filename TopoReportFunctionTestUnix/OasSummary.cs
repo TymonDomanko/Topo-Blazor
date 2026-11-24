@@ -242,7 +242,7 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
-        public void TheReportTravelsToTheFunctionAsItWasBuiltAndItsTypeIsLastSoOtherNumbersDoNotMove()
+        public void TheReportTravelsToTheFunctionAsItWasBuiltAndItsTypeComesAfterTheExistingOnesSoTheirNumbersDoNotMove()
         {
             var report = ReportOf(new OasSummarySheet { Patrol = "Eagles", Rows = { RowWith("Amy", 0, 2, 3, OasWorking.InReview) } });
             var back = Newtonsoft.Json.JsonConvert.DeserializeObject<OasSummaryReport>(Newtonsoft.Json.JsonConvert.SerializeObject(report))!;
@@ -250,7 +250,7 @@ namespace TopoReportFunctionTest
             Assert.AreEqual(OasWorking.InReview, back.Sheets.Single().Rows.Single().Cells[0].State);
             Assert.AreEqual(3, back.Sheets.Single().Rows.Single().Cells[0].Working);
             var types = Enum.GetValues<Topo.Model.ReportGeneration.ReportType>();
-            Assert.AreEqual(Topo.Model.ReportGeneration.ReportType.OasSummary, types[^1]);
+            Assert.IsTrue(Array.IndexOf(types, Topo.Model.ReportGeneration.ReportType.OasSummary) > Array.IndexOf(types, Topo.Model.ReportGeneration.ReportType.ReadyToSubmit), "added after the types that already existed");
             Assert.AreEqual(21, Array.IndexOf(types, Topo.Model.ReportGeneration.ReportType.ReadyToSubmit), "the number the deployed function knows it by");
         }
 
