@@ -53,9 +53,13 @@ namespace Topo.Model.BadgeStore
                 {
                     // A well formed record of a newer version is counted apart from a comment that is not a record at all
                     if (version > BadgeStoreSpec.SchemaVersion)
+                    {
                         contents.IgnoredNewerVersion++;
+                    }
                     else
+                    {
                         contents.IgnoredUnreadable++;
+                    }
                     continue;
                 }
                 if (!isTrustedAuthor(comment.member.id))
@@ -92,7 +96,9 @@ namespace Topo.Model.BadgeStore
         {
             var text = $"{{\"v\":{BadgeStoreSpec.SchemaVersion},\"t\":\"award\",\"m\":{Quote(memberId)},\"a\":{Quote(awardId)},\"d\":\"{awarded.ToString(DateFormat, CultureInfo.InvariantCulture)}\"";
             if (presented.HasValue)
+            {
                 text += $",\"p\":\"{presented.Value.ToString(DateFormat, CultureInfo.InvariantCulture)}\"";
+            }
             return text + "}";
         }
 
@@ -112,26 +118,40 @@ namespace Topo.Model.BadgeStore
                 using var doc = JsonDocument.Parse(text);
                 var root = doc.RootElement;
                 if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("v", out var v) || v.ValueKind != JsonValueKind.Number || !v.TryGetInt32(out version))
+                {
                     return false;
+                }
                 // A newer version may mean something different by the same fields, so it is not read at all
                 if (version != BadgeStoreSpec.SchemaVersion)
+                {
                     return false;
+                }
                 kind = Text(root, "t");
                 member = Text(root, "m");
                 award = Text(root, "a");
                 if (member.Length == 0 || award.Length == 0)
+                {
                     return false;
+                }
                 if (kind == "revoke")
+                {
                     return true;
+                }
                 if (kind != "award")
+                {
                     return false;
+                }
                 if (!DateTime.TryParseExact(Text(root, "d"), DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out awarded))
+                {
                     return false;
+                }
                 var p = Text(root, "p");
                 if (p.Length > 0)
                 {
                     if (!DateTime.TryParseExact(p, DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var presentedDate))
+                    {
                         return false;
+                    }
                     presented = presentedDate;
                 }
                 return true;

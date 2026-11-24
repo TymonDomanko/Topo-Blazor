@@ -597,7 +597,9 @@ namespace Topo.Services
         {
             var httpRequest = new HttpRequestMessage(httpMethod, requestUri);
             if (!string.IsNullOrEmpty(jsonBody))
+            {
                 httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+            }
             httpRequest.Headers.Add("authorization", _storageService?.AuthenticationResult?.IdToken);
             httpRequest.Headers.Add("accept", "application/json, text/plain, */*");
             try

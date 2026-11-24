@@ -15,7 +15,9 @@ namespace Topo.Model.BadgeStore
             var group = original.own_calendars.FirstOrDefault(c => c.type == "group" && c.id == groupId)
                         ?? original.own_calendars.FirstOrDefault(c => c.id == groupId);
             if (group == null || group.selected)
+            {
                 return null;
+            }
 
             var copy = JsonSerializer.Deserialize<GetCalendarsResultModel>(JsonSerializer.Serialize(original))!;
             var copyGroup = copy.own_calendars.First(c => c.id == group.id);
