@@ -2418,6 +2418,8 @@ namespace Topo.Services
                 sheet.SetRowHeight(rowNumber, 30);
                 sheet.Range[rowNumber, 1, rowNumber, lastColumn].BorderAround();
                 sheet.Range[rowNumber, 1, rowNumber, lastColumn].BorderInside();
+                // the names and every heading row stay in view as the sheet is scrolled
+                sheet.Range[rowNumber + 1, 2].FreezePanes();
 
                 foreach (var row in oasSheet.Rows)
                 {
