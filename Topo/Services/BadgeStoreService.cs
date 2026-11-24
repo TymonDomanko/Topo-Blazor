@@ -1,3 +1,4 @@
+using Topo.Model.AdditionalAwards;
 using Newtonsoft.Json;
 using Topo.Model.BadgeStore;
 using Topo.Model.Program;

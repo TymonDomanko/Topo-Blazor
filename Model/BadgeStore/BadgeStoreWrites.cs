@@ -1,3 +1,4 @@
+using Topo.Model.AdditionalAwards;
 using Topo.Model.Program;
 
 namespace Topo.Model.BadgeStore
@@ -27,15 +28,6 @@ namespace Topo.Model.BadgeStore
         public string EventId { get; set; } = "";
         public string CommentId { get; set; } = "";
         public bool Succeeded => Outcome != BadgeStoreWriteOutcome.Failed && Outcome != BadgeStoreWriteOutcome.NoStoreEvent;
-    }
-
-    // What a call that changes Terrain came back with. Terrain's rejections can carry no CORS header, so from a browser a
-    // failed write can arrive as no readable reply at all (StatusCode 0).
-    public class TerrainCallResult
-    {
-        public bool Success { get; set; }
-        public int StatusCode { get; set; }
-        public string Body { get; set; } = "";
     }
 
     // The decisions and request bodies for writing to the store, kept apart from the calls so they can be tested
