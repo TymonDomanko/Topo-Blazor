@@ -1,3 +1,5 @@
+using Topo.Model.YearsOfService;
+using Topo.Model.BadgeStore;
 using Topo.Model.History;
 using Topo.Model.Members;
 using Topo.Model.Program;
@@ -55,6 +57,9 @@ namespace Topo.Model.SectionReport
         public Dictionary<string, SectionMemberRecords> Records { get; set; } = new Dictionary<string, SectionMemberRecords>();
         public AdditionalAwardResults AdditionalAwards { get; set; } = new AdditionalAwardResults();
         public Dictionary<string, string> AwardNames { get; set; } = new Dictionary<string, string>();
+        // The years of service recorded in the group's store (Model/YearsOfService), for every member of the group. A year counts as awarded
+        // on the day it was presented, or the day awarded when that was not recorded, as an additional award does.
+        public List<BadgeStoreRecord> YearsOfService { get; set; } = new List<BadgeStoreRecord>();
         public List<UnitEventInput> Events { get; set; } = new List<UnitEventInput>();
         // The ids of every unit in the group, to tell a member from this group's younger section from one who joined from
         // another group. When empty, anyone with earlier records is taken to be from this group.
@@ -430,6 +435,19 @@ namespace Topo.Model.SectionReport
                     : ScoutingHistoryBuilder.Title(r.achievement_meta.additional_award_id);
                 awards[name] = awards.GetValueOrDefault(name) + 1;
                 awardIds[name] = r.achievement_meta.additional_award_id;
+            }
+
+            // Only the years of this section: a member who has moved up keeps the earlier section's records
+            foreach (var r in input.YearsOfService.Where(r => youthIds.Contains(r.MemberId)))
+            {
+                var day = (r.Presented ?? r.Awarded).Date;
+                if (!YearsOfServiceAwards.TryParse(r.AwardId, out var awardSection, out var years) || Key(awardSection) != section || day < input.From.Date || day > input.To.Date)
+                {
+                    continue;
+                }
+                var name = YearsOfServiceAwards.AwardName(awardSection, years);
+                awards[name] = awards.GetValueOrDefault(name) + 1;
+                awardIds[name] = r.AwardId;
             }
 
             model.Badges.OasProgressions = oasProgressions;

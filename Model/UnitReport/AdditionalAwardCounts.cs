@@ -12,6 +12,11 @@ namespace Topo.Model.UnitReport
                 .Select(a =>
                 {
                     var tier = idByName.TryGetValue(a.Key, out var id) ? CamperWalkaboutRules.Tiers(new[] { (id, a.Key) }).FirstOrDefault() : null;
+                    // The years of service of a section go in order of years too ("2 Years" before "10 Years")
+                    if (tier == null && id != null && Topo.Model.YearsOfService.YearsOfServiceAwards.TryParse(id, out var section, out var years))
+                    {
+                        return (a.Key, a.Value, family: "Years of Service " + section, threshold: years);
+                    }
                     return (a.Key, a.Value, family: tier?.Family ?? "", threshold: tier?.Threshold ?? 0);
                 })
                 // a Camper or Walkabout Award sorts as its family name ("camper", "walkabout") then its number; any other award as its own name

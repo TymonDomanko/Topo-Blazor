@@ -48,6 +48,9 @@ namespace Topo.Services
         // The background check. Reads the group's store and each unit's records (one unit at a time, in gaps between the leader's own requests
         // when pacing is given) and keeps what it finds; the pages read that, not Terrain.
         Task<YearsOfServiceScanResult> ScanAsync(ICheckPacing? pacing);
+        // The years of service recorded in the group's store, read from Terrain's calendar comments now, for a report. Nothing when it is not
+        // turned on or the group has no store; when Terrain cannot be read, what the last check kept.
+        Task<List<BadgeStoreRecord>> RecordsForReportAsync();
         // Where tracking stands, from the last check (or from Terrain itself when refresh is asked for)
         Task<YearsOfServiceStatus> StatusAsync(bool refresh = false);
         // The years of service to hand over for the unit's youth: the anniversaries passed since tracking started that the store has no record of.
@@ -175,6 +178,27 @@ namespace Topo.Services
                 await pacing.WaitForGapAsync();
                 pacing.ThrowIfPageNeedsTerrain();
             }
+        }
+
+        public async Task<List<BadgeStoreRecord>> RecordsForReportAsync()
+        {
+            if (!await IsEnabledAsync())
+            {
+                return new List<BadgeStoreRecord>();
+            }
+            var cache = await LoadCacheAsync();
+            try
+            {
+                cache.Store = await ReadStoreAsync();
+                await SaveCacheAsync();
+            }
+            catch (Exception)
+            {
+                // The report goes ahead with what the last check kept
+            }
+            return cache.Store == null
+                ? new List<BadgeStoreRecord>()
+                : cache.Store.Records.Where(r => YearsOfServiceAwards.IsYearsOfService(r.AwardId)).ToList();
         }
 
         public async Task<YearsOfServiceStatus> StatusAsync(bool refresh = false)
