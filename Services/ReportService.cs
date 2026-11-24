@@ -1550,10 +1550,10 @@ namespace Topo.Services
             var attendanceFirstColumn = infoFirstColumn + infoHeadings.Count;
             var lastColumn = attendanceFirstColumn + attendanceHeadings.Length - 1;
 
-            // Optional second block beside the main table (after a narrow spacer column): the person's
+            // Optional second block beside the main table: the person's
             // name again plus tick columns for how they took part in the activity.
             var participationHeadings = new[] { "Participate", "Lead" };
-            var participationNameColumn = lastColumn + 2;
+            var participationNameColumn = lastColumn + 1;
             var participationLastColumn = participationNameColumn + participationHeadings.Length;
 
             var workbook = CreateWorkbookWithLogo(groupName, section, lastColumn);
@@ -1698,8 +1698,7 @@ namespace Topo.Services
                 sheet.SetColumnWidth(c, tickColumnWidth);
             if (options.IncludeParticipationColumns)
             {
-                // autofit sizes the spacer and the sideways-headed tick columns badly
-                sheet.SetColumnWidth(lastColumn + 1, 3);
+                // autofit sizes the sideways-headed tick columns badly
                 sheet.SetColumnWidth(participationNameColumn, Math.Min(sheet.GetColumnWidth(participationNameColumn), nameColumnMaxWidth));
                 for (var c = participationNameColumn + 1; c <= participationLastColumn; c++)
                     sheet.SetColumnWidth(c, tickColumnWidth);
