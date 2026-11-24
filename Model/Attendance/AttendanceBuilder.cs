@@ -94,7 +94,9 @@ namespace Topo.Model.Attendance
             var events = Earlier.Concat(Events).ToList();
             var lastSeen = events.Where(e => e.Attended.Contains(key)).Select(e => (DateTime?)e.Start.Date).OrderByDescending(d => d).FirstOrDefault();
             if (lastSeen == null && joined == null)
+            {
                 return (null, null);
+            }
             var nights = events.Count(e => e.Kind == AttendanceKind.ScoutNight && (joined == null || e.Start.Date >= joined.Value) && (lastSeen == null || e.Start.Date > lastSeen.Value));
             return (nights, lastSeen);
         }
@@ -138,7 +140,9 @@ namespace Topo.Model.Attendance
 
             data.Events = ToEvents(counted, data.MeetingDay);
             if (input.EarlierEvents.Count > 0)
+            {
                 data.Earlier = ToEvents(Counted(input.EarlierEvents, DateTime.MinValue, input.From.Date.AddDays(-1), input.AsOf).Counted, data.MeetingDay);
+            }
             return data;
         }
 
@@ -153,13 +157,21 @@ namespace Topo.Model.Attendance
             {
                 var evt = item.Event;
                 if (!seen.Add(evt.id))
+                {
                     continue;
+                }
                 if (evt.start_datetime.Date < from.Date || evt.start_datetime.Date > to.Date || evt.start_datetime > asOf)
+                {
                     continue;
+                }
                 if (evt.status.Contains("cancel", StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
                 if (item.Scope == "patrol" || item.Scope == "member")
+                {
                     continue;
+                }
 
                 var attended = Attendees(evt);
                 if (attended.Count == 0)
@@ -194,12 +206,18 @@ namespace Topo.Model.Attendance
         public static AttendanceKind Classify(GetEventResultModel evt, DayOfWeek? meetingDay)
         {
             if (!IsSingleDay(evt))
+            {
                 return AttendanceKind.Camp;
+            }
             if (IsUnitCouncil(evt))
+            {
                 return AttendanceKind.UnitCouncil;
+            }
             // a hike on the meeting night is that week's Scout night
             if (meetingDay != null && evt.start_datetime.DayOfWeek == meetingDay)
+            {
                 return AttendanceKind.ScoutNight;
+            }
             return IsHike(evt) ? AttendanceKind.Hike : AttendanceKind.Other;
         }
 

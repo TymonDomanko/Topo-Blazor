@@ -85,22 +85,30 @@ namespace Topo.Services
                     {
                         var questions = ReadyParsers.ParseFormQuestions(json);
                         if (questions.Count > 0)
+                        {
                             _formTemplates[path] = questions;
+                        }
                     }
                     else
                     {
                         var inputs = ReadyParsers.ParseOasInputs(json);
                         if (inputs.Count > 0)
+                        {
                             _oasTemplates[path] = inputs;
+                        }
                     }
                 }
             }
             foreach (var path in formPaths)
                 if (_formTemplates.TryGetValue(path, out var known))
+                {
                     data.Templates.Forms[path] = known;
+                }
             foreach (var path in oasPaths)
                 if (_oasTemplates.TryGetValue(path, out var known))
+                {
                     data.Templates.OasInputs[path] = known;
+                }
             return data;
         }
     }
