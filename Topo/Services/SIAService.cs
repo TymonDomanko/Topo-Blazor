@@ -27,7 +27,9 @@ namespace Topo.Services
             var unitSiaProjects = new List<SIAProjectListModel>();
             // no one chosen, nothing to read
             if (selectedMembers.Count == 0)
+            {
                 return unitSiaProjects;
+            }
 
             // One read gives every Scout's projects, so the unit isn't read once per Scout. Every record carries its member_id,
             // so ToLookup hands back one Scout's projects (a Scout with none gets an empty list). The records include earlier
