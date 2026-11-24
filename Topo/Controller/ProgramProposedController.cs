@@ -35,11 +35,7 @@ namespace Topo.Controller
         private DateTime? _countedSince;
         public bool Loading = true;
         public bool FetchFailed;
-<<<<<<< HEAD
-        // No unit has been chosen (a leader of several units picks one on the Program page), so there is nothing to read
-=======
         // No unit has been chosen yet, so there is nothing to read
->>>>>>> program-unit-selectors
         public bool NoUnit;
         // Counts the reads, so one that finishes after a newer one was asked for does not replace its answer
         private int _loadNumber;
