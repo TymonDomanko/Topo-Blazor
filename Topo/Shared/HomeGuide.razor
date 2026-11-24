@@ -17,41 +17,61 @@
 @if (!IsYouthMember)
 {
     <div class="mb-3">
-        <h4>Badgework</h4>
+        <h4>Basecamp</h4>
         <p class="text-muted">Where Scouts are up to on their badges.</p>
-        <div class="row mb-1"><div class="col-sm-3"><NavLink href="oas">OAS</NavLink></div><div class="col-sm-9">See and print every Scout's Outdoor Adventure Skill stages: what is awarded and what they are working on.</div></div>
-        <div class="row mb-1"><div class="col-sm-3"><NavLink href="oasprogress">OAS Progress</NavLink></div><div class="col-sm-9">Print the Outdoor Adventure Skill stage worksheets.</div></div>
         <div class="row mb-1"><div class="col-sm-3"><NavLink href="sia">SIA</NavLink></div><div class="col-sm-9">Print the Special Interest Area status report: who has projects started, in review or finished.</div></div>
+        <div class="row mb-1"><div class="col-sm-3 ps-4"><NavLink href="siaprogress">SIA Progress</NavLink></div><div class="col-sm-9">Print a Special Interest Area project to talk through with a Scout.</div></div>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="oas">OAS</NavLink></div><div class="col-sm-9">See and print every Scout's Outdoor Adventure Skill stages in a table: what is awarded and what they are working on.</div></div>
+        <div class="row mb-1"><div class="col-sm-3 ps-4"><NavLink href="oasprogress">OAS Progress</NavLink></div><div class="col-sm-9">Print the Outdoor Adventure Skill stage worksheets.</div></div>
         <div class="row mb-1"><div class="col-sm-3"><NavLink href="milestone">Milestone</NavLink></div><div class="col-sm-9">Print the Milestone summary report.</div></div>
-        <div class="row mb-1"><div class="col-sm-3"><NavLink href="milestoneprogress">Milestone Progress</NavLink></div><div class="col-sm-9">Print a page for each Scout ready for a milestone: their counts, the events that counted and their review.</div></div>
+        <div class="row mb-1"><div class="col-sm-3 ps-4"><NavLink href="milestoneprogress">Milestone Progress</NavLink></div><div class="col-sm-9">Print a page for each Scout ready for a milestone: their counts, the events that counted and their review.</div></div>
         <div class="row mb-1"><div class="col-sm-3"><NavLink href="awards">Additional Awards</NavLink></div><div class="col-sm-9">Print the Additional Awards report.</div></div>
-    </div>
-
-    <div class="mb-3">
-        <h4>Reports</h4>
-        <p class="text-muted">Lists and summaries to print or keep.</p>
-        <div class="row mb-1"><div class="col-sm-3"><NavLink href="members">Members</NavLink></div><div class="col-sm-9">See the members of your units, and print patrol lists and patrol corner sheets.</div></div>
-        <div class="row mb-1"><div class="col-sm-3"><NavLink href="program">Program</NavLink></div><div class="col-sm-9">See the calendar of your units and print attendance lists.</div></div>
-        <div class="row mb-1"><div class="col-sm-3"><NavLink href="logbook">Logbook</NavLink></div><div class="col-sm-9">Print the Logbook summary report.</div></div>
-        <div class="row mb-1"><div class="col-sm-3"><NavLink href="wallchart">Wallchart</NavLink></div><div class="col-sm-9">Print the Wallchart: every Scout's progress on one chart.</div></div>
-        <div class="row mb-1"><div class="col-sm-3"><NavLink href="approvals/approvals">Approvals</NavLink></div><div class="col-sm-9">Print the Approvals report: badges and awards waiting to be approved or presented.</div></div>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="logbook">Logbook</NavLink></div><div class="col-sm-9">See and print each Scout's Logbook entries, and the Logbook summary.</div></div>
         <div class="row mb-1"><div class="col-sm-3"><NavLink href="progress/progress">Personal Progress</NavLink></div><div class="col-sm-9">Print one Scout's progress.</div></div>
-        <div class="row mb-1"><div class="col-sm-3"><NavLink href="scoutinghistory/member">Scouting History</NavLink></div><div class="col-sm-9">A Scout's whole history across sections, or a unit's totals over a period.</div></div>
     </div>
 
     <div class="mb-3">
-        <h4>Tools</h4>
-        <p class="text-muted">Things to help you run the unit.</p>
+        <h4>Approvals</h4>
+        <p class="text-muted">Badges and awards waiting for a leader.</p>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="approvals/approvals">Approvals</NavLink></div><div class="col-sm-9">See and print the badges and awards waiting to be approved or presented, and what to hand over.</div></div>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="approvals/pending">Pending Approvals</NavLink></div><div class="col-sm-9">Go through the pending requests one at a time, and approve them or ask for improvement.</div></div>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="approvals/massaward">Mass awarding</NavLink></div><div class="col-sm-9">Record the awards presented at a ceremony in one go, including Camper, Walkabout and Years of Service.</div></div>
+    </div>
+
+    <div class="mb-3">
+        <h4>Members</h4>
+        <p class="text-muted">The people in your units.</p>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="members">Members</NavLink></div><div class="col-sm-9">See the members of your units, and print patrol lists and patrol corner sheets.</div></div>
         <div class="row mb-1"><div class="col-sm-3"><NavLink href="patrolplanner">Patrol Planner</NavLink></div><div class="col-sm-9">Drag and drop Scouts between patrols to plan a reshuffle.</div></div>
+    </div>
+
+    <div class="mb-3">
+        <h4>Programming</h4>
+        <p class="text-muted">Planning and running meetings and activities.</p>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="program">Program</NavLink></div><div class="col-sm-9">See the calendar of your units and print attendance lists.</div></div>
         <div class="row mb-1"><div class="col-sm-3"><NavLink href="signinsheet">Sign In Sheet</NavLink></div><div class="col-sm-9">Make a sign in sheet for a meeting or activity.</div></div>
-        <div class="row mb-1"><div class="col-sm-3"><NavLink href="programideas">Program Ideas</NavLink></div><div class="col-sm-9">Browse and print program ideas, and see the activities your youth have proposed in Terrain.</div></div>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="programideas">Program Ideas</NavLink></div><div class="col-sm-9">Browse and print program ideas.</div></div>
+        <div class="row mb-1"><div class="col-sm-3 ps-4"><NavLink href="programideas/proposed">Proposed Activities</NavLink></div><div class="col-sm-9">See the activities your youth have proposed in Terrain, and how often each has run before.</div></div>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="programbuilder">Program Builder</NavLink></div><div class="col-sm-9">Plan a term's program.</div></div>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="attendance">Attendance</NavLink></div><div class="col-sm-9">Print the attendance report for a period.</div></div>
+    </div>
+
+    <div class="mb-3">
+        <h4>Group Life</h4>
+        <p class="text-muted">Reports and jobs for the whole group.</p>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="wallchart">Wallchart</NavLink></div><div class="col-sm-9">Print the Wallchart: every Scout's progress on one chart.</div></div>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="readytosubmit">Ready to Submit</NavLink></div><div class="col-sm-9">See which badges are 100% complete but not yet sent for review.</div></div>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="sectionreport">Section/Group Report</NavLink></div><div class="col-sm-9">Print a report on a section or the whole group for a period, for the group and district.</div></div>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="scoutinghistory/unit">Unit History</NavLink></div><div class="col-sm-9">A unit's totals over a period: members, badges, nights camped, hours.</div></div>
+        <div class="row mb-1"><div class="col-sm-3 ps-4"><NavLink href="scoutinghistory/member">Scouting History</NavLink></div><div class="col-sm-9">A Scout's whole history across sections.</div></div>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="badgeorder">Badge Order</NavLink></div><div class="col-sm-9">Fill a cart at the Scout Shop with the badges awarded since your last order.</div></div>
     </div>
 
     <div class="mb-3">
         <h4>Settings</h4>
         <p class="text-muted">Looking after your session.</p>
+        <div class="row mb-1"><div class="col-sm-3"><NavLink href="settings">Settings</NavLink></div><div class="col-sm-9">Turn on the background checks for awards to hand over and years of service.</div></div>
         <div class="row mb-1"><div class="col-sm-3">Logout</div><div class="col-sm-9">Sign out of Topo.</div></div>
-        <div class="row mb-1"><div class="col-sm-3"><a href="https://github.com/NomisNostab/Topo-Blazor/wiki" target="_blank">Help</a></div><div class="col-sm-9">How to use Topo, on its wiki.</div></div>
         <div class="row mb-1"><div class="col-sm-3">Enable Logging</div><div class="col-sm-9">Record what Topo asks Terrain, to help track down a problem.</div></div>
     </div>
 }
