@@ -21,7 +21,6 @@ namespace Topo.Services
         public string Problem { get; set; } = "";
         public int Recorded { get; set; }
         public int IgnoredRecords { get; set; }
-        public bool Active => StoreFound && StartedFrom.HasValue;
         // When the background check last finished (null if it has not yet), and how many Scouts it found
         public DateTime? ScannedAtUtc { get; set; }
         public int Scouts { get; set; }
@@ -83,6 +82,9 @@ namespace Topo.Services
         private YearsOfServiceScanCache? _cache;
         private string _cacheGroup = "";
         private bool? _enabled;
+        private string _enabledGroup = "";
+        // Counts the writes this copy has made, so a check that was running while one was made can tell its copy of the store is out of date
+        private int _writes;
         private HashSet<string> _trusted = new HashSet<string>();
 
         public YearsOfServiceService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, IBadgeStoreService badgeStoreService, ILocalStorageService localStorage)
@@ -103,13 +105,18 @@ namespace Topo.Services
             {
                 return false;
             }
-            _enabled ??= await _localStorage.GetItemAsync<bool>(EnabledKey);
+            if (_enabled == null || _enabledGroup != GroupId)
+            {
+                _enabled = await _localStorage.GetItemAsync<bool>(EnabledKey);
+                _enabledGroup = GroupId;
+            }
             return _enabled.Value;
         }
 
         public async Task SetEnabledAsync(bool enabled)
         {
             _enabled = enabled;
+            _enabledGroup = GroupId;
             await _localStorage.SetItemAsync(EnabledKey, enabled);
             // Turning it on starts afresh, so the first check is due at once
             var cache = await LoadCacheAsync();
@@ -138,6 +145,7 @@ namespace Topo.Services
             try
             {
                 await WaitForGapAsync(pacing);
+                var writesAtRead = _writes;
                 var store = await ReadStoreAsync();
 
                 var members = new List<ServiceMember>();
@@ -152,6 +160,12 @@ namespace Topo.Services
                     result.Units++;
                 }
 
+                // A record written from this copy while the check ran is not in what it read, so read the store again rather than lose it
+                if (_writes != writesAtRead)
+                {
+                    await WaitForGapAsync(pacing);
+                    store = await ReadStoreAsync();
+                }
                 cache.Store = store;
                 cache.Members = members;
                 cache.ScannedAtUtc = DateTime.UtcNow;
@@ -301,6 +315,7 @@ namespace Topo.Services
                             summary.Done++;
                             // So the lists are right straight away, before the next check reads the store again
                             Remember(contents, level.MemberId, level.AwardId, awarded, presented.Date);
+                            _writes++;
                         }
                         else
                         {
@@ -321,6 +336,7 @@ namespace Topo.Services
                 var cache = await LoadCacheAsync();
                 cache.Store ??= new BadgeStoreContents();
                 cache.Store.StoreEvents = Math.Max(1, cache.Store.StoreEvents);
+                _writes++;
                 await SaveCacheAsync();
             }
             return result;
@@ -343,6 +359,7 @@ namespace Topo.Services
             if (result.Succeeded)
             {
                 Remember(current, GroupId, YearsOfServiceAwards.StartAwardId, from.Date, null);
+                _writes++;
             }
             await SaveCacheAsync();
             return result;
@@ -440,7 +457,6 @@ namespace Topo.Services
             {
                 _cache = string.IsNullOrEmpty(group) ? new YearsOfServiceScanCache() : await _localStorage.GetItemAsync<YearsOfServiceScanCache>(CacheKey) ?? new YearsOfServiceScanCache();
                 _cacheGroup = group;
-                _enabled = null;
             }
             return _cache;
         }

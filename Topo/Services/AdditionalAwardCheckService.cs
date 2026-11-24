@@ -54,7 +54,9 @@ namespace Topo.Services
     }
 
     // The Camper and Walkabout awards: Terrain counts the nights and km but never records the award, so Topo works out from the logbook
-    // when each was earned, lists it as to be presented, and records it in Terrain when a leader presents it.
+    // when each was earned, lists it as to be presented, and records it in Terrain when a leader presents it. Years of Service badges, which
+    // Terrain has no record of at all, are listed and recorded by IYearsOfServiceService, so the pages ask this service for every badge Topo
+    // works out itself and it passes those on.
     public class AdditionalAwardCheckService : IAdditionalAwardCheckService
     {
         private readonly StorageService _storageService;
