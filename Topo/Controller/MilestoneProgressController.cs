@@ -143,7 +143,7 @@ namespace Topo.Controller
 
         internal void StageChanged(ChangeEventArgs e)
         {
-            model.Stage = int.TryParse(e.Value?.ToString(), out var stage) ? stage : 1;
+            model.Stage = int.TryParse(e.Value?.ToString(), out var stage) ? stage : MilestoneProgressBuilder.AllMilestones;
             Recalculate();
         }
 
