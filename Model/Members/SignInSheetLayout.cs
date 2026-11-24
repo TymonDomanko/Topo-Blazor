@@ -93,7 +93,9 @@ namespace Topo.Model.Members
 
             var leaders = memberList.Where(m => m.isAdultLeader == 1).ToList();
             if (leaders.Any())
+            {
                 groups.Add(new SignInSheetGroup { Heading = "Leaders", Members = Ordered(leaders) });
+            }
 
             return groups;
         }
@@ -104,10 +106,14 @@ namespace Topo.Model.Members
             var name = (duty ?? "").Trim();
             if (name.Equals("PL", StringComparison.OrdinalIgnoreCase) || name.Equals("Sixer", StringComparison.OrdinalIgnoreCase)
                 || name.Equals("Patrol Leader", StringComparison.OrdinalIgnoreCase))
+            {
                 return 0;
+            }
             if (name.Equals("APL", StringComparison.OrdinalIgnoreCase) || name.Equals("Seconder", StringComparison.OrdinalIgnoreCase)
                 || name.Equals("Assistant Patrol Leader", StringComparison.OrdinalIgnoreCase))
+            {
                 return 1;
+            }
             return 2;
         }
 
