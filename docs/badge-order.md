@@ -5,7 +5,7 @@ https://scoutshop.com.au.
 
 ## What it counts
 
-The same figures as the Section/Group Report, for every unit of the group, from a day to today: milestones, Outdoor Adventure Skill stages, Special
+The same figures as the Section/Group Report, for the unit chosen (or every unit of the group, the default), from a day to today: milestones, Outdoor Adventure Skill stages, Special
 Interest Areas, additional awards (Camper, Walkabout, years of service, First Aid and the rest), and the introduction badge for each Scout invested in
 the period. It reads Terrain's records, and the years of service recorded in the group's store (docs/badge-store.md).
 

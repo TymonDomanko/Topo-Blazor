@@ -9,7 +9,7 @@
 </div>
 
 <p class="text-muted">The badges the group has awarded since its last order, ready to put in a cart at the national Scout Shop. It counts what was awarded
-    (and presented, for years of service) in every unit, the same way as the Section/Group Report.</p>
+    (and presented, for years of service) in the unit you choose, or in every unit, the same way as the Section/Group Report.</p>
 
 @if (Status != null && !string.IsNullOrEmpty(Status.Problem))
 {
@@ -42,9 +42,16 @@ else if (Status != null && !Status.StoreFound)
                 <input type="date" id="from-date" class="form-control form-control-sm" style="max-width: 11rem" @bind="From" @bind:format="yyyy-MM-dd" />
             </div>
         }
-        <div class="mt-2 d-flex align-items-center gap-3">
+        <div class="mt-2 d-flex align-items-center gap-2">
+            <label for="unit" class="mb-0">Units</label>
+            <select id="unit" class="form-select form-select-sm" style="max-width: 14rem" value="@UnitId" @onchange="UnitChange" disabled="@Loading">
+                <option value="">All units</option>
+                @foreach (var unit in Units)
+                {
+                    <option value="@unit.Key">@unit.Value</option>
+                }
+            </select>
             <button type="button" class="btn btn-primary btn-sm" id="show" @onclick="ShowBadgesClick" disabled="@Loading">Show badges</button>
-            <span class="text-muted small">Units: @string.Join(", ", UnitNames)</span>
         </div>
     </div>
 </div>

@@ -20,7 +20,9 @@ namespace Topo.Controller
         public NavigationManager NavigationManager { get; set; } = default!;
 
         public string GroupName = "";
-        public List<string> UnitNames = new List<string>();
+        // The units to choose from, and the one chosen (blank for every unit)
+        public Dictionary<string, string> Units = new Dictionary<string, string>();
+        public string UnitId = "";
         public BadgeOrderStatus? Status;
         // The day to count from: the last order's, or one the leader picks when no order has been recorded
         public DateTime From = DateTime.Today.AddMonths(-3);
@@ -52,7 +54,7 @@ namespace Topo.Controller
                 return;
             }
             GroupName = _storageService.GroupNameDisplay;
-            UnitNames = (_storageService.Units ?? new Dictionary<string, string>()).Values.ToList();
+            Units = _storageService.Units ?? new Dictionary<string, string>();
             Status = await _badgeOrderService.StatusAsync();
             if (Status.LastOrder.HasValue)
             {
@@ -75,7 +77,7 @@ namespace Topo.Controller
             Progress = "";
             try
             {
-                var result = await _badgeOrderService.BuildAsync(From, DateTime.Today, step =>
+                var result = await _badgeOrderService.BuildAsync(UnitId.Length > 0 ? new[] { UnitId } : Units.Keys, From, DateTime.Today, step =>
                 {
                     Progress = step;
                     InvokeAsync(StateHasChanged);
@@ -88,6 +90,15 @@ namespace Topo.Controller
                 Error = "The badges could not be read from Terrain: " + ex.Message;
             }
             Loading = false;
+        }
+
+        internal void UnitChange(ChangeEventArgs e)
+        {
+            UnitId = e.Value?.ToString() ?? "";
+            // What was worked out was for the other units
+            Lines = null;
+            ConfirmPlaced = false;
+            Message = "";
         }
 
         internal void ChangeDateClick() => ChangingDate = true;

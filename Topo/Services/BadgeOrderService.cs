@@ -23,8 +23,8 @@ namespace Topo.Services
     {
         // Reads the group's store from Terrain: whether it exists and the day of the last order
         Task<BadgeOrderStatus> StatusAsync();
-        // The badges awarded in every unit of the group from one day to another, as an order for the Scout Shop
-        Task<BadgeOrderResult> BuildAsync(DateTime from, DateTime to, Action<string>? progress = null, CancellationToken cancellationToken = default);
+        // The badges awarded in the units (every unit of the group when none are given) from one day to another, as an order for the Scout Shop
+        Task<BadgeOrderResult> BuildAsync(IEnumerable<string> unitIds, DateTime from, DateTime to, Action<string>? progress = null, CancellationToken cancellationToken = default);
         // Records that an order was placed on a day, so the next one counts from then. Only on a leader's say so: it changes the group's store.
         Task<BadgeStoreWriteResult> MarkPlacedAsync(DateTime day);
     }
@@ -58,9 +58,10 @@ namespace Topo.Services
             }
         }
 
-        public async Task<BadgeOrderResult> BuildAsync(DateTime from, DateTime to, Action<string>? progress = null, CancellationToken cancellationToken = default)
+        public async Task<BadgeOrderResult> BuildAsync(IEnumerable<string> unitIds, DateTime from, DateTime to, Action<string>? progress = null, CancellationToken cancellationToken = default)
         {
-            var request = new SectionReportRequest { UnitIds = _storageService.Units.Keys.ToList(), IsGroup = true, From = from.Date, To = to.Date };
+            var chosen = unitIds.Where(id => _storageService.Units.ContainsKey(id)).Distinct().ToList();
+            var request = new SectionReportRequest { UnitIds = chosen.Count > 0 ? chosen : _storageService.Units.Keys.ToList(), IsGroup = true, From = from.Date, To = to.Date };
             var report = await _sectionReportService.GetSectionReport(request, progress, cancellationToken);
             return new BadgeOrderResult { From = from.Date, To = to.Date, Lines = BadgeOrderBuilder.Build(report.Report) };
         }
