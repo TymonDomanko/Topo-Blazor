@@ -38,6 +38,8 @@ namespace Topo.Controller
         public OasSummaryReport? Report;
         private List<OasSummaryMember>? _members;
         private List<Result>? _records;
+        // The branches of each skill, as Terrain lists them; read the first time they are wanted
+        private List<OasBranch>? _branches;
         // The unit can be changed while one is still being read, so a read that has been overtaken is dropped
         private int _loadId;
 
@@ -94,7 +96,7 @@ namespace Topo.Controller
                     return;
                 _members = members.Select(m => new OasSummaryMember { MemberId = m.id, FirstName = m.first_name, LastName = m.last_name, Patrol = m.patrol_name }).ToList();
                 _records = records.results.ToList();
-                Recalculate();
+                await SplitChanged();
             }
             catch (Exception)
             {
@@ -114,17 +116,46 @@ namespace Topo.Controller
         // The table follows the options as they are ticked, without reading Terrain again
         internal void OptionChanged() => Recalculate();
 
+        // The branches are listed in Terrain's stage tree, which is read once (the OAS Progress page shares it) the first time they are wanted
+        internal async Task SplitChanged()
+        {
+            if (model.SplitBranches && _branches == null)
+            {
+                Loading = true;
+                Progress = "the branches of each skill";
+                StateHasChanged();
+                try
+                {
+                    _branches = (await _oasService.GetOASStagesList())
+                        .Select(stage => (stream: OasSummaryLayout.Streams.FirstOrDefault(s => string.Equals(s.Heading, stage.Stream, StringComparison.OrdinalIgnoreCase)), stage))
+                        .Where(x => x.stream != null)
+                        .GroupBy(x => (x.stream!.Key, branch: x.stage.Branch))
+                        .Select(g => new OasBranch { Stream = g.Key.Key, Key = g.Key.branch, Title = g.First().stage.StageTitle })
+                        .ToList();
+                }
+                catch (Exception)
+                {
+                    // the branches the Scouts have records in are still shown, named from Terrain's own names for them
+                    _branches = new List<OasBranch>();
+                }
+                finally
+                {
+                    Loading = false;
+                    Progress = "";
+                }
+            }
+            Recalculate();
+        }
+
         private void Recalculate()
         {
             if (_members == null || _records == null)
                 return;
-            Report = new OasSummaryReport
-            {
-                UnitName = _storageService.UnitName ?? "",
-                Section = _storageService.Section,
-                GeneratedAt = DateTime.Now,
-                Sheets = OasSummaryBuilder.Build(_members, _records, _storageService.Section, model.BreakByPatrol, model.UseFullNames)
-            };
+            var columns = model.SplitBranches ? OasSummaryLayout.BranchColumns(_branches ?? new List<OasBranch>(), _records) : OasSummaryLayout.SkillColumns();
+            Report = OasSummaryBuilder.Build(_members, _records, _storageService.Section, model.BreakByPatrol, model.UseFullNames, columns, model.SplitBranches);
+            Report.UnitName = _storageService.UnitName ?? "";
+            Report.Section = _storageService.Section;
+            Report.GeneratedAt = DateTime.Now;
         }
 
         internal async Task PdfClick() => await Download(OutputType.PDF);

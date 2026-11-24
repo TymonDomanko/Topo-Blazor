@@ -32,6 +32,12 @@
             <label class="form-check-label" for="useFullNames">Use full names (otherwise first name plus enough of the surname to tell Scouts apart)</label>
         </div>
     </div>
+    <div class="mt-3 mb-3 row">
+        <div class="col-sm-12">
+            <InputCheckbox id="splitBranches" class="form-check-input" @bind-Value="model.SplitBranches" @bind-Value:after="SplitChanged" />
+            <label class="form-check-label" for="splitBranches">Split into branches (Canoeing, Sailing and so on). A branch nobody has started is left out; "Main" is the stages every Scout does before a skill branches.</label>
+        </div>
+    </div>
 
     <PageStatus Loading="Loading" Progress="@Progress" Error="@model.ErrorMessage" />
 

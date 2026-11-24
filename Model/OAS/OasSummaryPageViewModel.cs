@@ -9,5 +9,7 @@ namespace Topo.Model.OAS
         public string ErrorMessage { get; set; } = string.Empty;
         public bool BreakByPatrol { get; set; }
         public bool UseFullNames { get; set; }
+        // A column for each branch of each skill (Canoeing, Sailing, ...) instead of one for the whole skill
+        public bool SplitBranches { get; set; }
     }
 }

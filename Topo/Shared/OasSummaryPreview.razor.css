@@ -21,7 +21,7 @@
     border-bottom: 1px solid #d6d5d5;
 }
 
-/* The three heading rows stack up under each other, so each is given the height the next one sits below */
+/* The heading rows stack up under each other, each stuck below the one before (their offsets are set on the cells) */
 .oas thead th {
     position: sticky;
     z-index: 2;
@@ -32,18 +32,6 @@
 .oas .groups th {
     background-color: #e9ecef;
     font-weight: bold;
-}
-
-.oas thead tr:nth-child(1) th {
-    top: 0;
-}
-
-.oas thead tr:nth-child(2) th {
-    top: 1.7rem;
-}
-
-.oas thead tr:nth-child(3) th {
-    top: 3.4rem;
 }
 
 .oas .name {

@@ -25,23 +25,24 @@ namespace TopoReportFunctionTest
 
         private static OasSummaryCell CellOf(string stream, params Result[] records)
         {
-            var row = OasSummaryBuilder.Build(new[] { Scout("a", "Amy") }, records, "scout", false, false).Single().Rows.Single();
-            return row.Streams[Array.FindIndex(OasSummaryLayout.Streams, s => s.Key == stream)];
+            var row = OasSummaryBuilder.Build(new[] { Scout("a", "Amy") }, records, "scout", false, false, OasSummaryLayout.SkillColumns()).Sheets.Single().Rows.Single();
+            return row.Cells[Array.FindIndex(OasSummaryLayout.Streams, s => s.Key == stream)];
         }
 
         [TestMethod]
         public void TheSkillsAreTheNineInTheWallchartsOrderInThreeGroups()
         {
             CollectionAssert.AreEqual(new[] { "Bushcraft", "Bushwalking", "Camping", "Alpine", "Cycling", "Vertical", "Aquatics", "Boating", "Paddling" }, OasSummaryLayout.Streams.Select(s => s.Heading).ToArray());
-            Assert.AreEqual(9, OasSummaryLayout.Groups.Sum(g => g.Span));
+            Assert.AreEqual(9, OasSummaryLayout.GroupSpans(OasSummaryLayout.SkillColumns()).Sum(g => g.Span));
+            CollectionAssert.AreEqual(new[] { "CORE", "LAND", "WATER" }, OasSummaryLayout.GroupSpans(OasSummaryLayout.SkillColumns()).Select(g => g.Heading).ToArray());
         }
 
         [TestMethod]
         public void EveryRowHasACellForEachSkillEvenWithNoRecords()
         {
-            var row = OasSummaryBuilder.Build(new[] { Scout("a", "Amy") }, new Result[0], "scout", false, false).Single().Rows.Single();
-            Assert.AreEqual(9, row.Streams.Count);
-            Assert.IsTrue(row.Streams.All(c => c.Awarded == 0 && c.Working == 0 && c.State == OasWorking.None));
+            var row = OasSummaryBuilder.Build(new[] { Scout("a", "Amy") }, new Result[0], "scout", false, false, OasSummaryLayout.SkillColumns()).Sheets.Single().Rows.Single();
+            Assert.AreEqual(9, row.Cells.Count);
+            Assert.IsTrue(row.Cells.All(c => c.Awarded == 0 && c.Working == 0 && c.State == OasWorking.None));
         }
 
         [TestMethod]
@@ -132,12 +133,12 @@ namespace TopoReportFunctionTest
         {
             var rows = OasSummaryBuilder.Build(new[] { Scout("a", "Amy"), Scout("b", "Ben") },
                 new[] { Record("a", "camping", 2, "awarded"), Record("b", "aquatics", 1, "awarded"), Record("zz", "camping", 9, "awarded"), Record("a", "no-such-skill", 4, "awarded") },
-                "scout", false, false).Single().Rows;
+                "scout", false, false, OasSummaryLayout.SkillColumns()).Sheets.Single().Rows;
             var camping = Array.FindIndex(OasSummaryLayout.Streams, s => s.Key == "camping");
             var aquatics = Array.FindIndex(OasSummaryLayout.Streams, s => s.Key == "aquatics");
-            Assert.AreEqual(2, rows.Single(r => r.Name == "Amy").Streams[camping].Awarded);
-            Assert.AreEqual(0, rows.Single(r => r.Name == "Ben").Streams[camping].Awarded);
-            Assert.AreEqual(1, rows.Single(r => r.Name == "Ben").Streams[aquatics].Awarded);
+            Assert.AreEqual(2, rows.Single(r => r.Name == "Amy").Cells[camping].Awarded);
+            Assert.AreEqual(0, rows.Single(r => r.Name == "Ben").Cells[camping].Awarded);
+            Assert.AreEqual(1, rows.Single(r => r.Name == "Ben").Cells[aquatics].Awarded);
         }
 
         [TestMethod]
@@ -149,10 +150,10 @@ namespace TopoReportFunctionTest
         [TestMethod]
         public void TheUnitIsInNameOrderAndNamedLikeTheOtherReports()
         {
-            var sheets = OasSummaryBuilder.Build(new[] { Scout("1", "Zed", "Zee"), Scout("2", "Amy", "Ant"), Scout("3", "Amy", "Bee") }, new Result[0], "scout", false, false);
+            var sheets = OasSummaryBuilder.Build(new[] { Scout("1", "Zed", "Zee"), Scout("2", "Amy", "Ant"), Scout("3", "Amy", "Bee") }, new Result[0], "scout", false, false, OasSummaryLayout.SkillColumns()).Sheets;
             Assert.AreEqual(1, sheets.Count);
             CollectionAssert.AreEqual(new[] { "Amy A", "Amy B", "Zed" }, sheets[0].Rows.Select(r => r.Name).ToArray());
-            var full = OasSummaryBuilder.Build(new[] { Scout("1", "Zed", "Zee") }, new Result[0], "scout", false, true);
+            var full = OasSummaryBuilder.Build(new[] { Scout("1", "Zed", "Zee") }, new Result[0], "scout", false, true, OasSummaryLayout.SkillColumns()).Sheets;
             Assert.AreEqual("Zed Zee", full[0].Rows.Single().Name);
         }
 
@@ -163,7 +164,7 @@ namespace TopoReportFunctionTest
             var sheets = OasSummaryBuilder.Build(new[]
             {
                 Scout("1", "Zoe", "Z", "Wombats"), Scout("2", "Abe", "A", "Wombats"), Scout("3", "Ivy", "I", "Eagles")
-            }, new Result[0], "scout", true, false);
+            }, new Result[0], "scout", true, false, OasSummaryLayout.SkillColumns()).Sheets;
             CollectionAssert.AreEqual(new[] { "Wombats", "Eagles" }, sheets.Select(s => s.Patrol).ToArray());
             CollectionAssert.AreEqual(new[] { "Zoe", "Abe" }, sheets[0].Rows.Select(r => r.Name).ToArray());
         }
@@ -178,12 +179,12 @@ namespace TopoReportFunctionTest
         }
 
         private static OasSummaryReport ReportOf(params OasSummarySheet[] sheets) =>
-            new OasSummaryReport { UnitName = "Scout Unit", Section = "scout", GeneratedAt = new DateTime(2026, 11, 25), Sheets = sheets.ToList() };
+            new OasSummaryReport { UnitName = "Scout Unit", Section = "scout", GeneratedAt = new DateTime(2026, 11, 25), Columns = OasSummaryLayout.SkillColumns(), Sheets = sheets.ToList() };
 
         private static OasSummaryRow RowWith(string name, int stream, int awarded, int working = 0, OasWorking state = OasWorking.None)
         {
-            var row = new OasSummaryRow { Name = name, Streams = OasSummaryLayout.Streams.Select(_ => new OasSummaryCell()).ToList() };
-            row.Streams[stream] = new OasSummaryCell { Awarded = awarded, Working = working, State = state };
+            var row = new OasSummaryRow { Name = name, Cells = OasSummaryLayout.Streams.Select(_ => new OasSummaryCell()).ToList() };
+            row.Cells[stream] = new OasSummaryCell { Awarded = awarded, Working = working, State = state };
             return row;
         }
 
@@ -246,11 +247,125 @@ namespace TopoReportFunctionTest
             var report = ReportOf(new OasSummarySheet { Patrol = "Eagles", Rows = { RowWith("Amy", 0, 2, 3, OasWorking.InReview) } });
             var back = Newtonsoft.Json.JsonConvert.DeserializeObject<OasSummaryReport>(Newtonsoft.Json.JsonConvert.SerializeObject(report))!;
             Assert.AreEqual("Eagles", back.Sheets.Single().Patrol);
-            Assert.AreEqual(OasWorking.InReview, back.Sheets.Single().Rows.Single().Streams[0].State);
-            Assert.AreEqual(3, back.Sheets.Single().Rows.Single().Streams[0].Working);
+            Assert.AreEqual(OasWorking.InReview, back.Sheets.Single().Rows.Single().Cells[0].State);
+            Assert.AreEqual(3, back.Sheets.Single().Rows.Single().Cells[0].Working);
             var types = Enum.GetValues<Topo.Model.ReportGeneration.ReportType>();
             Assert.AreEqual(Topo.Model.ReportGeneration.ReportType.OasSummary, types[^1]);
             Assert.AreEqual(21, Array.IndexOf(types, Topo.Model.ReportGeneration.ReportType.ReadyToSubmit), "the number the deployed function knows it by");
+        }
+
+        private static Result BranchRecord(string member, string stream, string branch, int stage, string status, params string[] ticked)
+        {
+            var record = Record(member, stream, stage, status, "scout", ticked);
+            record.achievement_meta.branch = branch;
+            return record;
+        }
+
+        private static readonly OasBranch[] Tree =
+        {
+            new OasBranch { Stream = "paddling", Key = "paddling", Title = "Paddling" },
+            new OasBranch { Stream = "paddling", Key = "canoeing", Title = "Canoeing" },
+            new OasBranch { Stream = "paddling", Key = "kayaking", Title = "Kayaking" },
+            new OasBranch { Stream = "boating", Key = "sailing", Title = "Sailing" }
+        };
+
+        private static (List<OasSummaryColumn> columns, List<OasSummarySheet> sheets) Split(Result[] records, bool hideEmpty, params OasSummaryMember[] members)
+        {
+            var columns = OasSummaryLayout.BranchColumns(Tree, records);
+            var report = OasSummaryBuilder.Build(members.Length == 0 ? new[] { Scout("a", "Amy") } : members, records, "scout", false, false, columns, hideEmpty);
+            return (report.Columns, report.Sheets);
+        }
+
+        [TestMethod]
+        public void BranchColumnsKeepTheTreesOrderStartWithMainAndAddBranchesOnlyTheRecordsKnow()
+        {
+            var columns = OasSummaryLayout.BranchColumns(Tree, new[] { BranchRecord("a", "paddling", "sea-kayaking", 4, "awarded") });
+            var paddling = columns.Where(c => c.Stream == "paddling").ToList();
+            CollectionAssert.AreEqual(new[] { "Main", "Canoeing", "Kayaking", "Sea Kayaking" }, paddling.Select(c => c.Heading).ToArray());
+            Assert.AreEqual("paddling", paddling[0].Branch, "the stages before the skill forks");
+            CollectionAssert.AreEqual(new[] { "Main", "Sailing" }, columns.Where(c => c.Stream == "boating").Select(c => c.Heading).ToArray());
+            Assert.AreEqual(1, columns.Count(c => c.Stream == "camping"), "a skill that never forks is just Main");
+            Assert.IsTrue(columns.All(c => c.Heading != ""));
+        }
+
+        [TestMethod]
+        public void ABranchColumnCountsOnlyItsOwnBranchWhileASkillColumnCountsAll()
+        {
+            var records = new[] { BranchRecord("a", "paddling", "paddling", 3, "awarded"), BranchRecord("a", "paddling", "canoeing", 5, "awarded") };
+            var (columns, sheets) = Split(records, false);
+            var cells = sheets.Single().Rows.Single().Cells;
+            Assert.AreEqual(3, cells[columns.FindIndex(c => c.Stream == "paddling" && c.Branch == "paddling")].Awarded);
+            Assert.AreEqual(5, cells[columns.FindIndex(c => c.Stream == "paddling" && c.Branch == "canoeing")].Awarded);
+            Assert.AreEqual(0, cells[columns.FindIndex(c => c.Stream == "paddling" && c.Branch == "kayaking")].Awarded);
+            Assert.AreEqual(5, CellOf("paddling", records).Awarded);
+        }
+
+        [TestMethod]
+        public void AStageBeingWorkedOnIsInTheBranchItIsIn()
+        {
+            var records = new[] { BranchRecord("a", "paddling", "paddling", 3, "awarded"), BranchRecord("a", "paddling", "canoeing", 4, "draft_review", "x") };
+            var (columns, sheets) = Split(records, false);
+            var canoeing = sheets.Single().Rows.Single().Cells[columns.FindIndex(c => c.Branch == "canoeing")];
+            Assert.AreEqual(0, canoeing.Awarded);
+            Assert.AreEqual(4, canoeing.Working);
+            Assert.AreEqual(OasWorking.InProgress, canoeing.State);
+            var main = sheets.Single().Rows.Single().Cells[columns.FindIndex(c => c.Branch == "paddling")];
+            Assert.AreEqual(0, main.Working);
+        }
+
+        [TestMethod]
+        public void BranchesNobodyHasStartedAreLeftOutButEverySkillKeepsItsMainColumn()
+        {
+            var records = new[] { BranchRecord("a", "paddling", "canoeing", 4, "awarded"), BranchRecord("b", "boating", "sailing", 4, "pending_review") };
+            var (columns, sheets) = Split(records, true, Scout("a", "Amy"), Scout("b", "Ben"));
+            CollectionAssert.AreEqual(new[] { "Main", "Canoeing" }, columns.Where(c => c.Stream == "paddling").Select(c => c.Heading).ToArray());
+            CollectionAssert.AreEqual(new[] { "Main", "Sailing" }, columns.Where(c => c.Stream == "boating").Select(c => c.Heading).ToArray());
+            Assert.AreEqual(9 + 2, columns.Count, "nine mains, canoeing and sailing");
+            Assert.IsTrue(sheets.Single().Rows.All(r => r.Cells.Count == columns.Count), "every row matches the columns left");
+            Assert.AreEqual(4, sheets.Single().Rows.Single(r => r.Name == "Amy").Cells[columns.FindIndex(c => c.Branch == "canoeing")].Awarded);
+        }
+
+        [TestMethod]
+        public void EveryPatrolSheetHasTheSameColumnsWhenBranchesAreLeftOut()
+        {
+            var records = new[] { BranchRecord("a", "paddling", "canoeing", 4, "awarded") };
+            var columns = OasSummaryLayout.BranchColumns(Tree, records);
+            var report = OasSummaryBuilder.Build(new[] { Scout("a", "Amy", "", "Eagles"), Scout("b", "Ben", "", "Wombats") }, records, "scout", true, false, columns, true);
+            Assert.AreEqual(2, report.Sheets.Count);
+            Assert.IsTrue(report.Sheets.SelectMany(sheet => sheet.Rows).All(r => r.Cells.Count == report.Columns.Count));
+            Assert.IsTrue(report.Columns.Any(c => c.Branch == "canoeing"), "Amy's branch is kept for Ben's sheet too");
+        }
+
+        [TestMethod]
+        public void TheHeadingsOverBranchColumnsRunTogetherByGroupAndSkill()
+        {
+            var columns = OasSummaryLayout.BranchColumns(Tree, new Result[0]);
+            Assert.IsTrue(OasSummaryLayout.HasBranchHeadings(columns));
+            Assert.IsFalse(OasSummaryLayout.HasBranchHeadings(OasSummaryLayout.SkillColumns()));
+            var streams = OasSummaryLayout.StreamSpans(columns);
+            Assert.AreEqual(9, streams.Count);
+            Assert.AreEqual(3, streams.Single(s => s.Heading == "Paddling").Span);
+            Assert.AreEqual(columns.Count, streams.Sum(s => s.Span));
+            var groups = OasSummaryLayout.GroupSpans(columns);
+            CollectionAssert.AreEqual(new[] { "CORE", "LAND", "WATER" }, groups.Select(g => g.Heading).ToArray());
+            Assert.AreEqual(columns.Count, groups.Sum(g => g.Span));
+        }
+
+        [TestMethod]
+        public void TheWorkbookHasARowOfBranchNamesWhenSplitAndTheDataMovesDownOne()
+        {
+            var records = new[] { BranchRecord("a", "paddling", "canoeing", 5, "awarded") };
+            var report = OasSummaryBuilder.Build(new[] { Scout("a", "Amy") }, records, "scout", false, false, OasSummaryLayout.BranchColumns(Tree, records), true);
+            report.UnitName = "Scout Unit"; report.Section = "scout"; report.GeneratedAt = new DateTime(2026, 11, 25);
+            var sheet = new ReportService().GenerateOasSummaryWorkbook(report, "Group", "scout", "Scout Unit").Worksheets[0];
+            Assert.AreEqual("CORE", sheet.Range[4, 2].Text);
+            Assert.AreEqual("Bushcraft", sheet.Range[5, 2].Text);
+            Assert.AreEqual("Main", sheet.Range[6, 2].Text);
+            Assert.AreEqual("Awarded", sheet.Range[7, 2].Text);
+            Assert.AreEqual("Amy", sheet.Range[8, 1].Text);
+            var canoeing = 2 + 2 * report.Columns.FindIndex(c => c.Branch == "canoeing");
+            Assert.AreEqual("Canoeing", sheet.Range[6, canoeing].Text);
+            Assert.AreEqual(5, sheet.Range[8, canoeing].Number);
         }
     }
 }
