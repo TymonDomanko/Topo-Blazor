@@ -40,6 +40,12 @@ namespace Topo.Controller
         // The highest stage anyone in the unit has been awarded in each skill, for "one above the highest"
         private Dictionary<string, int> _highest = new Dictionary<string, int>();
         private int _loadId;
+        // The worksheets on the screen, made from what has been read for the stages picked. Each stage is read once for the unit
+        // and the options that change what is read, so changing the picks only reads what is new.
+        public List<OasWorksheetSheet> Sheets = new List<OasWorksheetSheet>();
+        private readonly Dictionary<string, List<OASWorksheetAnswers>> _answers = new Dictionary<string, List<OASWorksheetAnswers>>();
+        private List<OASWorksheetAnswers> _shown = new List<OASWorksheetAnswers>();
+        private int _viewId;
 
         // The skills to pick from, in the order Terrain lists them
         public List<string> Skills => model.Stages.Select(s => s.Stream).Distinct().ToList();
@@ -82,12 +88,14 @@ namespace Topo.Controller
             model.UnitName = _storageService.UnitName;
             _everyoneHas = new HashSet<string>();
             _highest = new Dictionary<string, int>();
+            _answers.Clear();
             var loadId = ++_loadId;
             if (string.IsNullOrEmpty(unitId))
             {
                 Loading = false;
                 Progress = "";
                 Recalculate();
+                await ShowWorksheets();
                 return;
             }
 
@@ -118,31 +126,115 @@ namespace Topo.Controller
                     Recalculate();
                 }
             }
+            if (loadId == _loadId)
+                await ShowWorksheets();
         }
 
-        internal void SkillChanged(ChangeEventArgs e)
+        internal async Task SkillChanged(ChangeEventArgs e)
         {
             model.Skill = e.Value?.ToString() ?? "";
             TickAllBranches();
             Recalculate();
+            await ShowWorksheets();
         }
 
-        internal void LevelChanged(ChangeEventArgs e)
+        internal async Task LevelChanged(ChangeEventArgs e)
         {
             model.Level = int.TryParse(e.Value?.ToString(), out var level) ? level : 0;
             TickAllBranches();
             Recalculate();
+            await ShowWorksheets();
         }
 
-        internal void IncludeBelowChanged() => Recalculate();
+        internal async Task IncludeBelowChanged()
+        {
+            Recalculate();
+            await ShowWorksheets();
+        }
 
-        internal void BranchChanged(OasBranchChoice choice, bool ticked)
+        internal async Task BranchChanged(OasBranchChoice choice, bool ticked)
         {
             if (ticked)
                 model.ChosenBranches.Add(choice.Key);
             else
                 model.ChosenBranches.Remove(choice.Key);
             Recalculate();
+            await ShowWorksheets();
+        }
+
+        // These change what is read (who is listed, how they are named), so the worksheets are read again
+        internal async Task ReadOptionChanged() => await ShowWorksheets();
+
+        // These only change how what has been read is laid out
+        internal void BreakByPatrolChanged() => Layout();
+
+        private void Layout() => Sheets = OasWorksheetLayout.Build(_shown, model.BreakByPatrol);
+
+        // What was read for a stage depends on the unit and on these options
+        private string ReadKey(OASStageListModel stage) => $"{stage.TemplateLink}|{model.HideCompletedMembers}|{model.SuppressLastName}";
+
+        // Makes the worksheets on the screen for what is picked, reading only the stages not read yet. A read that has been overtaken by a
+        // newer choice stops there, so the screen always follows the latest choice.
+        private async Task ShowWorksheets()
+        {
+            var viewId = ++_viewId;
+            if (!CanMake)
+            {
+                if (string.IsNullOrEmpty(model.UnitId) || Selection.Included.Count == 0)
+                {
+                    _shown = new List<OASWorksheetAnswers>();
+                    Layout();
+                }
+                return;
+            }
+
+            model.ErrorMessage = "";
+            Loading = true;
+            await InvokeAsync(StateHasChanged);
+            try
+            {
+                var answers = await ReadWorksheets(Selection.Included.ToList(), viewId);
+                if (answers == null || viewId != _viewId)
+                    return;
+                _shown = answers;
+                Layout();
+            }
+            catch (Exception)
+            {
+                if (viewId == _viewId)
+                    model.ErrorMessage = "Couldn't read the worksheets from Terrain.";
+            }
+            finally
+            {
+                if (viewId == _viewId)
+                {
+                    Loading = false;
+                    Progress = "";
+                }
+            }
+        }
+
+        // The answers for the stages, from what has been read already and reading the rest. Null if a newer choice (viewId) took over.
+        private async Task<List<OASWorksheetAnswers>?> ReadWorksheets(List<OASStageListModel> stages, int? viewId)
+        {
+            _storageService.SuppressLastName = model.SuppressLastName;
+            var all = new List<OASWorksheetAnswers>();
+            for (var i = 0; i < stages.Count; i++)
+            {
+                var key = ReadKey(stages[i]);
+                if (!_answers.TryGetValue(key, out var answers))
+                {
+                    Progress = $"{stages[i].SelectListItemText} ({i + 1} of {stages.Count})";
+                    await InvokeAsync(StateHasChanged);
+                    var templateList = await _oasService.GetOASTemplate(stages[i].TemplateLink.Replace("/latest.json", ""));
+                    answers = await _oasService.GenerateOASWorksheetAnswers(model.UnitId, stages[i], model.HideCompletedMembers, templateList);
+                    if (viewId != null && viewId != _viewId)
+                        return null;
+                    _answers[key] = answers;
+                }
+                all.AddRange(answers);
+            }
+            return all;
         }
 
         // Every branch at the level starts ticked; the leader unticks the ones they do not want
@@ -172,16 +264,8 @@ namespace Topo.Controller
             Loading = true;
             try
             {
-                _storageService.SuppressLastName = model.SuppressLastName;
-                var stages = Selection.Included.ToList();
-                var sortedAnswers = new List<OASWorksheetAnswers>();
-                for (var i = 0; i < stages.Count; i++)
-                {
-                    Progress = $"{stages[i].SelectListItemText} ({i + 1} of {stages.Count})";
-                    await InvokeAsync(StateHasChanged);
-                    var templateList = await _oasService.GetOASTemplate(stages[i].TemplateLink.Replace("/latest.json", ""));
-                    sortedAnswers.AddRange(await _oasService.GenerateOASWorksheetAnswers(model.UnitId, stages[i], model.HideCompletedMembers, templateList));
-                }
+                // what is on the screen is made from the same reads, so it is not read twice
+                var sortedAnswers = await ReadWorksheets(Selection.Included.ToList(), null) ?? new List<OASWorksheetAnswers>();
 
                 var groupName = _storageService.GroupName ?? "";
                 var unitName = _storageService.UnitName ?? "";

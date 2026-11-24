@@ -1,0 +1,99 @@
+/* The table scrolls inside its own box, keeping the headings and the first columns in view, so it never widens the page */
+.scroller {
+    overflow: auto;
+    width: 0;
+    min-width: 100%;
+    max-height: calc(100vh - 1rem);
+    max-height: calc(100dvh - 1rem);
+}
+
+.worksheet {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.8rem;
+}
+
+.worksheet th,
+.worksheet td {
+    padding: 0.15rem 0.45rem;
+    border-right: 1px solid #d6d5d5;
+    border-bottom: 1px solid #d6d5d5;
+}
+
+.worksheet thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: #fff;
+}
+
+/* The Scouts' names read upwards over narrow columns */
+.worksheet th.scout {
+    height: 8rem;
+    vertical-align: bottom;
+    padding: 0.15rem 0.2rem;
+}
+
+.worksheet th.scout span {
+    display: inline-block;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
+}
+
+/* Terrain-like: Plan, Do and Review in a narrow column, then the requirements, both kept in view as the Scouts scroll by */
+.worksheet .group {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    box-sizing: border-box;
+    min-width: 4.5rem;
+    width: 4.5rem;
+    font-weight: bold;
+    background-color: #fff;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.worksheet .requirement {
+    position: sticky;
+    left: 4.5rem;
+    z-index: 1;
+    min-width: 14rem;
+    max-width: 28rem;
+    background-color: #fff;
+}
+
+/* The other way round: the Scouts' names down the side, Plan, Do and Review over the requirements */
+.worksheet .name {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 9rem;
+    background-color: #fff;
+}
+
+.worksheet .heading {
+    font-weight: bold;
+    text-align: center;
+}
+
+.worksheet thead .group,
+.worksheet thead .requirement,
+.worksheet thead .name {
+    z-index: 3;
+}
+
+.worksheet .cell {
+    min-width: 2rem;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.worksheet .cell.awarded {
+    background-color: #8fbc8b;
+}
+
+.worksheet .cell.progress {
+    background-color: #ffa500;
+}
