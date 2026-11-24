@@ -4,7 +4,10 @@ namespace Topo.Model.Help
     // top right of a page opens the wiki page for exactly that page. To document a new page: add its address here, then write the wiki page.
     public static class HelpPages
     {
-        public const string WikiUrl = "https://github.com/NomisNostab/Topo-Blazor/wiki";
+        // Where the help pages live. For now this is the wiki on TymonDomanko's fork, because the upstream wiki only takes edits from its
+        // maintainer; point it back at https://github.com/NomisNostab/Topo-Blazor/wiki if the pages move there. The menu's own Help
+        // link (NavMenuItems.HelpUrl) is separate and still opens the upstream wiki's front page.
+        public const string WikiUrl = "https://github.com/TymonDomanko/Topo-Blazor/wiki";
 
         // The page's address within Topo (no leading slash, no query) and the wiki page that documents it. A wiki page's name is its web
         // address, so it uses hyphens for spaces and has no slash. Some pages are listed under more than one address, because the same

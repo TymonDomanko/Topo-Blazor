@@ -8,8 +8,8 @@ namespace TopoReportFunctionTest
         [TestMethod]
         public void APageLinksToItsOwnWikiPage()
         {
-            Assert.AreEqual("https://github.com/NomisNostab/Topo-Blazor/wiki/Members", HelpPages.UrlFor("members"));
-            Assert.AreEqual("https://github.com/NomisNostab/Topo-Blazor/wiki/Home-Page", HelpPages.UrlFor(""));
+            Assert.AreEqual(HelpPages.WikiUrl + "/Members", HelpPages.UrlFor("members"));
+            Assert.AreEqual(HelpPages.WikiUrl + "/Home-Page", HelpPages.UrlFor(""));
         }
 
         [TestMethod]
