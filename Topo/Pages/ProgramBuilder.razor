@@ -719,11 +719,15 @@
             _ => "Activity"
         };
         if (!ProgramPlanner.IsDated(extra))
+        {
             return $"{kind} · no date yet";
+        }
         var from = extra.Date.Date;
         var to = extra.EndDate?.Date;
         if (to == null || to == from)
+        {
             return $"{kind} · {from:ddd d MMM}";
+        }
         return from.Month == to.Value.Month && from.Year == to.Value.Year
             ? $"{kind} · {from:ddd d} - {to:ddd d MMM}"
             : $"{kind} · {from:ddd d MMM} - {to:ddd d MMM}";
@@ -750,10 +754,22 @@
     private string NightMoreSummary(ProgramRow edit)
     {
         var parts = new List<string>();
-        if (edit.Leader != "") parts.Add(edit.Leader);
-        if (edit.ChallengeArea != "") parts.Add(ProgramLayout.AreaLabel(edit.ChallengeArea));
-        if (edit.ScoutMethod.Count > 0) parts.Add("Method: " + ProgramScoutMethod.Summary(edit.ScoutMethod));
-        if (edit.StartTime != "" || edit.EndTime != "") parts.Add($"{(edit.StartTime == "" ? draft.NightStart : edit.StartTime)}-{(edit.EndTime == "" ? draft.NightEnd : edit.EndTime)}");
+        if (edit.Leader != "")
+        {
+            parts.Add(edit.Leader);
+        }
+        if (edit.ChallengeArea != "")
+        {
+            parts.Add(ProgramLayout.AreaLabel(edit.ChallengeArea));
+        }
+        if (edit.ScoutMethod.Count > 0)
+        {
+            parts.Add("Method: " + ProgramScoutMethod.Summary(edit.ScoutMethod));
+        }
+        if (edit.StartTime != "" || edit.EndTime != "")
+        {
+            parts.Add($"{(edit.StartTime == "" ? draft.NightStart : edit.StartTime)}-{(edit.EndTime == "" ? draft.NightEnd : edit.EndTime)}");
+        }
         return parts.Count == 0 ? "Leader, challenge area, times" : string.Join(" · ", parts);
     }
 }
