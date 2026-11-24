@@ -10,7 +10,6 @@
 
 @foreach (var sheet in Report.Sheets.Where(s => s.Rows.Count > 0))
 {
-    <div class="sheet">
     <h4 class="mt-3">@(sheet.Patrol == "" ? "" : sheet.Patrol + " ")Outdoor Adventure Skills as at @Report.GeneratedAt.ToString("d MMM yyyy", CultureInfo.InvariantCulture)</h4>
     <div class="scroller">
         <table class="oas">
@@ -63,7 +62,6 @@
                 }
             </tbody>
         </table>
-    </div>
     </div>
 }
 

@@ -1,21 +1,10 @@
-/* The table scrolls inside its own box, keeping the names and the headings in view, so it never widens the page. The box also sticks
-   to the top of the screen once the page is scrolled up to it, filling the screen, so the headings and the names stay in view while the
-   page is scrolled too. It sticks only within its own sheet, so each patrol's table scrolls past in turn. */
-.sheet {
-    position: relative;
-}
-
+/* The table scrolls inside its own box, keeping the names and the headings in view, so it never widens the page */
 .scroller {
-    position: sticky;
-    top: 0;
-    z-index: 4;
     overflow: auto;
-    /* No width of its own to count towards the page's, so the table scrolls in the space there is instead of widening the page */
     width: 0;
     min-width: 100%;
-    max-height: 100vh;
-    max-height: 100dvh;
-    background-color: #fff;
+    max-height: calc(100vh - 1rem);
+    max-height: calc(100dvh - 1rem);
 }
 
 .oas {
