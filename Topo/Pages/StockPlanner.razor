@@ -7,7 +7,7 @@
     <h2>Stock Planner @GroupName</h2>
 </div>
 
-<p class="text-muted">How many of each badge to keep in stock. It looks at how many were awarded over the last twelve months, and at what Topo can already see
+<p class="text-muted">How many of each badge to keep in stock. It looks at how many were awarded over the years you choose, and at what Topo can already see
     coming: requests waiting for approval and years of service anniversaries.</p>
 
 <div class="card mb-3" id="options">
@@ -21,6 +21,11 @@
                     <option value="@unit.Key">@unit.Value</option>
                 }
             </select>
+        </div>
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <label for="years" class="mb-0">Years to look back</label>
+            <input type="number" id="years" class="form-control form-control-sm" style="max-width: 6rem" min="1" max="10" value="@HistoryYears" @onchange="YearsChange" disabled="@Loading" />
+            <span class="text-muted small">More years smooth out a busy or quiet year, but take longer to read. Press Show stock plan to read them again.</span>
         </div>
         <div class="d-flex align-items-center gap-2 mb-2">
             <label for="cover" class="mb-0">Months of stock to keep</label>
@@ -37,14 +42,14 @@
 {
     @if (Plan.Count == 0)
     {
-        <div class="mb-3" id="nothing">Nothing was awarded in the last twelve months and nothing is waiting, so there is no stock to plan.</div>
+        <div class="mb-3" id="nothing">Nothing was awarded in the last @(Data.HistoryYears == 1 ? "year" : Data.HistoryYears + " years") and nothing is waiting, so there is no stock to plan.</div>
     }
     else
     {
         <div class="card mb-3" id="plan">
             <div class="d-flex gap-3 px-3 py-1 small fw-bold text-muted bg-light">
                 <div class="flex-grow-1">Badge</div>
-                <div class="text-end" style="width: 6rem">Last 12 months</div>
+                <div class="text-end" style="width: 6rem">Last @(Data!.HistoryYears == 1 ? "year" : Data.HistoryYears + " years")</div>
                 <div class="text-end" style="width: 5rem">Per month</div>
                 <div class="text-end" style="width: 5rem">Coming</div>
                 <div class="text-end" style="width: 6rem">Keep in stock</div>
@@ -74,8 +79,8 @@
         </div>
 
         <p class="text-muted small mb-1" id="method">
-            How the figure is worked out: the badges awarded in the last twelve months, spread over the months you chose, or what is already coming if that is more,
-            with a spare fifth on top, and at least one of anything awarded in the last year. "Coming" is requests waiting for approval now (milestones, Outdoor
+            How the figure is worked out: the badges awarded over the last @(Data.HistoryYears == 1 ? "year" : Data.HistoryYears + " years"), spread over the months you chose, or what is already coming if that is more,
+            with a spare fifth on top, and at least one of anything awarded in that time. "Coming" is requests waiting for approval now (milestones, Outdoor
             Adventure Skill stages, Special Interest Areas and introductions) plus years of service anniversaries inside those months. Peak Awards are not planned,
             and years of service count only once recorded, as in the Badge Order.@(AnyNotInShop ? " Badges marked \"Not in the shop\" are still in the plan but have to be ordered another way." : "")
         </p>
