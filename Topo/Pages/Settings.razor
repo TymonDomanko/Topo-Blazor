@@ -3,6 +3,7 @@
 @inject Topo.Services.IAutoAwardService _autoAwards
 @inject Topo.Services.IYearsOfServiceService _yearsOfService
 @inject NavigationManager NavigationManager
+@inject Blazored.LocalStorage.ILocalStorageService _localStorage
 @implements IDisposable
 
 <PageTitle>Topo / Settings</PageTitle>
@@ -11,6 +12,41 @@
 
 <div class="mt-3 mb-3 row">
     <h2>Settings</h2>
+</div>
+
+<h4>Defaults</h4>
+
+<div class="mb-4" id="defaults">
+    <div class="form-text mb-2">What the pages start with. Each report can still be changed as you make it. These are kept in this browser.</div>
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="default-full-names" checked="@_defaults.UseFullNames" @onchange="e => DefaultChange(d => d.UseFullNames = e.Value is true)" />
+        <label class="form-check-label" for="default-full-names">Use full names (otherwise first name plus enough of the surname to tell people apart)</label>
+    </div>
+    <div class="fw-bold mt-3 mb-1">Sign in sheet</div>
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="default-registered" checked="@_defaults.SignIn.IncludeRegisteredColumn" @onchange="e => DefaultChange(d => d.SignIn.IncludeRegisteredColumn = e.Value is true)" />
+        <label class="form-check-label" for="default-registered">Registered column</label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="default-paid" checked="@_defaults.SignIn.IncludePaidColumn" @onchange="e => DefaultChange(d => d.SignIn.IncludePaidColumn = e.Value is true)" />
+        <label class="form-check-label" for="default-paid">Paid column</label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="default-participation" checked="@_defaults.SignIn.IncludeParticipationColumns" @onchange="e => DefaultChange(d => d.SignIn.IncludeParticipationColumns = e.Value is true)" />
+        <label class="form-check-label" for="default-participation">Participate / Lead columns</label>
+    </div>
+    <div class="mt-1">
+        <label class="me-2" for="default-attendance">Attendance</label>
+        <select class="form-select form-select-sm d-inline-block w-auto" id="default-attendance" value="@(_defaults.SignIn.UseTimeInOutSignature ? "timeinout" : "tickbox")"
+                @onchange="AttendanceDefaultChange">
+            <option value="timeinout">Time in / signature / time out / signature</option>
+            <option value="tickbox">Tick box</option>
+        </select>
+    </div>
+    @if (_defaultsSaved)
+    {
+        <div class="form-text text-success" id="defaults-saved">Saved.</div>
+    }
 </div>
 
 <h4>Background tasks</h4>
@@ -126,6 +162,8 @@
 </div>
 
 @code {
+    private Topo.Model.Defaults.UserDefaults _defaults = new();
+    private bool _defaultsSaved;
     private bool _yosEnabled;
     private bool _yosBusy;
     private bool _yosConfirmCreate;
@@ -142,11 +180,26 @@
             return;
         }
         _autoAwards.Changed += OnAutoChanged;
+        // what has been chosen, or what the pages start with now
+        _defaults = await Topo.Services.UserDefaultsStore.ReadAsync(_localStorage) ?? new Topo.Model.Defaults.UserDefaults { UseFullNames = _storageService.UseFullNames };
         _yosEnabled = await _yearsOfService.IsEnabledAsync();
         if (_yosEnabled)
         {
             _yosStatus = await _yearsOfService.StatusAsync();
         }
+    }
+
+    private Task AttendanceDefaultChange(ChangeEventArgs e)
+    {
+        var timeInOut = e.Value?.ToString() == "timeinout";
+        return DefaultChange(d => d.SignIn.UseTimeInOutSignature = timeInOut);
+    }
+
+    private async Task DefaultChange(Action<Topo.Model.Defaults.UserDefaults> change)
+    {
+        change(_defaults);
+        await Topo.Services.UserDefaultsStore.SaveAsync(_localStorage, _storageService, _defaults);
+        _defaultsSaved = true;
     }
 
     private async Task YosToggle(ChangeEventArgs e)
