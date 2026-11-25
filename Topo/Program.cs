@@ -32,6 +32,7 @@ builder.Services.AddScoped<IAdditionalAwardCheckService, AdditionalAwardCheckSer
 builder.Services.AddScoped<IBadgeStoreService, BadgeStoreService>();
 builder.Services.AddScoped<IYearsOfServiceService, YearsOfServiceService>();
 builder.Services.AddScoped<IBadgeOrderService, BadgeOrderService>();
+builder.Services.AddScoped<IStockPlanService, StockPlanService>();
 builder.Services.AddScoped<IApprovalsService, ApprovalsService>();
 builder.Services.AddScoped<IProgressService, ProgressService>();
 builder.Services.AddScoped<IHistoryService, HistoryService>();
