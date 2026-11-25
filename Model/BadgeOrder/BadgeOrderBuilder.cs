@@ -26,9 +26,10 @@ namespace Topo.Model.BadgeOrder
         public const string SiaGroup = "Special Interest Areas";
         public const string AdditionalGroup = "Additional awards";
         public const string IntroGroup = "Introduction badges";
+        public const string NewMemberGroup = "New member items";
         public const string PeakGroup = "Peak awards";
 
-        private static readonly string[] GroupOrder = { YearsOfServiceGroup, MilestonesGroup, OasGroup, SiaGroup, AdditionalGroup, IntroGroup, PeakGroup };
+        private static readonly string[] GroupOrder = { YearsOfServiceGroup, MilestonesGroup, OasGroup, SiaGroup, AdditionalGroup, IntroGroup, NewMemberGroup, PeakGroup };
 
         private static readonly Dictionary<string, string> MilestoneProducts = new Dictionary<string, string>
         {
@@ -45,6 +46,13 @@ namespace Topo.Model.BadgeOrder
         private static readonly Dictionary<string, string> ServiceProducts = new Dictionary<string, string>
         {
             ["joey"] = "joey-service", ["cub"] = "cub-service", ["scout"] = "scout-service-badge", ["venturer"] = "venturer-service", ["rover"] = "rover-service-badge"
+        };
+
+        // What a new member is given when they join, as the Section/Group Report names it. The ones the Scout Shop sells are listed here; the others (the group's
+        // tape and scarf, the scarf badge and the region badge) are ordered by hand, so they show as lines that are not in the shop.
+        private static readonly Dictionary<string, string> NewMemberProducts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Australian Scouting Badge"] = "australian-scout-flag-badge", ["World Scouting Badge"] = "world-membership-badge"
         };
 
         private static readonly Dictionary<string, string> IntroProducts = new Dictionary<string, string>
@@ -92,6 +100,11 @@ namespace Topo.Model.BadgeOrder
                 {
                     var shop = IntroProducts.TryGetValue(key, out var handle) ? ScoutShopCatalog.Find(handle, "Default Title") : null;
                     Add(lines, IntroGroup, $"Introduction to {sectionName}", section.InvestedInPeriod, shop);
+                }
+                foreach (var item in section.Badges.InvestitureItems)
+                {
+                    var shop = NewMemberProducts.TryGetValue(item.Name, out var handle) ? ScoutShopCatalog.Find(handle, "Default Title") : null;
+                    Add(lines, NewMemberGroup, item.Name, item.Count, shop);
                 }
                 if (section.Badges.PeakAwards > 0)
                 {

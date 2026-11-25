@@ -7,7 +7,7 @@ https://scoutshop.com.au.
 
 The same figures as the Section/Group Report, for the unit chosen (or every unit of the group, the default), from a day to today: milestones, Outdoor Adventure Skill stages, Special
 Interest Areas, additional awards (Camper, Walkabout, years of service, First Aid and the rest), and the introduction badge for each Scout invested in
-the period. It reads Terrain's records, and the years of service recorded in the group's store (docs/badge-store.md).
+the period, along with what each new member is given when they join (the same items as the report's Badges needed list). The Australian Scouting Badge (the Australian Scout Flag Badge in the shop) and the World Scouting Badge (the World Membership Badge) go in the cart; the group tape, scarf, scarf badge and region badge are not sold by the national shop and are listed to order by hand. It reads Terrain's records, and the years of service recorded in the group's store (docs/badge-store.md).
 
 Each line is matched to a product in the shop by `Model/BadgeOrder/BadgeOrderBuilder.cs`. A badge with no match (Peak Awards, which the report counts
 without saying which part, an additional award the shop does not sell, a fourth Cub year of service) is shown as "Not in the shop, order by hand" and is
