@@ -105,10 +105,12 @@ namespace Topo.Shared
             }),
             new("Settings", NavAudience.SignedIn, new NavItem[]
             {
-                new("Settings", "settings", "oi-cog", NavAudience.Leader),
+                new("Settings", "settings", "oi-cog", NavAudience.Leader, SubItems: new NavItem[]
+                {
+                    new("Enable Logging", "logging", "oi-document", NavAudience.Leader,
+                        TitleFor: storage => storage.LogToQueue ? "Stop Logging" : "Enable Logging")
+                }),
                 new("Logout", "logout", "oi-lock-locked"),
-                new("Enable Logging", "logging", "oi-document", NavAudience.Leader,
-                    TitleFor: storage => storage.LogToQueue ? "Stop Logging" : "Enable Logging"),
             }, OpenByDefault: false),
         };
 

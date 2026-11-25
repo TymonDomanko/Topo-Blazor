@@ -100,6 +100,7 @@ namespace Topo.Services
             _storageService.Groups = GetGroups();
             _storageService.GroupId = _storageService.Groups.Count == 1 ? _storageService.Groups.FirstOrDefault().Key : "";
             _storageService.GroupName = _storageService.Groups.Count == 1 ? _storageService.Groups.FirstOrDefault().Value : "";
+            await UserDefaultsStore.ApplyAsync(_localStorageService, _storageService);
         }
 
         public async Task PersistSessionAsync()
@@ -125,6 +126,7 @@ namespace Topo.Services
             _storageService.AuthenticationResult = session.AuthenticationResult;
             _storageService.TokenExpiry = session.TokenExpiry;
             _storageService.IsAuthenticated = true;
+            await UserDefaultsStore.ApplyAsync(_localStorageService, _storageService);
 
             try
             {
