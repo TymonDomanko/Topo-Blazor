@@ -92,6 +92,7 @@ namespace Topo.Shared
                 new("Sign In Sheet", "signinsheet", "oi-pencil"),
                 new("Program Ideas", "programideas", "oi-lightbulb"),
                 new("Program Builder", "programbuilder", "oi-calendar"),
+                new("Badge Order", "badgeorder", "oi-cart"),
             }),
             new("Settings", NavAudience.SignedIn, new NavItem[]
             {

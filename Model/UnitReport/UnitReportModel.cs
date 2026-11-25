@@ -64,5 +64,7 @@ namespace Topo.Model.UnitReport
     {
         public string Name { get; set; } = string.Empty;
         public int Count { get; set; }
+        // Terrain's id for the award, when the count is of an additional award (blank for the other badges)
+        public string Id { get; set; } = string.Empty;
     }
 }
