@@ -49,7 +49,6 @@ namespace Topo.Controller
         public string UnitName(string unitId) => Units.TryGetValue(unitId, out var name) ? name : unitId;
         public int InShopCount => Lines?.Where(l => l.InShop).Sum(l => l.Count) ?? 0;
         public int ByHandCount => Lines?.Where(l => !l.InShop).Sum(l => l.Count) ?? 0;
-        public decimal Total => Lines?.Sum(l => l.Cost) ?? 0;
         public List<string> CartLinks => Lines == null ? new List<string>() : BadgeOrderBuilder.CartLinks(Lines);
         // Where a leader signs in to the Scout Shop (Topo never signs in for them)
         public const string ScoutShopLoginUrl = ScoutShopCatalog.ShopUrl + "account/login";
