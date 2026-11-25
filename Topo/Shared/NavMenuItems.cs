@@ -94,7 +94,6 @@ namespace Topo.Shared
                 new("Section/Group Report", "sectionreport", "oi-pie-chart"),
                 new("Unit History", "scoutinghistory/unit", "oi-clock", SubItems: new NavItem[] { new("Scouting History", "scoutinghistory/member", "oi-person") }),
                 new("Badge Order", "badgeorder", "oi-cart"),
-                new("Stock Planner", "stockplanner", "oi-box"),
             }),
             new(null, NavAudience.Youth, new NavItem[]
             {

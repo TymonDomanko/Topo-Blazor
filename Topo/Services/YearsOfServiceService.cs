@@ -6,7 +6,6 @@ using Topo.Model.Members;
 using Topo.Model.Milestone;
 using Topo.Model.Progress;
 using Topo.Model.Wallchart;
-using Topo.Model.StockPlan;
 using Topo.Model.YearsOfService;
 
 namespace Topo.Services
@@ -51,9 +50,6 @@ namespace Topo.Services
         // The years of service recorded in the group's store, read from Terrain's calendar comments now, for a report. Nothing when it is not
         // turned on or the group has no store; when Terrain cannot be read, what the last check kept.
         Task<List<BadgeStoreRecord>> RecordsForReportAsync();
-        // The years of service anniversaries the units' youth will reach after one day and up to another, for the stock planner. From the kept
-        // check (the first page to ask makes it when none has been made), so it needs no call to Terrain.
-        Task<List<DatedBadge>> UpcomingAsync(IEnumerable<string> unitIds, DateTime after, DateTime upTo);
         // Where tracking stands, from the last check (or from Terrain itself when refresh is asked for, or when nothing has been kept yet or the
         // last look found no records event)
         Task<YearsOfServiceStatus> StatusAsync(bool refresh = false);
@@ -302,25 +298,6 @@ namespace Topo.Services
                 return new List<AwardRow>();
             }
             return PendingFor(cache.Members, unitId, from.Value, cache.Store);
-        }
-
-        public async Task<List<DatedBadge>> UpcomingAsync(IEnumerable<string> unitIds, DateTime after, DateTime upTo)
-        {
-            var upcoming = new List<DatedBadge>();
-            if (!await IsEnabledAsync())
-            {
-                return upcoming;
-            }
-            var cache = await CacheWithFirstCheckAsync();
-            foreach (var unitId in unitIds)
-            {
-                var section = SectionOf(unitId);
-                if (section.Length > 0)
-                {
-                    upcoming.AddRange(YearsOfServiceAwards.Upcoming(cache.Members.Where(m => m.UnitId == unitId), section, after, upTo).Select(a => new DatedBadge { Day = a.Day, AwardId = a.AwardId }));
-                }
-            }
-            return upcoming;
         }
 
         public async Task<List<RecordedAward>> RecordedAsync(string unitId)

@@ -60,37 +60,6 @@ namespace Topo.Model.BadgeOrder
             ["messengers_of_peace"] = "messengers-of-peace-badge", ["scouts_of_the_world"] = "scouts-of-the-world-achievement-badge"
         };
 
-        // The lines for one kind of badge, added to a list (the same badge from two places is one line). Used by the order and by the stock planner.
-        public static void AddMilestone(List<BadgeOrderLine> lines, string section, int stage, int count)
-        {
-            var key = (section ?? "").Trim().ToLowerInvariant();
-            var sectionName = YearsOfServiceAwards.SectionName(key);
-            Add(lines, MilestonesGroup, $"{sectionName} Milestone {stage}", count, Shop(MilestoneProducts, key, $"{sectionName} Milestone {stage}"));
-        }
-
-        public static void AddOas(List<BadgeOrderLine> lines, string stream, int stage, int count) =>
-            Add(lines, OasGroup, $"OAS {stream}, Stage {stage}", count, ScoutShopCatalog.Find($"oas-{stream.ToLowerInvariant()}-badge", $"Stage {stage}"));
-
-        public static void AddSia(List<BadgeOrderLine> lines, string section, string category, int count)
-        {
-            var key = (section ?? "").Trim().ToLowerInvariant();
-            var option = category == "Art & Literature" ? "Arts & Literature" : category;
-            Add(lines, SiaGroup, $"{YearsOfServiceAwards.SectionName(key)} SIA, {category}", count, SiaProducts.TryGetValue(key, out var handle) ? ScoutShopCatalog.FindLoosely(handle, option) : null);
-        }
-
-        // An additional award, a Years of Service badge included, by Terrain's id (or Topo's, yos_scout_3)
-        public static void AddAward(List<BadgeOrderLine> lines, string awardId, string name, int count)
-        {
-            var (group, shop) = Additional(awardId);
-            Add(lines, group, name, count, shop);
-        }
-
-        public static void AddIntro(List<BadgeOrderLine> lines, string section, int count)
-        {
-            var key = (section ?? "").Trim().ToLowerInvariant();
-            Add(lines, IntroGroup, $"Introduction to {YearsOfServiceAwards.SectionName(key)}", count, IntroProducts.TryGetValue(key, out var handle) ? ScoutShopCatalog.Find(handle, "Default Title") : null);
-        }
-
         // What was awarded in the report's period, as an order. Lines with the same badge are added together across the sections.
         public static List<BadgeOrderLine> Build(SectionReportSet report)
         {
@@ -102,23 +71,27 @@ namespace Topo.Model.BadgeOrder
 
                 foreach (var milestone in section.Badges.Milestones)
                 {
-                    AddMilestone(lines, key, int.TryParse(milestone.Name.Split(' ').LastOrDefault(), out var stage) ? stage : 0, milestone.Count);
+                    var stage = milestone.Name.Split(' ').LastOrDefault() ?? "";
+                    Add(lines, MilestonesGroup, $"{sectionName} {milestone.Name}", milestone.Count, Shop(MilestoneProducts, key, $"{sectionName} Milestone {stage}"));
                 }
                 foreach (var oas in section.Badges.OasStages)
                 {
-                    AddOas(lines, oas.Stream, oas.Stage, oas.Count);
+                    Add(lines, OasGroup, $"OAS {oas.Stream}, Stage {oas.Stage}", oas.Count, ScoutShopCatalog.Find($"oas-{oas.Stream.ToLowerInvariant()}-badge", $"Stage {oas.Stage}"));
                 }
                 foreach (var sia in section.Badges.SiaCategories)
                 {
-                    AddSia(lines, key, sia.Name, sia.Count);
+                    var option = sia.Name == "Art & Literature" ? "Arts & Literature" : sia.Name;
+                    Add(lines, SiaGroup, $"{sectionName} SIA, {sia.Name}", sia.Count, SiaProducts.TryGetValue(key, out var handle) ? ScoutShopCatalog.FindLoosely(handle, option) : null);
                 }
                 foreach (var award in section.Badges.AdditionalAwards)
                 {
-                    AddAward(lines, award.Id, award.Name, award.Count);
+                    var (group, shop) = Additional(award.Id);
+                    Add(lines, group, award.Name, award.Count, shop);
                 }
                 if (section.InvestedInPeriod > 0)
                 {
-                    AddIntro(lines, key, section.InvestedInPeriod);
+                    var shop = IntroProducts.TryGetValue(key, out var handle) ? ScoutShopCatalog.Find(handle, "Default Title") : null;
+                    Add(lines, IntroGroup, $"Introduction to {sectionName}", section.InvestedInPeriod, shop);
                 }
                 if (section.Badges.PeakAwards > 0)
                 {
@@ -163,9 +136,6 @@ namespace Topo.Model.BadgeOrder
             }
             return (AdditionalGroup, null);
         }
-
-        // A line added to a list, summed with the same badge already there
-        public static void MergeInto(List<BadgeOrderLine> lines, BadgeOrderLine line) => Add(lines, line.Group, line.Name, line.Count, line.Shop);
 
         private static void Add(List<BadgeOrderLine> lines, string group, string name, int count, ShopVariant? shop)
         {
