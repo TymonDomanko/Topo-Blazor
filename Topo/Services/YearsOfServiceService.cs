@@ -54,7 +54,8 @@ namespace Topo.Services
         // last look found no records event)
         Task<YearsOfServiceStatus> StatusAsync(bool refresh = false);
         // The years of service to hand over for the unit's youth: the anniversaries passed since tracking started that the store has no record of.
-        // Worked out from the last check, with no call to Terrain. Empty until a check has run, and when tracking has not been started.
+        // Worked out from the last check, with no call to Terrain once a check has been made (the first page to ask makes it when none has).
+        // Empty when tracking has not been started.
         Task<List<AwardRow>> PendingAsync(string unitId);
         // The years of service the store held a record of at the last check, for the unit's youth
         Task<List<RecordedAward>> RecordedAsync(string unitId);
@@ -87,6 +88,7 @@ namespace Topo.Services
         // Counts the writes this copy has made, so a check that was running while one was made can tell its copy of the store is out of date
         private int _writes;
         private HashSet<string> _trusted = new HashSet<string>();
+        private int _scanning;
 
         public YearsOfServiceService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, IBadgeStoreService badgeStoreService, ILocalStorageService localStorage)
         {
@@ -134,6 +136,23 @@ namespace Topo.Services
             await IsEnabledAsync() && YearsOfServiceSchedule.IsDue(await LoadCacheAsync(), true, DateTime.UtcNow);
 
         public async Task<YearsOfServiceScanResult> ScanAsync(ICheckPacing? pacing)
+        {
+            // One check at a time: the background one, "Check now" and the first look a page takes would otherwise read the same things twice
+            if (Interlocked.Exchange(ref _scanning, 1) == 1)
+            {
+                return new YearsOfServiceScanResult { Skipped = true };
+            }
+            try
+            {
+                return await ScanCoreAsync(pacing);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _scanning, 0);
+            }
+        }
+
+        private async Task<YearsOfServiceScanResult> ScanCoreAsync(ICheckPacing? pacing)
         {
             var result = new YearsOfServiceScanResult();
             if (!await IsEnabledAsync())
@@ -252,13 +271,27 @@ namespace Topo.Services
             };
         }
 
+        // The kept result, after a first check if none has been made yet (a new browser, or just signed in) so the lists are right straight away
+        // rather than after the next quiet moment. Not retried on every page: a check that failed waits a few minutes, and one already running is
+        // not started again.
+        private async Task<YearsOfServiceScanCache> CacheWithFirstCheckAsync()
+        {
+            var cache = await LoadCacheAsync();
+            if (cache.ScannedAtUtc == null && Volatile.Read(ref _scanning) == 0 && YearsOfServiceSchedule.IsDue(cache, true, DateTime.UtcNow))
+            {
+                await ScanAsync(null);
+                cache = await LoadCacheAsync();
+            }
+            return cache;
+        }
+
         public async Task<List<AwardRow>> PendingAsync(string unitId)
         {
             if (!await IsEnabledAsync())
             {
                 return new List<AwardRow>();
             }
-            var cache = await LoadCacheAsync();
+            var cache = await CacheWithFirstCheckAsync();
             var from = cache.Store == null ? null : YearsOfServiceAwards.StartedFrom(cache.Store, GroupId);
             if (cache.Store == null || cache.Store.StoreEvents == 0 || from == null)
             {
@@ -273,7 +306,7 @@ namespace Topo.Services
             {
                 return new List<RecordedAward>();
             }
-            var cache = await LoadCacheAsync();
+            var cache = await CacheWithFirstCheckAsync();
             if (cache.Store == null || cache.Store.StoreEvents == 0)
             {
                 return new List<RecordedAward>();
