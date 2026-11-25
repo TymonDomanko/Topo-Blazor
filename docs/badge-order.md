@@ -34,7 +34,7 @@ their own account, and some badges can only be bought by an adult leader.
 
 ## Keeping the shop list up to date
 
-`Model/BadgeOrder/ScoutShopCatalog.cs` holds the shop's variant ids and RRP prices as they were on 25 November 2026. If the shop re-creates a product its
+`Model/BadgeOrder/ScoutShopCatalog.cs` holds the shop's variant ids (and the prices, kept for reference but not shown on the page) as they were on 25 November 2026. If the shop re-creates a product its
 numbers change and that badge shows as "not in the shop" until the list is refreshed. To refresh it, open any scoutshop.com.au product page, run this in
 the browser console, and paste the result over the `Data` text in the file:
 

@@ -14,7 +14,6 @@ namespace Topo.Model.BadgeOrder
         public int Count { get; set; }
         public ShopVariant? Shop { get; set; }
         public bool InShop => Shop != null;
-        public decimal Cost => Shop == null ? 0 : Shop.Price * Count;
     }
 
     // Turns what was awarded in a period (the Section/Group Report's badges, for every unit of the group) into an order for the Scout Shop. Each
