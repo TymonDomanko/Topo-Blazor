@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Topo EVERYTHING</title>
+    <link rel="icon" type="image/x-icon" href="G12-Map-icon-64.png"> <!--Icon from http://raindropmemory.deviantart.com/-->
+    <base href="/Topo-Blazor/" />
+    <link href="css/bootstrap/bootstrap.min.css" rel="stylesheet" />
+    <link href="css/app.css" rel="stylesheet" />
+    <link href="Topo.styles.css" rel="stylesheet" />
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <link href="_content/Syncfusion.Blazor.Themes/bootstrap5.css" rel="stylesheet" />
+    <script src="_content/Syncfusion.Blazor.Core/scripts/syncfusion-blazor.min.js" type="text/javascript"></script>
+</head>
+
+<body>
+    <div id="app">
+        <div class="mt-3 mb-3 row text-center">
+            <p />
+            <h2>Topo, helping you navigate the Terrain</h2>
+            <p />
+            <p />
+            <h4>Please wait while Topo loads</h4>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss">🗙</a>
+    </div>
+    <script src="_framework/blazor.webassembly.js"></script>
+<div style="position:fixed;bottom:0;right:0;z-index:99999;background:#c0392b;color:#fff;padding:2px 10px;font:12px sans-serif;border-top-left-radius:6px;opacity:.9">EVERYTHING - 3a0d778 - test build, writes to Terrain</div></body>
+
+</html>
+<script type="text/javascript">
+    // Use it for .NET 6+
+    function BlazorDownloadFile(filename, contentType, content) {
+        // Create the URL
+        const file = new File([content], filename, { type: contentType });
+        const exportUrl = URL.createObjectURL(file);
+
+        // Create the <a> element and click on it
+        const a = document.createElement("a");
+        document.body.appendChild(a);
+        a.href = exportUrl;
+        a.download = filename;
+        a.target = "_self";
+        a.click();
+
+        // We don't need to keep the object URL, let's release the memory
+        // On older versions of Safari, it seems you need to comment this line...
+        URL.revokeObjectURL(exportUrl);
+    }
+
+</script>
+<script type="text/javascript">
+    // A row dragged by its handle (Program Builder) moves with the mouse as a whole row, not just the handle.
+    // Only the handle is draggable, so the text boxes in the row can still be used normally.
+    document.addEventListener("dragstart", function (e) {
+        const handle = e.target instanceof Element ? e.target.closest(".drag-handle") : null;
+        const row = handle ? handle.closest(".night-card, tr") : null;
+        if (!row || !e.dataTransfer) return;
+        const box = row.getBoundingClientRect();
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", "");
+        e.dataTransfer.setDragImage(row, e.clientX - box.left, e.clientY - box.top);
+        // dim the row left behind, after the browser has taken its picture of it
+        setTimeout(function () { row.classList.add("row-dragging"); }, 0);
+    });
+    // dragend is not sent when the thing dragged has gone from the page by then (a night's handle goes once the night is emptied), so a drop clears it too
+    function clearDragging() {
+        document.querySelectorAll(".row-dragging").forEach(function (r) { r.classList.remove("row-dragging"); });
+    }
+    document.addEventListener("dragend", clearDragging);
+    document.addEventListener("drop", clearDragging);
+</script>
+<script type="text/javascript">
+
+    // In your Javascript (external .js resource or <script> tag)
+    function BindSelect2() {
+        $('.select2').select2({
+            placeholder: "Select one or more items",
+            language: {
+                noResults: function (term) {
+                    return "Please wait while items load.";
+                }
+            }
+        });
+    };
+
+    // Lets Blazor know when the person changes the selection (not when it is changed from code).
+    window.bindSelect2Change = function (sel, dotNetRef) {
+        $(sel).on('change', function () {
+            dotNetRef.invokeMethodAsync('OnCalendarsChanged');
+        });
+    };
+
+    // Sets the selection from code and refreshes what select2 shows, without raising the change above.
+    window.setSelectedValues = function (sel, values) {
+        $(sel).val(values).trigger('change.select2');
+    };
+
+    window.getSelectedValues = function (sel) {
+        var results = [];
+        var i;
+        for (i = 0; i < sel.options.length; i++) {
+            if (sel.options[i].selected) {
+                results[results.length] = sel.options[i].value;
+            }
+        }
+        return results;
+    };
+
+</script>

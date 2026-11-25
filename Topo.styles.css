@@ -1,0 +1,2507 @@
+/* /Pages/PatrolPlanner/PatrolPlanner.razor.rz.scp.css */
+.patrol-board[b-2c46t3i2kg] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.patrol-column[b-2c46t3i2kg] {
+    background-color: var(--patrol-color, #e2e2e2);
+    border-radius: 8px;
+    padding: 0.5rem;
+    min-width: 270px;
+    flex: 1 1 270px;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.patrol-column-ul[b-2c46t3i2kg] {
+    background-color: #f0f0f0;
+    border: 2px dashed #999;
+}
+
+.patrol-header[b-2c46t3i2kg] {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    font-size: 1.05rem;
+    margin-bottom: 0.25rem;
+}
+
+/* Both wrapped as single flex children of .patrol-header so its justify-content: space-between
+   only ever sees two groups (name+count on the left, colour+remove on the right) - without this,
+   a third loose child would get pushed to the middle instead of staying grouped on one side. */
+.patrol-header-title[b-2c46t3i2kg] {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.patrol-header-actions[b-2c46t3i2kg] {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex: 0 0 auto;
+}
+
+.patrol-remove-btn[b-2c46t3i2kg] {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    line-height: 1;
+    color: rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+    padding: 0 0.1rem;
+}
+
+.patrol-remove-btn:hover[b-2c46t3i2kg] {
+    color: rgba(0, 0, 0, 0.85);
+}
+
+.patrol-color-picker-wrap[b-2c46t3i2kg] {
+    position: relative;
+    display: inline-block;
+    width: 1.3rem;
+    height: 1.3rem;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    cursor: pointer;
+    background: conic-gradient(from 0deg, #ff0000, #ff8800, #ffee00, #44dd00, #00ccaa, #0066ff, #8800ff, #ff00aa, #ff0000);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* Invisible but fully clickable, stacked exactly over .patrol-color-picker-wrap so a click opens
+   the real native colour picker while the user only ever sees the rainbow wheel underneath. */
+.patrol-color-picker-input[b-2c46t3i2kg] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    margin: 0;
+    border: none;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.patrol-count[b-2c46t3i2kg] {
+    background-color: rgba(255, 255, 255, 0.7);
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+    font-size: 0.85rem;
+}
+
+.patrol-count-unbalanced[b-2c46t3i2kg] {
+    background-color: #f8d7da;
+    color: #842029;
+}
+
+.patrol-gender-tally[b-2c46t3i2kg] {
+    font-size: 0.85rem;
+    color: #555;
+    margin-bottom: 0.4rem;
+}
+
+.patrol-cards[b-2c46t3i2kg] {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-height: 40px;
+}
+
+.patrol-cards-row[b-2c46t3i2kg] {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.export-panels[b-2c46t3i2kg] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.export-panel[b-2c46t3i2kg] {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 0.75rem;
+}
+
+.export-panel-label[b-2c46t3i2kg] {
+    font-size: 0.85rem;
+    color: #555;
+    margin-bottom: 0.5rem;
+}
+
+.export-panel-buttons[b-2c46t3i2kg] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.add-patrol-input[b-2c46t3i2kg] {
+    max-width: 220px;
+}
+/* /Pages/ProgramBuilder.razor.rz.scp.css */
+/* Panels, as on the Patrol Planner: a light box with a small label */
+.pb-panel[b-vxcw87pzxj],
+.export-panel[b-vxcw87pzxj] {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 0.75rem;
+}
+
+.pb-panel-label[b-vxcw87pzxj],
+.export-panel-label[b-vxcw87pzxj] {
+    font-size: 0.85rem;
+    color: #555;
+    margin-bottom: 0.5rem;
+}
+
+.export-panels[b-vxcw87pzxj] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.export-panel-buttons[b-vxcw87pzxj] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.export-panel .report-buttons[b-vxcw87pzxj] {
+    margin-bottom: 0 !important;
+}
+
+.pb-badge[b-vxcw87pzxj] {
+    background-color: rgba(0, 0, 0, 0.08);
+    border-radius: 999px;
+    padding: 0.05rem 0.5rem;
+    font-size: 0.8rem;
+}
+
+.pb-count[b-vxcw87pzxj] {
+    margin-left: 0.5rem;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+/* Set up: three panels side by side while there is room */
+.pb-setup[b-vxcw87pzxj] {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 0.75rem;
+    align-items: start;
+    margin: 0.5rem 0 1rem;
+}
+
+.pb-field[b-vxcw87pzxj] {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    width: calc(50% - 0.4rem);
+    margin: 0 0.3rem 0.6rem 0;
+    font-size: 0.85rem;
+    color: #555;
+    vertical-align: bottom;
+}
+
+.pb-field.pb-wide[b-vxcw87pzxj] {
+    width: 100%;
+    margin-right: 0;
+}
+
+.pb-field-button[b-vxcw87pzxj] {
+    align-items: flex-start;
+}
+
+.pb-break[b-vxcw87pzxj],
+.pb-row[b-vxcw87pzxj] {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.4rem;
+}
+
+.pb-times[b-vxcw87pzxj] {
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.4rem;
+}
+
+.pb-times-name[b-vxcw87pzxj] {
+    color: #444;
+    font-size: 0.9rem;
+}
+
+.pb-x[b-vxcw87pzxj] {
+    border: 0;
+    background: none;
+    color: #888;
+    font-size: 1.2rem;
+    line-height: 1;
+    padding: 0 0.2rem;
+    flex: 0 0 auto;
+}
+
+.pb-x:hover[b-vxcw87pzxj] {
+    color: #b3261e;
+}
+
+/* Plan the Program: the ideas stay in view at the side while nights are scrolled past */
+.pb-plan[b-vxcw87pzxj] {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    align-items: start;
+}
+
+@media (min-width: 1100px) {
+    .pb-plan[b-vxcw87pzxj] {
+        grid-template-columns: 270px minmax(0, 1fr);
+    }
+
+    .pb-ideas[b-vxcw87pzxj] {
+        position: sticky;
+        top: 0.75rem;
+    }
+
+    .ideas-panel[b-vxcw87pzxj] {
+        max-height: calc(100vh - 1.5rem);
+        overflow-y: auto;
+    }
+}
+
+/* The ideas, kept until they are dragged onto a night; dropping what is on a night here takes it off */
+.ideas-pool[b-vxcw87pzxj] {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-height: 3.2rem;
+    padding: 0.4rem;
+    margin-bottom: 0.6rem;
+    border: 2px dashed #c6c6c6;
+    border-radius: 6px;
+    background-color: #fff;
+}
+
+.idea-card[b-vxcw87pzxj] {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    background-color: #fff;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+    cursor: grab;
+}
+
+.idea-text[b-vxcw87pzxj] {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.idea-title[b-vxcw87pzxj] {
+    font-weight: bold;
+    overflow-wrap: anywhere;
+}
+
+.idea-detail[b-vxcw87pzxj] {
+    font-size: 0.75rem;
+    color: #666;
+}
+
+.idea-new[b-vxcw87pzxj] {
+    display: grid;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+}
+
+.drag-handle[b-vxcw87pzxj] {
+    cursor: grab;
+    color: #888;
+    user-select: none;
+    letter-spacing: -0.2em;
+    flex: 0 0 auto;
+}
+
+/* the night being dragged, dimmed while it is carried (the class is put on by a script in index.html) */
+.row-dragging[b-vxcw87pzxj] {
+    opacity: 0.4;
+}
+
+/* The nights, a column a month with a card a night, as the Patrol Planner has a column a patrol */
+/* The columns are as wide as each other, and as many go across as makes the rows even (see BoardColumns); how many can fit comes from the width
+   of the nights area: a column wants about 290px */
+.pb-nights[b-vxcw87pzxj] {
+    container: nights / inline-size;
+}
+
+.night-board[b-vxcw87pzxj] {
+    display: grid;
+    grid-template-columns: repeat(var(--c1, 1), minmax(0, 1fr));
+    gap: 1rem;
+    align-items: start;
+}
+
+@container nights (min-width: 596px) {
+    .night-board[b-vxcw87pzxj] {
+        grid-template-columns: repeat(var(--c2, 1), minmax(0, 1fr));
+    }
+}
+
+@container nights (min-width: 902px) {
+    .night-board[b-vxcw87pzxj] {
+        grid-template-columns: repeat(var(--c3, 1), minmax(0, 1fr));
+    }
+}
+
+@container nights (min-width: 1208px) {
+    .night-board[b-vxcw87pzxj] {
+        grid-template-columns: repeat(var(--c4, 1), minmax(0, 1fr));
+    }
+}
+
+@container nights (min-width: 1514px) {
+    .night-board[b-vxcw87pzxj] {
+        grid-template-columns: repeat(var(--c5, 1), minmax(0, 1fr));
+    }
+}
+
+.month-column[b-vxcw87pzxj] {
+    background-color: #e9ecef;
+    border-radius: 8px;
+    padding: 0.5rem;
+    min-width: 0;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.month-header[b-vxcw87pzxj] {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    font-size: 1.05rem;
+}
+
+/* The stripe is the duty patrol's colour, put on in the style of the card */
+.night-card[b-vxcw87pzxj] {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    background-color: #fff;
+    border-left: 6px solid #9aa0a6;
+    border-radius: 6px;
+    padding: 0.4rem 0.5rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.night-skipped[b-vxcw87pzxj] {
+    opacity: 0.55;
+}
+
+.night-head[b-vxcw87pzxj] {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.night-date[b-vxcw87pzxj] {
+    font-weight: 600;
+    white-space: nowrap;
+    flex: 1 1 auto;
+}
+
+/* A button that moves the night's duty patrol on; the stripe is the patrol's colour, and it is filled when put on by hand */
+.night-duty[b-vxcw87pzxj] {
+    max-width: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0.1rem 0.6rem;
+    border: 1px solid #ced4da;
+    border-left: 6px solid #9aa0a6;
+    border-radius: 6px;
+    background-color: #fff;
+    color: #444;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.night-duty:hover:not(:disabled)[b-vxcw87pzxj] {
+    background-color: #eef0f2;
+}
+
+.night-duty-set[b-vxcw87pzxj] {
+    font-weight: bold;
+    background-color: #f1f3f5;
+}
+
+.night-duty:disabled[b-vxcw87pzxj] {
+    cursor: default;
+}
+
+/* A button that moves a location on, set like the boxes beside it */
+.choice-toggle[b-vxcw87pzxj] {
+    min-width: 0;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background-color: #fff;
+    color: #212529;
+    font-size: 0.875rem;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.choice-usual[b-vxcw87pzxj] {
+    color: #6c757d;
+}
+
+.choice-toggle:hover:not(:disabled)[b-vxcw87pzxj] {
+    background-color: #eef0f2;
+}
+
+.choice-toggle:disabled[b-vxcw87pzxj] {
+    cursor: default;
+}
+
+.night-skip[b-vxcw87pzxj] {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+    color: #666;
+    white-space: nowrap;
+}
+
+.night-pair[b-vxcw87pzxj] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.3rem;
+}
+
+.night-pair-single[b-vxcw87pzxj] {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.night-more > summary[b-vxcw87pzxj] {
+    font-size: 0.78rem;
+    color: #666;
+    cursor: pointer;
+}
+
+.night-more[open] > summary[b-vxcw87pzxj] {
+    margin-bottom: 0.3rem;
+}
+
+/* A camp, hike or other activity among the nights: tinted, with a label, so it is plainly not a weeknight */
+.extra-card[b-vxcw87pzxj] {
+    --extra-colour: #b7791f;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    background-color: #fff6e0;
+    border: 2px dashed var(--extra-colour);
+    border-left: 6px solid var(--extra-colour);
+    border-radius: 6px;
+    padding: 0.4rem 0.5rem;
+}
+
+.extra-hike[b-vxcw87pzxj] {
+    --extra-colour: #2f8f6b;
+    background-color: #e6f6ee;
+}
+
+.extra-weekend[b-vxcw87pzxj] {
+    --extra-colour: #7b4fc9;
+    background-color: #f1eafb;
+}
+
+.extra-other[b-vxcw87pzxj] {
+    --extra-colour: #5f6b7a;
+    background-color: #eceff2;
+}
+
+.extra-tag[b-vxcw87pzxj] {
+    align-self: flex-start;
+    padding: 0.05rem 0.6rem;
+    border-radius: 999px;
+    background-color: var(--extra-colour);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: bold;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.extra-head[b-vxcw87pzxj] {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.extra-head .extra-kind[b-vxcw87pzxj] {
+    width: auto;
+    flex: 0 0 auto;
+}
+
+.extra-head .extra-tag[b-vxcw87pzxj] {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.extra-note[b-vxcw87pzxj] {
+    flex: 1 1 auto;
+    font-size: 0.75rem;
+    font-style: italic;
+    color: var(--extra-colour);
+}
+
+.extra-head .pb-x[b-vxcw87pzxj] {
+    margin-left: auto;
+}
+
+.extra-times[b-vxcw87pzxj] {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.3rem;
+}
+
+.extra-add[b-vxcw87pzxj] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+}
+
+.extra-add-label[b-vxcw87pzxj] {
+    font-size: 0.85rem;
+    color: #555;
+}
+
+/* What the program shows: toggles that light up when on */
+.pb-chips[b-vxcw87pzxj] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.pb-chips-label[b-vxcw87pzxj] {
+    font-size: 0.85rem;
+    color: #555;
+}
+
+.pb-chip[b-vxcw87pzxj] {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.7rem;
+    border: 1px solid #ced4da;
+    border-radius: 999px;
+    background-color: #fff;
+    font-size: 0.85rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.pb-chip:has(input:checked)[b-vxcw87pzxj] {
+    background-color: #e7f1ff;
+    border-color: #0d6efd;
+    color: #0a58ca;
+}
+
+/* The duty patrol cycle: one chip a patrol, in the order they take their turn */
+.duty-cycle[b-vxcw87pzxj] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.duty-chip[b-vxcw87pzxj] {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.4rem 0.25rem 0.5rem;
+    background-color: #fff;
+    border: 1px solid #d0d0d0;
+    border-left: 6px solid #9aa0a6;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    cursor: grab;
+    user-select: none;
+}
+
+/* The chip a dragged patrol would take the place of */
+.duty-over[b-vxcw87pzxj] {
+    outline: 2px dashed #0d6efd;
+    outline-offset: 1px;
+}
+
+.duty-number[b-vxcw87pzxj] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 50%;
+    background-color: #eef0f2;
+    color: #555;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.duty-name[b-vxcw87pzxj] {
+    font-weight: 600;
+}
+
+.duty-button[b-vxcw87pzxj] {
+    width: 1.6rem;
+    height: 1.6rem;
+    padding: 0;
+    line-height: 1;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: none;
+    color: #555;
+}
+
+.duty-button:hover:not(:disabled)[b-vxcw87pzxj] {
+    background-color: #eef0f2;
+    border-color: #d0d0d0;
+}
+
+.duty-button:disabled[b-vxcw87pzxj] {
+    color: #c4c4c4;
+}
+
+.duty-remove:hover:not(:disabled)[b-vxcw87pzxj] {
+    background-color: #fdecea;
+    border-color: #f1b0a8;
+    color: #b3261e;
+}
+
+/* The sections fold away from their headings */
+.pb-section > summary[b-vxcw87pzxj] {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+.pb-section > summary[b-vxcw87pzxj]::-webkit-details-marker {
+    display: none;
+}
+
+.pb-section > summary h4[b-vxcw87pzxj] {
+    margin: 0;
+}
+
+.pb-section > summary[b-vxcw87pzxj]::before {
+    content: "\25BE";
+    display: inline-block;
+    width: 1rem;
+    color: #666;
+    transition: transform 0.15s;
+}
+
+.pb-section:not([open]) > summary[b-vxcw87pzxj]::before {
+    transform: rotate(-90deg);
+}
+
+.pb-section > summary:hover h4[b-vxcw87pzxj] {
+    text-decoration: underline;
+}
+
+.pb-section:not([open])[b-vxcw87pzxj] {
+    border-bottom: 1px solid #e3e3e3;
+    padding-bottom: 0.5rem;
+}
+
+/* The strip of camps, hikes and other activities that have no date yet */
+.pb-unplaced[b-vxcw87pzxj] {
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    border: 2px dashed #b7791f;
+    border-radius: 8px;
+    background-color: #fffaf0;
+}
+
+.pb-unplaced-label[b-vxcw87pzxj] {
+    margin-bottom: 0.4rem;
+    font-weight: bold;
+}
+
+.pb-unplaced-label .text-muted[b-vxcw87pzxj] {
+    font-weight: normal;
+}
+
+.pb-unplaced-cards[b-vxcw87pzxj] {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 0.5rem;
+    align-items: start;
+}
+
+/* The list of choices that a right click on a duty patrol or a location opens, under what was clicked */
+.menu-wrap[b-vxcw87pzxj] {
+    position: relative;
+    display: block;
+    min-width: 0;
+}
+
+.menu-wrap > .choice-toggle[b-vxcw87pzxj] {
+    width: 100%;
+}
+
+.night-head .menu-wrap[b-vxcw87pzxj] {
+    display: inline-block;
+}
+
+.pb-menu-backdrop[b-vxcw87pzxj] {
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+}
+
+.pb-menu[b-vxcw87pzxj] {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1050;
+    min-width: 11rem;
+    max-width: 18rem;
+    max-height: 16rem;
+    overflow-y: auto;
+    margin-top: 2px;
+    padding: 0.25rem;
+    background-color: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.night-head .pb-menu[b-vxcw87pzxj] {
+    left: auto;
+    right: 0;
+}
+
+.pb-menu-item[b-vxcw87pzxj] {
+    display: block;
+    width: 100%;
+    padding: 0.25rem 0.5rem;
+    border: 0;
+    border-left: 6px solid transparent;
+    border-radius: 4px;
+    background: none;
+    color: #212529;
+    font-size: 0.85rem;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pb-menu-item:hover[b-vxcw87pzxj] {
+    background-color: #eef0f2;
+}
+
+.pb-menu-selected[b-vxcw87pzxj] {
+    font-weight: bold;
+    background-color: #e7f1ff;
+}
+
+.pb-menu-note[b-vxcw87pzxj] {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+
+/* How many activities there are in each challenge area, in the program and among the ideas; it scrolls sideways rather than push the page wider */
+.area-summary-wrap[b-vxcw87pzxj] {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.area-summary[b-vxcw87pzxj] {
+    margin-bottom: 0.75rem;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.9rem;
+}
+
+.area-summary th[b-vxcw87pzxj],
+.area-summary td[b-vxcw87pzxj] {
+    padding: 0.2rem 0.5rem;
+    text-align: center;
+    border-bottom: 1px solid #e3e3e3;
+}
+
+.area-summary th[scope="row"][b-vxcw87pzxj],
+.area-summary thead th:first-child[b-vxcw87pzxj] {
+    text-align: left;
+    font-weight: normal;
+    color: #555;
+}
+
+.area-summary td[b-vxcw87pzxj] {
+    font-weight: bold;
+}
+
+.area-summary .area-zero[b-vxcw87pzxj] {
+    color: #b0b5ba;
+    font-weight: normal;
+}
+
+.area-summary .area-total[b-vxcw87pzxj] {
+    border-left: 1px solid #e3e3e3;
+    color: #555;
+}
+
+.area-tag[b-vxcw87pzxj] {
+    display: inline-block;
+    padding: 0.05rem 0.6rem;
+    border-radius: 999px;
+    background-color: #6c757d;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.area-outdoors[b-vxcw87pzxj] {
+    background-color: #2f8f6b;
+}
+
+.area-community[b-vxcw87pzxj] {
+    background-color: #3a6fd8;
+}
+
+.area-personal_growth[b-vxcw87pzxj] {
+    background-color: #d98a1f;
+}
+
+.area-creative[b-vxcw87pzxj] {
+    background-color: #b24fa8;
+}
+
+/* The box at the foot of a list of locations for adding one */
+.pb-menu-add[b-vxcw87pzxj] {
+    padding: 0.25rem 0.25rem 0.1rem;
+    border-top: 1px solid #e3e3e3;
+    margin-top: 0.25rem;
+}
+
+/* The Scout Method list: ticks in a column, and a row to clear or close it */
+.night-wide[b-vxcw87pzxj] {
+    grid-column: 1 / -1;
+}
+
+.pb-tick[b-vxcw87pzxj] {
+    display: inline-block;
+    width: 1.2rem;
+}
+
+.pb-menu-actions[b-vxcw87pzxj] {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* an activity that still needs its part of the Scout Method chosen */
+.choice-needed[b-vxcw87pzxj] {
+    border-color: #d98a1f;
+    color: #8a5a0b;
+}
+/* /Shared/AdditionalAwardsPreview.razor.rz.scp.css */
+/* A wide table scrolls inside its own box, no taller than the screen, so the page itself never scrolls sideways, the scroll bar is
+   at the bottom of the screen when the table is tall and under the table when it isn't, and the names and awards stay in view */
+.scroller[b-0bhn5ssjzy] {
+    overflow: auto;
+    /* No width of its own to count towards the page's, so the table scrolls in the space there is instead of widening the page */
+    width: 0;
+    min-width: 100%;
+    max-height: calc(100vh - 1rem);
+    max-height: calc(100dvh - 1rem);
+}
+
+.awards[b-0bhn5ssjzy] {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.awards th[b-0bhn5ssjzy],
+.awards td[b-0bhn5ssjzy] {
+    padding: 0.1rem 0.3rem;
+    border-right: 1px solid #d6d5d5;
+    border-bottom: 1px solid #d6d5d5;
+}
+
+.awards thead th[b-0bhn5ssjzy] {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: #e9ecef;
+}
+
+.awards .name[b-0bhn5ssjzy] {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 9rem;
+    background-color: #fff;
+    text-align: left;
+}
+
+/* the corner is above the names and the awards it sits between */
+.awards thead .name[b-0bhn5ssjzy] {
+    z-index: 3;
+    background-color: #e9ecef;
+}
+
+.awards td.text-center[b-0bhn5ssjzy] {
+    min-width: 2.6rem;
+}
+
+/* The award names read upwards, as on the printed page */
+.awards .turned[b-0bhn5ssjzy] {
+    height: 11rem;
+    padding: 0.2rem 0;
+    text-align: center;
+    vertical-align: bottom;
+}
+
+.awards .turned span[b-0bhn5ssjzy] {
+    display: inline-block;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+}
+
+.swatch[b-0bhn5ssjzy] {
+    display: inline-block;
+    width: 1.4rem;
+    height: 0.9rem;
+    border: 1px solid #999;
+    vertical-align: middle;
+}
+
+.awards .name label[b-0bhn5ssjzy] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.awards .name input[b-0bhn5ssjzy] {
+    margin-right: 0.35rem;
+}
+
+/* Scouts who are not in the report once some are ticked */
+.awards tr.dim td[b-0bhn5ssjzy] {
+    opacity: 0.4;
+}
+/* /Shared/AttendancePreview.razor.rz.scp.css */
+/* The table scrolls both ways inside its own box, which is no taller than the screen, so a wide table does not widen the page and
+   the two heading rows stay in view while the rows scroll */
+.scroller[b-xq67ww16jt] {
+    overflow: auto;
+    width: 0;
+    min-width: 100%;
+    max-height: calc(100vh - 1rem);
+    max-height: calc(100dvh - 1rem);
+}
+
+.attendance[b-xq67ww16jt] {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.attendance th[b-xq67ww16jt],
+.attendance td[b-xq67ww16jt] {
+    padding: 0.15rem 0.45rem;
+    border-right: 1px solid #d6d5d5;
+    border-bottom: 1px solid #d6d5d5;
+}
+
+/* The two heading rows stack up under each other, so the first is given the height the second sits below */
+.attendance thead th[b-xq67ww16jt] {
+    position: sticky;
+    z-index: 2;
+    background-color: #e9ecef;
+    font-weight: bold;
+}
+
+.attendance thead tr:nth-child(1) th[b-xq67ww16jt] {
+    top: 0;
+    height: 1.9rem;
+}
+
+.attendance thead tr:nth-child(2) th[b-xq67ww16jt] {
+    top: 1.9rem;
+}
+
+/* The names stay in view while the columns scroll */
+.attendance .name[b-xq67ww16jt] {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 8rem;
+    background-color: #fff;
+    text-align: left;
+}
+
+/* the corner is above the names and the headings it sits between */
+.attendance thead .name[b-xq67ww16jt] {
+    z-index: 3;
+    background-color: #e9ecef;
+}
+
+.attendance tfoot td[b-xq67ww16jt] {
+    font-weight: bold;
+    background-color: #f8f9fa;
+}
+
+.attendance tfoot .name[b-xq67ww16jt] {
+    background-color: #f8f9fa;
+}
+
+/* Who has missed several Scout nights in a row: amber from three, red from four */
+.not-seen[b-xq67ww16jt] {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d6d5d5;
+    border-radius: 6px;
+}
+
+.not-seen ul[b-xq67ww16jt] {
+    list-style: none;
+    padding-left: 0;
+}
+
+.flag[b-xq67ww16jt] {
+    display: inline-block;
+    min-width: 1.5rem;
+    margin-right: 0.4rem;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.flag-amber[b-xq67ww16jt] {
+    background-color: #ffc000;
+}
+
+.flag-red[b-xq67ww16jt] {
+    background-color: #f8696b;
+}
+/* /Shared/DepartureToggle.razor.rz.scp.css */
+/* A small pill like the Patrol Planner's role badges: dashed until a reason is chosen, then filled */
+.pill[b-0eib2xqvt3] {
+    display: inline-block;
+    cursor: pointer;
+    user-select: none;
+    font-weight: bold;
+    font-size: 0.7rem;
+    line-height: 1.3rem;
+    height: 1.4rem;
+    min-width: 6.5rem;
+    text-align: center;
+    padding: 0 0.6rem;
+    border-radius: 999px;
+    border: 1px dashed #c6c6c6;
+    color: #6c757d;
+    white-space: nowrap;
+}
+
+.pill.moved-up[b-0eib2xqvt3],
+.pill.moved-group[b-0eib2xqvt3],
+.pill.left-scouting[b-0eib2xqvt3] {
+    border-style: solid;
+    color: #fff;
+}
+
+.pill.moved-up[b-0eib2xqvt3] {
+    background-color: #10b981;
+    border-color: #10b981;
+}
+
+.pill.moved-group[b-0eib2xqvt3] {
+    background-color: #f59e0b;
+    border-color: #f59e0b;
+}
+
+.pill.left-scouting[b-0eib2xqvt3] {
+    background-color: #9ca3af;
+    border-color: #9ca3af;
+}
+/* /Shared/LoadingFigures.razor.rz.scp.css */
+/* Colours are the gumtree artwork's own: navy ground, teal figures */
+.loading[b-juj00sz23y] {
+    --navy: #242a5d;
+    --teal: #14998f;
+    --step: 0.9s;
+    --count: 12;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Wider screens: a row of figures hopping in a wave, on a soft backdrop so it reads over the page */
+.hoppers[b-juj00sz23y] {
+    display: none;
+    gap: 0.25rem;
+    align-items: flex-end;
+    padding: 2.5rem 1.25rem 0.75rem;
+    border-radius: 0.75rem;
+    background-color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.2);
+}
+
+.hopper[b-juj00sz23y] {
+    width: 4.5rem;
+    height: 4.5rem;
+    fill: var(--teal);
+    animation: hop-b-juj00sz23y 1.2s ease-in-out infinite;
+    animation-delay: calc(var(--i) * 0.12s);
+}
+
+.hopper:nth-child(even)[b-juj00sz23y] {
+    fill: var(--navy);
+}
+
+/* Phones: figures take turns inside a ring */
+.badge[b-juj00sz23y] {
+    position: relative;
+    width: 6.5rem;
+    height: 6.5rem;
+    border-radius: 50%;
+    background-color: var(--navy);
+    box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.3);
+}
+
+/* The ring that turns while the figures change, so it still reads as a spinner */
+.badge[b-juj00sz23y]::before {
+    content: "";
+    position: absolute;
+    inset: -0.45rem;
+    border-radius: 50%;
+    border: 0.3rem solid rgba(20, 153, 143, 0.25);
+    border-top-color: var(--teal);
+    animation: ring-b-juj00sz23y 1.1s linear infinite;
+}
+
+.figure[b-juj00sz23y] {
+    position: absolute;
+    inset: 0.9rem;
+    width: calc(100% - 1.8rem);
+    height: calc(100% - 1.8rem);
+    fill: var(--teal);
+    opacity: 0;
+    animation: figure-b-juj00sz23y calc(var(--count) * var(--step)) infinite;
+    /* Delays are relative to --start, so the figure numbered --start is the first one shown */
+    animation-delay: calc((var(--i) - var(--start)) * var(--step));
+}
+
+.caption[b-juj00sz23y] {
+    padding: 0.1rem 0.6rem;
+    border-radius: 0.75rem;
+    background-color: rgba(255, 255, 255, 0.85);
+    color: var(--navy);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+@keyframes hop-b-juj00sz23y {
+    0%, 60%, 100% {
+        transform: translateY(0);
+    }
+
+    30% {
+        transform: translateY(-2.25rem);
+    }
+}
+
+@keyframes ring-b-juj00sz23y {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Each figure takes one twelfth of the cycle: pops in, holds, and fades out just as the next pops in */
+@keyframes figure-b-juj00sz23y {
+    0% {
+        opacity: 0;
+        transform: translateY(12%) scale(0.85);
+    }
+
+    1.5%, 8.33% {
+        opacity: 1;
+        transform: none;
+    }
+
+    9.5%, 100% {
+        opacity: 0;
+        transform: translateY(-12%) scale(0.9);
+    }
+}
+
+@media (min-width: 641px) {
+    .badge[b-juj00sz23y] {
+        display: none;
+    }
+
+    .hoppers[b-juj00sz23y] {
+        display: flex;
+    }
+}
+
+/* The page is the screen less the 250px sidebar, so a narrow window drops figures from the end of the row to fit */
+@media (min-width: 641px) and (max-width: 789.98px) {
+    .hopper:nth-child(n+6)[b-juj00sz23y] {
+        display: none;
+    }
+}
+
+@media (min-width: 641px) and (max-width: 719.98px) {
+    .hopper:nth-child(n+5)[b-juj00sz23y] {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hopper[b-juj00sz23y] {
+        animation: none;
+    }
+
+    .badge[b-juj00sz23y]::before {
+        animation: none;
+        border-top-color: rgba(20, 153, 143, 0.25);
+    }
+
+    /* One still figure instead of a changing one */
+    .figure[b-juj00sz23y] {
+        animation: none;
+        opacity: 0;
+    }
+
+    .figure:first-of-type[b-juj00sz23y] {
+        opacity: 1;
+    }
+}
+/* /Shared/LogbookPreview.razor.rz.scp.css */
+.logbook[b-u04vlnk5lq] {
+    margin-bottom: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #d6d5d5;
+    border-radius: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.logbook.dim[b-u04vlnk5lq] {
+    opacity: 0.5;
+}
+
+/* A column each for the arrow, the tick, the name and the totals, so the totals line up from one person to the next */
+.logbook summary[b-u04vlnk5lq] {
+    display: grid;
+    grid-template-columns: 0.8rem 1.2rem 10rem 4.5rem 5.5rem 5.5rem 9.5rem;
+    align-items: baseline;
+    column-gap: 0.5rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+.logbook summary[b-u04vlnk5lq]::-webkit-details-marker {
+    display: none;
+}
+
+/* The arrow that says the row opens, turned down while it is open */
+.logbook summary[b-u04vlnk5lq]::before {
+    content: "\25B8";
+    color: #6c757d;
+}
+
+.logbook[open] > summary[b-u04vlnk5lq]::before {
+    content: "\25BE";
+}
+
+.logbook .tick[b-u04vlnk5lq] {
+    align-self: center;
+}
+
+/* Every column is a fixed width, so the totals are in the same place on every row; a long name is cut short (its full name is the tooltip) */
+.logbook .name[b-u04vlnk5lq] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.logbook .stat[b-u04vlnk5lq] {
+    white-space: nowrap;
+}
+
+.logbook .num[b-u04vlnk5lq] {
+    text-align: right;
+}
+
+.logbook .entries[b-u04vlnk5lq] {
+    margin: 0.6rem 0 0.2rem;
+}
+
+.logbook .entries .date[b-u04vlnk5lq],
+.logbook .entries .num[b-u04vlnk5lq] {
+    white-space: nowrap;
+}
+
+.logbook .entries .num[b-u04vlnk5lq] {
+    text-align: right;
+}
+
+.logbook .more[b-u04vlnk5lq] {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+/* On a narrow screen the name gets a line to itself and the totals run along the next */
+@media (max-width: 700px) {
+    .logbook summary[b-u04vlnk5lq] {
+        grid-template-columns: 0.8rem 1.2rem auto auto auto 1fr;
+    }
+
+    .logbook .name[b-u04vlnk5lq] {
+        grid-column: 3 / -1;
+    }
+
+    .logbook .stat:first-of-type[b-u04vlnk5lq] {
+        grid-column: 3;
+    }
+}
+/* /Shared/MainLayout.razor.rz.scp.css */
+.page[b-6wbl9fsfs3] {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+main[b-6wbl9fsfs3] {
+    flex: 1;
+    /* May be narrower than its widest content, so that content scrolls or overflows rather than squeezing the sidebar */
+    min-width: 0;
+}
+
+.sidebar[b-6wbl9fsfs3] {
+    background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 95%);
+}
+
+.top-row[b-6wbl9fsfs3] {
+    background-color: #f7f7f7;
+    border-bottom: 1px solid #d6d5d5;
+    justify-content: flex-end;
+    height: 3.5rem;
+    display: flex;
+    align-items: center;
+}
+
+    .top-row[b-6wbl9fsfs3]  a, .top-row[b-6wbl9fsfs3]  .btn-link {
+        white-space: nowrap;
+        margin-left: 1.5rem;
+        text-decoration: none;
+    }
+
+    .top-row[b-6wbl9fsfs3]  a:hover, .top-row[b-6wbl9fsfs3]  .btn-link:hover {
+        text-decoration: underline;
+    }
+
+    .top-row[b-6wbl9fsfs3]  a:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+@media (max-width: 640.98px) {
+    /* Stack the menu above the loading spinner, which is fixed to the middle of the screen */
+    .sidebar[b-6wbl9fsfs3] {
+        position: relative;
+        z-index: 1000;
+    }
+
+    .top-row:not(.auth)[b-6wbl9fsfs3] {
+        display: none;
+    }
+
+    .top-row.auth[b-6wbl9fsfs3] {
+        justify-content: space-between;
+    }
+
+    .top-row[b-6wbl9fsfs3]  a, .top-row[b-6wbl9fsfs3]  .btn-link {
+        margin-left: 0;
+    }
+}
+
+@media (min-width: 641px) {
+    .page[b-6wbl9fsfs3] {
+        flex-direction: row;
+    }
+
+    .sidebar[b-6wbl9fsfs3] {
+        width: 250px;
+        flex-shrink: 0;
+        height: 100vh;
+        position: sticky;
+        top: 0;
+        transition: width 0.15s ease-in-out;
+        /* Not scrollable itself: the nav links scroll inside .nav-scroll-area (see NavMenu.razor.css), which
+           fits the viewport, so a scrollbar here would be a second one. It also has to stay visible so the
+           collapse toggle can sit over its right edge. See issue #197. */
+    }
+
+    .sidebar.icon-only[b-6wbl9fsfs3] {
+        width: 4rem;
+    }
+
+    .top-row[b-6wbl9fsfs3] {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .top-row.auth[b-6wbl9fsfs3]  a:first-child {
+        flex: 1;
+        text-align: right;
+        width: 0;
+    }
+
+    .top-row[b-6wbl9fsfs3], article[b-6wbl9fsfs3] {
+        padding-left: 2rem !important;
+        padding-right: 1.5rem !important;
+    }
+}
+/* /Shared/MemberListPreview.razor.rz.scp.css */
+/* The shades the printed list uses */
+.second-last[b-jn0d30ewm8] {
+    background-color: #ffff00;
+}
+
+.last[b-jn0d30ewm8] {
+    background-color: #ff99cc;
+}
+
+.swatch[b-jn0d30ewm8] {
+    display: inline-block;
+    width: 1.4rem;
+    height: 0.9rem;
+    border: 1px solid #999;
+    vertical-align: middle;
+}
+/* /Shared/MilestonePreview.razor.rz.scp.css */
+.milestone[b-i101dajuaq] {
+    font-size: 0.9rem;
+}
+
+.milestone .percent[b-i101dajuaq] {
+    background-color: #c0c0c0;
+}
+/* /Shared/MilestoneProgressPreview.razor.rz.scp.css */
+.scout-page[b-9me6kp4csa] {
+    margin: 0 0 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid #d6d5d5;
+    border-radius: 0.5rem;
+}
+
+.scout-heading[b-9me6kp4csa] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin: 0 0 0.5rem;
+}
+
+.status[b-9me6kp4csa] {
+    padding: 0.05rem 0.5rem;
+    border-radius: 0.25rem;
+    background-color: #e9ecef;
+    font-size: 0.8rem;
+}
+
+.status.ready[b-9me6kp4csa] {
+    background-color: #9cf250;
+}
+
+.counts[b-9me6kp4csa] {
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.counts th[b-9me6kp4csa],
+.counts td[b-9me6kp4csa] {
+    padding: 0.2rem 0.75rem;
+    border: 1px solid #d6d5d5;
+    text-align: center;
+}
+
+.counts th[b-9me6kp4csa] {
+    background-color: #f7f7f7;
+    font-weight: normal;
+}
+
+.counts td.met[b-9me6kp4csa] {
+    background-color: #9cf250;
+}
+
+.events[b-9me6kp4csa] {
+    margin: 0.25rem 0 0;
+    font-size: 0.8rem;
+}
+
+.events td[b-9me6kp4csa] {
+    padding: 0.05rem 0.75rem 0.05rem 0;
+}
+
+.review .question[b-9me6kp4csa] {
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.review .answer[b-9me6kp4csa] {
+    white-space: pre-wrap;
+}
+
+/* A question not answered yet is a box to be written in, as it is on the printed page */
+.review .answer.blank[b-9me6kp4csa] {
+    min-height: 3.5rem;
+    padding: 0.2rem 0.5rem;
+    border: 1px dashed #adb5bd;
+    border-radius: 0.25rem;
+    color: #adb5bd;
+}
+
+.review .choices[b-9me6kp4csa] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.25rem;
+    margin-top: 0.2rem;
+}
+
+.review .choice[b-9me6kp4csa] {
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.review .choice.chosen[b-9me6kp4csa] {
+    color: inherit;
+    font-weight: bold;
+}
+/* /Shared/NavMenu.razor.rz.scp.css */
+.navbar-toggler[b-8dz3jqa64m] {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.icon-toggler[b-8dz3jqa64m] {
+    display: none;
+    position: absolute;
+    top: 50%;
+    right: 0;
+    transform: translate(50%, -50%);
+    width: 1.75rem;
+    height: 1.75rem;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    border-radius: 50%;
+    background-color: #fff;
+    border: 1px solid rgba(0,0,0,0.1);
+    color: #3a0647;
+    padding: 0;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+    z-index: 10;
+}
+
+.icon-toggler:hover[b-8dz3jqa64m] {
+    color: #050527;
+    background-color: #f0f0f0;
+}
+
+.icon-toggler .oi[b-8dz3jqa64m] {
+    width: auto;
+    height: auto;
+    font-size: 0.8rem;
+    line-height: 1;
+    vertical-align: middle;
+    top: 0;
+}
+
+.nav-group-label[b-8dz3jqa64m] {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255,255,255,0.5);
+    margin-top: 0.75rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-radius: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+}
+
+.nav-group-label:hover[b-8dz3jqa64m] {
+    background-color: rgba(255,255,255,0.1);
+    color: white;
+}
+
+.nav-group-label .oi[b-8dz3jqa64m] {
+    width: auto;
+    font-size: 0.6rem;
+    vertical-align: middle;
+    top: 0;
+}
+
+.nav-group-label + .version-item[b-8dz3jqa64m] {
+    margin-top: 0.75rem;
+}
+
+.top-row[b-8dz3jqa64m] {
+    height: 3.5rem;
+    background-color: rgba(0,0,0,0.4);
+    position: relative;
+}
+
+.navbar-brand[b-8dz3jqa64m] {
+    font-size: 1.1rem;
+}
+
+.oi[b-8dz3jqa64m] {
+    width: 2rem;
+    font-size: 1.1rem;
+    vertical-align: text-top;
+    top: -2px;
+}
+
+.nav-item[b-8dz3jqa64m] {
+    font-size: 0.9rem;
+    padding-bottom: 0.5rem;
+}
+
+    .nav-item:first-of-type[b-8dz3jqa64m] {
+        padding-top: 1rem;
+    }
+
+    .nav-item:last-of-type[b-8dz3jqa64m] {
+        padding-bottom: 1rem;
+    }
+
+    .nav-item[b-8dz3jqa64m]  a {
+        color: #d7d7d7;
+        border-radius: 4px;
+        height: 3rem;
+        display: flex;
+        align-items: center;
+        line-height: 3rem;
+    }
+
+/* A long name (Section/Group Report) wraps onto two lines, so its lines sit close together and stay centred beside the icon
+   instead of each taking the link's full 3rem line height */
+.nav-text[b-8dz3jqa64m] {
+    line-height: 1.2;
+}
+
+.nav-item[b-8dz3jqa64m]  a.active {
+    background-color: rgba(255,255,255,0.25);
+    color: white;
+}
+
+.nav-item[b-8dz3jqa64m]  a:hover {
+    background-color: rgba(255,255,255,0.1);
+    color: white;
+}
+
+@media (min-width: 641px) {
+    .navbar-toggler[b-8dz3jqa64m] {
+        display: none;
+    }
+
+    .icon-toggler[b-8dz3jqa64m] {
+        display: flex;
+    }
+
+    .nav-scroll-area[b-8dz3jqa64m] {
+        max-height: calc(100vh - 3.5rem);
+        overflow-y: auto;
+        overflow-x: hidden;
+        /* Keep room for the scrollbar on both sides, so the items stay centred whether or not it is showing */
+        scrollbar-width: thin;
+        scrollbar-gutter: stable both-edges;
+        scrollbar-color: rgba(255,255,255,0.35) transparent;
+    }
+
+    .collapse[b-8dz3jqa64m] {
+        /* Never collapse the sidebar for wide screens */
+        display: block;
+    }
+}
+
+.icon-only .nav-text[b-8dz3jqa64m] {
+    display: none;
+}
+
+/* In icon mode a group is just its chevron, centred, so a collapsed group can still be opened */
+.icon-only .nav-group-label[b-8dz3jqa64m] {
+    justify-content: center;
+    margin-top: 0.4rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
+.icon-only .container-fluid[b-8dz3jqa64m] {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.icon-only .navbar-brand[b-8dz3jqa64m] {
+    margin-right: 0;
+}
+
+.icon-only .version-item[b-8dz3jqa64m] {
+    display: none;
+}
+
+.icon-only .nav-item[b-8dz3jqa64m]  a {
+    justify-content: center;
+}
+
+
+/* The bar is only 4rem wide and the scrollbar's gutters take 20px of it, so the usual 1rem each side would leave the icon
+   less room than its own width and push it off centre */
+.icon-only .nav-item.px-3[b-8dz3jqa64m] {
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+}
+
+.icon-only .oi[b-8dz3jqa64m] {
+    width: auto;
+}
+/* /Shared/OasSummaryPreview.razor.rz.scp.css */
+/* The table scrolls inside its own box, keeping the names and the headings in view, so it never widens the page */
+.scroller[b-nnistwylmd] {
+    overflow: auto;
+    width: 0;
+    min-width: 100%;
+    max-height: calc(100vh - 1rem);
+    max-height: calc(100dvh - 1rem);
+}
+
+.oas[b-nnistwylmd] {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.oas th[b-nnistwylmd],
+.oas td[b-nnistwylmd] {
+    padding: 0.15rem 0.45rem;
+    border-right: 1px solid #d6d5d5;
+    border-bottom: 1px solid #d6d5d5;
+}
+
+/* The heading rows stack up under each other, each stuck below the one before (their offsets are set on the cells) */
+.oas thead th[b-nnistwylmd] {
+    position: sticky;
+    z-index: 2;
+    background-color: #fff;
+    height: 1.7rem;
+}
+
+.oas .groups th[b-nnistwylmd] {
+    background-color: #e9ecef;
+    font-weight: bold;
+}
+
+.oas .name[b-nnistwylmd] {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 9rem;
+    background-color: #fff;
+    text-align: left;
+}
+
+.oas thead .name[b-nnistwylmd] {
+    z-index: 3;
+}
+
+.legend .swatch[b-nnistwylmd] {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    margin: 0 0.25rem 0 1rem;
+    border: 1px solid #adb5bd;
+    vertical-align: text-bottom;
+}
+
+.legend .swatch:first-child[b-nnistwylmd] {
+    margin-left: 0;
+}
+/* /Shared/OasWorksheetPreview.razor.rz.scp.css */
+/* The table scrolls inside its own box, keeping the headings and the first columns in view, so it never widens the page */
+.scroller[b-9f1sreh50m] {
+    overflow: auto;
+    width: 0;
+    min-width: 100%;
+    max-height: calc(100vh - 1rem);
+    max-height: calc(100dvh - 1rem);
+}
+
+.worksheet[b-9f1sreh50m] {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.8rem;
+}
+
+.worksheet th[b-9f1sreh50m],
+.worksheet td[b-9f1sreh50m] {
+    padding: 0.15rem 0.45rem;
+    border-right: 1px solid #d6d5d5;
+    border-bottom: 1px solid #d6d5d5;
+}
+
+.worksheet thead th[b-9f1sreh50m] {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: #fff;
+}
+
+/* The Scouts' names read upwards over narrow columns */
+.worksheet th.scout[b-9f1sreh50m] {
+    height: 8rem;
+    vertical-align: bottom;
+    padding: 0.15rem 0.2rem;
+}
+
+.worksheet th.scout span[b-9f1sreh50m] {
+    display: inline-block;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
+}
+
+/* Terrain-like: Plan, Do and Review in a narrow column, then the requirements, both kept in view as the Scouts scroll by */
+.worksheet .group[b-9f1sreh50m] {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    box-sizing: border-box;
+    min-width: 4.5rem;
+    width: 4.5rem;
+    font-weight: bold;
+    background-color: #fff;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.worksheet .requirement[b-9f1sreh50m] {
+    position: sticky;
+    left: 4.5rem;
+    z-index: 1;
+    min-width: 14rem;
+    max-width: 28rem;
+    background-color: #fff;
+}
+
+/* The other way round: the Scouts' names down the side, Plan, Do and Review over the requirements */
+.worksheet .name[b-9f1sreh50m] {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 9rem;
+    background-color: #fff;
+}
+
+.worksheet .heading[b-9f1sreh50m] {
+    font-weight: bold;
+    text-align: center;
+}
+
+.worksheet thead .group[b-9f1sreh50m],
+.worksheet thead .requirement[b-9f1sreh50m],
+.worksheet thead .name[b-9f1sreh50m] {
+    z-index: 3;
+}
+
+.worksheet .cell[b-9f1sreh50m] {
+    min-width: 2rem;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.worksheet .cell.awarded[b-9f1sreh50m] {
+    background-color: #8fbc8b;
+}
+
+.worksheet .cell.progress[b-9f1sreh50m] {
+    background-color: #ffa500;
+}
+/* /Shared/PatrolListPreview.razor.rz.scp.css */
+.patrol-list[b-wjaehc14ak] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    align-items: flex-start;
+}
+
+.patrols[b-wjaehc14ak] {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 22rem;
+}
+
+.council[b-wjaehc14ak] {
+    flex: 1 1 18rem;
+}
+
+.heading[b-wjaehc14ak] {
+    margin-top: 0.75rem;
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.duty td[b-wjaehc14ak] {
+    background-color: #c0c0c0;
+}
+/* /Shared/PatrolMemberCard.razor.rz.scp.css */
+.member-card[b-or53o1ika1] {
+    /* gender | name | age | attendance | role. The fixed widths are what make each part line up from card to card. */
+    display: grid;
+    grid-template-columns: 1.6rem minmax(0, 1fr) 3rem 2.6rem 2rem;
+    align-items: center;
+    column-gap: 0.4rem;
+    min-width: 0;
+    background-color: #fff;
+    border-radius: 6px;
+    padding: 0.3rem 0.5rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    cursor: grab;
+}
+
+.member-card.changed[b-or53o1ika1] {
+    outline: 2px solid #0d6efd;
+}
+
+/* Gender and duty badges are styled as one consistent set - same pill shape, same sizing,
+   same letter-label convention (M/F/NB/-- for gender, Member/APL/PL/UL for duty) - so they
+   read as "the same kind of control" rather than two different UI patterns. */
+.gender-badge[b-or53o1ika1],
+.duty-badge[b-or53o1ika1] {
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 0.65rem;
+    height: 1.3rem;
+    line-height: 1.3rem;
+    min-width: 0;
+    padding: 0;
+    border-radius: 999px;
+    text-align: center;
+    user-select: none;
+    color: #fff;
+}
+
+.gender-male[b-or53o1ika1] {
+    background-color: #3a86ff;
+}
+
+.gender-female[b-or53o1ika1] {
+    background-color: #e0529c;
+}
+
+.gender-nb[b-or53o1ika1] {
+    background-color: #a855f7;
+}
+
+.gender-unknown[b-or53o1ika1] {
+    background-color: #9ca3af;
+}
+
+.member-name[b-or53o1ika1] {
+    min-width: 0;
+    overflow-wrap: break-word;
+}
+
+.member-age[b-or53o1ika1] {
+    font-size: 0.8rem;
+    color: #666;
+    white-space: nowrap;
+    text-align: right;
+}
+
+.duty-blank[b-or53o1ika1] {
+    background-color: transparent;
+    border: 1px dashed #c6c6c6;
+    color: transparent;
+}
+
+.duty-apl[b-or53o1ika1] {
+    background-color: #f59e0b;
+}
+
+.duty-pl[b-or53o1ika1] {
+    background-color: #10b981;
+}
+
+.duty-ul[b-or53o1ika1] {
+    background-color: #6366f1;
+}
+
+/* How much of the last Scout nights the member came to */
+.attendance-badge[b-or53o1ika1] {
+    font-size: 0.7rem;
+    text-align: center;
+    padding: 0 0.2rem;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.75);
+    color: #333;
+}
+/* /Shared/PatrolSheetsPreview.razor.rz.scp.css */
+.sheets[b-ncp3slh1p4] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+}
+
+/* One printed page: a patrol on a sheet of its own, so a card each */
+.sheet[b-ncp3slh1p4] {
+    flex: 1 1 18rem;
+    max-width: 26rem;
+    padding: 1rem;
+    border: 1px solid #d6d5d5;
+    border-radius: 0.25rem;
+}
+
+.patrol-name[b-ncp3slh1p4] {
+    margin-bottom: 0.75rem;
+    text-align: center;
+    font-size: 1.6rem;
+    font-weight: bold;
+}
+
+.sheet table[b-ncp3slh1p4] {
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.duty td[b-ncp3slh1p4] {
+    background-color: #c0c0c0;
+}
+/* /Shared/ProgramPreview.razor.rz.scp.css */
+/* The table scrolls sideways inside its own box, so a wide one does not widen the page */
+.scroller[b-d5i59lkmxe] {
+    overflow-x: auto;
+    width: 0;
+    min-width: 100%;
+}
+
+.program[b-d5i59lkmxe] {
+    border-collapse: collapse;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 0.85rem;
+}
+
+.program th[b-d5i59lkmxe],
+.program td[b-d5i59lkmxe] {
+    padding: 0.15rem 0.5rem;
+    border: 1px solid #7f7f7f;
+}
+
+.program thead th[b-d5i59lkmxe] {
+    background-color: #d9d9d9;
+}
+
+.program tbody tr:nth-child(even) td:not(.month)[b-d5i59lkmxe] {
+    background-color: #f2f2f2;
+}
+
+.program .break td[b-d5i59lkmxe] {
+    background-color: #a6a6a6;
+    text-align: center;
+    font-weight: bold;
+}
+
+/* A month with several rows reads sideways, as in the printed program */
+.program .month[b-d5i59lkmxe] {
+    text-align: center;
+    vertical-align: middle;
+    background-color: #fff;
+}
+
+.program .month.turned span[b-d5i59lkmxe] {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+}
+
+.small-table[b-d5i59lkmxe] {
+    min-width: 18rem;
+}
+/* /Shared/SectionReportView.razor.rz.scp.css */
+/* The block, line, label and detail rules reach into SectionBadgesUsed too (a child component is not styled by this file otherwise).
+   Laid out like the exported pdf: a logo and centred titles, grey headed blocks, bold labels beside their details */
+.report[b-fvz05zafoh] {
+    max-width: 60rem;
+    font-size: 0.9rem;
+}
+
+.report-header[b-fvz05zafoh] {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.report-logo[b-fvz05zafoh] {
+    width: 6.5rem;
+    height: auto;
+}
+
+.report-title[b-fvz05zafoh] {
+    flex: 1;
+    text-align: center;
+    font-weight: bold;
+}
+
+.report-group[b-fvz05zafoh] {
+    font-size: 1.5rem;
+}
+
+.report-name[b-fvz05zafoh] {
+    font-size: 1.25rem;
+}
+
+.report-unit[b-fvz05zafoh] {
+    font-size: 1.1rem;
+}
+
+.report[b-fvz05zafoh]  .block {
+    margin-top: 1.25rem;
+    padding: 0.15rem 0.4rem;
+    background-color: #c0c0c0;
+    font-weight: bold;
+    font-size: 1rem;
+}
+
+.report[b-fvz05zafoh]  .line {
+    display: flex;
+    gap: 1rem;
+    padding: 0.15rem 0.4rem;
+}
+
+.report[b-fvz05zafoh]  .label {
+    flex: 0 0 12rem;
+    font-weight: bold;
+}
+
+.report[b-fvz05zafoh]  .detail {
+    flex: 1;
+}
+
+.departed[b-fvz05zafoh] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.15rem 0;
+}
+
+.ages[b-fvz05zafoh] {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+}
+
+.age[b-fvz05zafoh] {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    width: 2rem;
+}
+
+.age-count[b-fvz05zafoh],
+.age-label[b-fvz05zafoh] {
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+
+.age-bar[b-fvz05zafoh] {
+    width: 1.2rem;
+    min-height: 2px;
+    background-color: #0d6efd;
+}
+
+.age-bar.empty[b-fvz05zafoh] {
+    opacity: 0.25;
+}
+
+@media (max-width: 576px) {
+    .report[b-fvz05zafoh]  .line {
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .report[b-fvz05zafoh]  .label {
+        flex: none;
+    }
+}
+/* /Shared/SiaProgressPreview.razor.rz.scp.css */
+/* Laid out like the printed page: grey headed blocks, bold labels beside their details */
+.project[b-wytvzbzhyy] {
+    margin-bottom: 0.75rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #d6d5d5;
+    border-radius: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.project summary[b-wytvzbzhyy] {
+    cursor: pointer;
+}
+
+.block[b-wytvzbzhyy] {
+    margin-top: 0.75rem;
+    padding: 0.15rem 0.4rem;
+    background-color: #c0c0c0;
+    font-weight: bold;
+}
+
+.line[b-wytvzbzhyy] {
+    display: flex;
+    gap: 1rem;
+    padding: 0.15rem 0.4rem;
+    border-bottom: 1px solid #eee;
+}
+
+.label[b-wytvzbzhyy] {
+    flex: 0 0 14rem;
+}
+
+.detail[b-wytvzbzhyy] {
+    flex: 1;
+    white-space: pre-wrap;
+}
+
+.detail.blank[b-wytvzbzhyy] {
+    min-height: 2rem;
+    border-bottom: 1px dashed #999;
+}
+
+@media (max-width: 576px) {
+    .line[b-wytvzbzhyy] {
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .label[b-wytvzbzhyy] {
+        flex: none;
+        font-weight: bold;
+    }
+}
+/* /Shared/SiaProjectsPreview.razor.rz.scp.css */
+.projects[b-5584ciddqx] {
+    font-size: 0.9rem;
+}
+
+/* each Scout's name stands over their projects */
+.scout td[b-5584ciddqx] {
+    padding-top: 0.6rem;
+    border-bottom: 0;
+    font-weight: bold;
+}
+
+.area[b-5584ciddqx] {
+    width: 12rem;
+    padding-left: 1.5rem;
+}
+
+.status[b-5584ciddqx] {
+    width: 10rem;
+}
+
+.date[b-5584ciddqx] {
+    width: 7rem;
+    text-align: right;
+}
+
+.scout label[b-5584ciddqx] {
+    cursor: pointer;
+}
+
+/* Scouts who are not in the report once some are ticked */
+.dim td[b-5584ciddqx] {
+    opacity: 0.4;
+}
+
+.scout input[b-5584ciddqx] {
+    margin-right: 0.35rem;
+}
+/* /Shared/SignInSheetPreview.razor.rz.scp.css */
+.sign-in-preview[b-or6qrj9agr] {
+    font-size: 0.85rem;
+    width: 100%;
+}
+
+/* shrink to the text */
+.sign-in-preview .fit[b-or6qrj9agr] {
+    width: 1%;
+    white-space: nowrap;
+}
+
+/* with a single tick box the text columns (no fixed width) simply share the spare width */
+
+.sign-in-preview th.sideways[b-or6qrj9agr] {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
+    text-align: left;
+    width: 2rem;
+}
+
+.sign-in-preview .spacer[b-or6qrj9agr] {
+    width: 1rem;
+    padding: 0;
+}
+
+.sign-in-preview td.write-in[b-or6qrj9agr] {
+    height: 1.9rem;
+}
+
+/* the leftover width goes to the write-in columns, signatures getting the most */
+.sign-in-preview .time[b-or6qrj9agr] {
+    width: 11%;
+}
+
+.sign-in-preview .signature[b-or6qrj9agr] {
+    width: 26%;
+}
+
+.sign-in-preview .attended[b-or6qrj9agr] {
+    width: 12%;
+}
+
+.sign-in-preview .tick[b-or6qrj9agr] {
+    width: 2rem;
+}
+/* /Shared/WallchartPreview.razor.rz.scp.css */
+/* The printed page is wide and long, so the table scrolls both ways inside its own box and keeps the names and the headings in view.
+   The box is no taller than the screen, so its sideways scroll bar is at the bottom of the screen when the table is too tall to
+   fit and straight under the table when it isn't. */
+.scroller[b-9pmyusyk8j] {
+    overflow: auto;
+    /* No width of its own to count towards the page's, so the table scrolls in the space there is instead of widening the page */
+    width: 0;
+    min-width: 100%;
+    max-height: calc(100vh - 1rem);
+    max-height: calc(100dvh - 1rem);
+}
+
+.wallchart[b-9pmyusyk8j] {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.wallchart th[b-9pmyusyk8j],
+.wallchart td[b-9pmyusyk8j] {
+    padding: 0.1rem 0.3rem;
+    border-right: 1px solid #d6d5d5;
+    border-bottom: 1px solid #d6d5d5;
+}
+
+/* The three heading rows stack up under each other, so each is given the height the next one sits below */
+.wallchart thead th[b-9pmyusyk8j] {
+    position: sticky;
+    z-index: 2;
+    background-color: #fff;
+}
+
+.wallchart .groups th[b-9pmyusyk8j] {
+    height: 1.6rem;
+    background-color: #e9ecef;
+    font-weight: bold;
+}
+
+.wallchart thead tr:nth-child(1) th[b-9pmyusyk8j] {
+    top: 0;
+}
+
+.wallchart thead tr:nth-child(2) th[b-9pmyusyk8j] {
+    top: 1.6rem;
+}
+
+.wallchart thead tr:nth-child(3) th[b-9pmyusyk8j] {
+    top: 3.2rem;
+}
+
+.wallchart .name[b-9pmyusyk8j] {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 9rem;
+    background-color: #fff;
+    text-align: left;
+}
+
+/* the corner is above the names and the headings it sits between */
+.wallchart thead .name[b-9pmyusyk8j] {
+    z-index: 3;
+}
+
+.wallchart td.text-center[b-9pmyusyk8j] {
+    min-width: 1.8rem;
+}
+
+/* The column names read upwards, as on the printed page */
+.wallchart .turned[b-9pmyusyk8j] {
+    height: 8rem;
+    padding: 0.2rem 0;
+    text-align: center;
+    vertical-align: bottom;
+}
+
+.wallchart .turned span[b-9pmyusyk8j] {
+    display: inline-block;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+}
