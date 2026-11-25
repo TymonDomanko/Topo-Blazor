@@ -90,11 +90,7 @@ else if (Status != null && !Status.StoreFound)
                     <div class="d-flex align-items-center gap-3 px-3 py-1 border-top">
                         <div class="flex-grow-1">@line.Name</div>
                         <div class="text-end small" style="min-width: 14rem">
-                            @if (line.InShop)
-                            {
-                                <span class="text-muted">$@line.Shop!.Price.ToString("0.00") each</span>
-                            }
-                            else
+                            @if (!line.InShop)
                             {
                                 <span class="badge bg-warning text-dark">Not in the shop, order by hand</span>
                             }
@@ -111,7 +107,12 @@ else if (Status != null && !Status.StoreFound)
 
         <div class="d-flex justify-content-between mb-2" id="summary">
             <span>@InShopCount @(InShopCount == 1 ? "badge" : "badges") for the cart@(ByHandCount > 0 ? $", {ByHandCount} to order by hand" : "")</span>
-            <strong>About $@Total.ToString("0.00") at RRP</strong>
+        </div>
+
+        <div class="alert alert-info py-2" id="check-order">
+            Topo fills the cart through the Scout Shop's cart link, which is not an official way to order, so the shop could change how it works or leave something out.
+            <strong>Check the cart in the Scout Shop before you pay:</strong> the badges, the stages and the quantities, against this list. Topo does not show prices, because it
+            cannot read them from the shop. The shop shows the real price, with any discount.
         </div>
 
         <div class="alert alert-warning py-2 d-flex align-items-center justify-content-between gap-3" id="signin-note">
