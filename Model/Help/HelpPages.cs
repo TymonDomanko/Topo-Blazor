@@ -44,7 +44,6 @@ namespace Topo.Model.Help
             ["scoutinghistory/unit"] = "Scouting-History-Unit",
             ["sectionreport"] = "Section-Group-Report",
             ["badgeorder"] = "Badge-Order",
-            ["stockplanner"] = "Stock-Planner",
 
             // Tools
             ["patrolplanner"] = "Patrol-Planner",
