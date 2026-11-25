@@ -50,7 +50,8 @@ namespace Topo.Services
         // The years of service recorded in the group's store, read from Terrain's calendar comments now, for a report. Nothing when it is not
         // turned on or the group has no store; when Terrain cannot be read, what the last check kept.
         Task<List<BadgeStoreRecord>> RecordsForReportAsync();
-        // Where tracking stands, from the last check (or from Terrain itself when refresh is asked for)
+        // Where tracking stands, from the last check (or from Terrain itself when refresh is asked for, or when nothing has been kept yet or the
+        // last look found no records event)
         Task<YearsOfServiceStatus> StatusAsync(bool refresh = false);
         // The years of service to hand over for the unit's youth: the anniversaries passed since tracking started that the store has no record of.
         // Worked out from the last check, with no call to Terrain. Empty until a check has run, and when tracking has not been started.
@@ -219,6 +220,12 @@ namespace Topo.Services
         public async Task<YearsOfServiceStatus> StatusAsync(bool refresh = false)
         {
             var cache = await LoadCacheAsync();
+            // Nothing kept yet (a new browser, or just signed in), or the last look found no records event: look in Terrain now, so an event that
+            // already exists (another leader made it, or it was made from another browser) is recognised at once, not after the next daily check
+            if (cache.Store == null || cache.Store.StoreEvents == 0)
+            {
+                refresh = true;
+            }
             if (refresh)
             {
                 try
