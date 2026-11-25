@@ -96,6 +96,29 @@ namespace Topo.Model.YearsOfService
             return reached;
         }
 
+        // The anniversaries members will reach after one day and up to another (both ends counted at the end): the award id (yos_scout_3) and the day,
+        // for the stock planner. Unlike Reached it ignores the day tracking started from, because a badge is needed whenever the year passes.
+        public static List<(DateTime Day, string AwardId)> Upcoming(IEnumerable<ServiceMember> members, string section, DateTime after, DateTime upTo)
+        {
+            var upcoming = new List<(DateTime, string)>();
+            foreach (var member in members.Where(m => m.Start.HasValue))
+            {
+                for (var years = 1; years <= MostYears; years++)
+                {
+                    var day = Anniversary(member.Start!.Value, years);
+                    if (day > upTo.Date)
+                    {
+                        break;
+                    }
+                    if (day > after.Date)
+                    {
+                        upcoming.Add((day, AwardId(section, years)));
+                    }
+                }
+            }
+            return upcoming;
+        }
+
         // Every year of a section is a level of one kind, so the highest is the badge to hand over (see AwardCheckRows.Pending)
         private static List<AwardTier> Tiers(IEnumerable<string> awardIds)
         {
