@@ -10,7 +10,7 @@
         @foreach (var tab in Tabs)
         {
             <li class="nav-item">
-                <NavLink class="nav-link" href="@tab.Href" Match="NavLinkMatch.All">@tab.Title</NavLink>
+                <NavLink class="nav-link" href="@tab.Href" Match="NavLinkMatch.All">@tab.TitleText(_storageService)</NavLink>
             </li>
         }
     </ul>
