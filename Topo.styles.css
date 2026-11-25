@@ -1157,6 +1157,39 @@
     background-color: #9ca3af;
     border-color: #9ca3af;
 }
+/* /Shared/HelpIcon.razor.rz.scp.css */
+/* Sits in the top right corner of the page's content (the article it is placed in is positioned) */
+.help-icon[b-67ih9y0k7h] {
+    position: absolute;
+    top: 0.5rem;
+    right: 1rem;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    border: 1px solid #6c757d;
+    color: #495057;
+    background-color: #fff;
+    text-decoration: none;
+}
+
+    .help-icon:hover[b-67ih9y0k7h], .help-icon:focus-visible[b-67ih9y0k7h] {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+        color: #fff;
+    }
+
+    /* The page's own font. The "?" is nudged to the middle of the circle, measured in this font. */
+    .help-mark[b-67ih9y0k7h] {
+        display: block;
+        font-size: 1rem;
+        font-weight: 600;
+        line-height: 1;
+        transform: translate(0, 0.02em);
+    }
 /* /Shared/LoadingFigures.razor.rz.scp.css */
 /* Colours are the gumtree artwork's own: navy ground, teal figures */
 .loading[b-juj00sz23y] {
@@ -1405,6 +1438,11 @@
     position: relative;
     display: flex;
     flex-direction: column;
+}
+
+article[b-6wbl9fsfs3] {
+    /* The help icon is placed against the top right corner of the content */
+    position: relative;
 }
 
 main[b-6wbl9fsfs3] {
