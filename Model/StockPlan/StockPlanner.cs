@@ -10,12 +10,14 @@ namespace Topo.Model.StockPlan
         public string Group { get; set; } = "";
         public string Name { get; set; } = "";
         public ShopVariant? Shop { get; set; }
-        // Awarded in the last twelve months
+        // Awarded over the years looked back
         public int Awarded { get; set; }
+        // How many months those years are
+        public int HistoryMonths { get; set; } = StockPlanner.HistoryMonths;
         // Needed soon that Topo can see: requests waiting to be approved, and years of service anniversaries coming up
         public int Coming { get; set; }
         public int Suggested { get; set; }
-        public double PerMonth => Awarded / (double)StockPlanner.HistoryMonths;
+        public double PerMonth => Awarded / (double)Math.Max(1, HistoryMonths);
         public decimal Value => Shop == null ? 0 : Shop.Price * Suggested;
     }
 
@@ -26,28 +28,29 @@ namespace Topo.Model.StockPlan
         public string AwardId { get; set; } = "";
     }
 
-    // Works out how many of each badge to keep in stock. History is how many were awarded in the last twelve months (a year smooths out the
-    // busy and quiet terms); what is coming is what Topo can see will be needed: requests waiting for approval, and the years of service
+    // Works out how many of each badge to keep in stock. History is how many were awarded over the years looked back (a year, the default, smooths out
+    // the busy and quiet terms; more years smooth out the odd big or small year); what is coming is what Topo can see will be needed: requests waiting for approval, and the years of service
     // anniversaries that fall inside the months to be covered. For each badge the stock is whichever is more, the history spread over the months to
     // cover or what is known to be coming, with a spare fifth on top, and at least one of anything awarded in the last year.
     public static class StockPlanner
     {
+        // The default years looked back
         public const int HistoryMonths = 12;
         public const double Buffer = 0.2;
 
-        public static int Suggested(int awardedLastYear, int coming, int coverMonths)
+        public static int Suggested(int awarded, int coming, int coverMonths, int historyMonths = HistoryMonths)
         {
-            if (awardedLastYear <= 0 && coming <= 0)
+            if (awarded <= 0 && coming <= 0)
             {
                 return 0;
             }
             var months = Math.Max(1, coverMonths);
-            var need = Math.Max(awardedLastYear * months / (double)HistoryMonths, coming);
+            var need = Math.Max(awarded * months / (double)Math.Max(1, historyMonths), coming);
             return Math.Max(1, (int)Math.Ceiling(need * (1 + Buffer) - 1e-9));
         }
 
         // The stock plan: the history and what is coming, matched up badge by badge, and the stock to keep for the months to cover
-        public static List<StockLine> Plan(IEnumerable<BadgeOrderLine> history, IEnumerable<BadgeOrderLine> pending, IEnumerable<DatedBadge> anniversaries, DateTime today, int coverMonths)
+        public static List<StockLine> Plan(IEnumerable<BadgeOrderLine> history, IEnumerable<BadgeOrderLine> pending, IEnumerable<DatedBadge> anniversaries, DateTime today, int coverMonths, int historyMonths = HistoryMonths)
         {
             var coming = new List<BadgeOrderLine>();
             foreach (var line in pending)
@@ -77,7 +80,8 @@ namespace Topo.Model.StockPlan
             }
             foreach (var line in plan)
             {
-                line.Suggested = Suggested(line.Awarded, line.Coming, coverMonths);
+                line.HistoryMonths = historyMonths;
+                line.Suggested = Suggested(line.Awarded, line.Coming, coverMonths, historyMonths);
             }
             return plan
                 .OrderBy(l => Array.IndexOf(OrderOfGroups, l.Group))
