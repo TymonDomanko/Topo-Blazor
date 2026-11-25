@@ -6,7 +6,8 @@ name: Deploy everything (live test build)
 #
 # Repository settings it reads:
 #   secrets.SYNCFUSION_KEY   the Syncfusion key the site is built with (without it the site shows Syncfusion's trial banner)
-# The report downloads (pdf and xlsx) go to the live report function, which does not know the newer reports (they come back blank).
+#   vars.REPORT_URL          the Function URL of your own copy of the report function (with the trailing /). Without it the report downloads
+#                            (pdf and xlsx) go to the live report function, which does not know the newer reports (they come back blank).
 on:
   push:
     branches: [ everything-live ]
@@ -25,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SYNCFUSION_KEY: ${{ secrets.SYNCFUSION_KEY }}
+      REPORT_URL: ${{ vars.REPORT_URL }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -41,6 +43,11 @@ jobs:
     - name: Replace Syncfusion key
       if: ${{ env.SYNCFUSION_KEY != '' }}
       run: sed -i "s@__SYNCFUSION-KEY__@$SYNCFUSION_KEY@g" ./Topo/Program.cs
+
+    # The site sends its reports to the address written in ReportService.cs; point it at your own report function instead of the live one
+    - name: Point the site at your report function
+      if: ${{ env.REPORT_URL != '' }}
+      run: sed -i -E "s@https://[a-z0-9]+\.lambda-url\.ap-southeast-2\.on\.aws/@$REPORT_URL@g" ./Topo/Services/ReportService.cs
 
     - name: Publish the site
       run: dotnet publish ./Topo/Topo.csproj -c Release -o release --nologo
