@@ -114,6 +114,27 @@ namespace TopoReportFunctionTest
             Assert.AreEqual(43723109466205L, line.Shop!.VariantId);
         }
 
+        // What a new member is given when they join: the two the Scout Shop sells go in the cart, the rest are ordered by hand
+        [TestMethod]
+        public void NewMemberItemsAreListedAndOnlyTheShopsOnesGoInTheCart()
+        {
+            var items = new[]
+            {
+                Count("Group Tape", 3), Count("Scarf", 3), Count("Scarf Badge", 3), Count("Region Badge", 3),
+                Count("Australian Scouting Badge", 2), Count("World Scouting Badge", 2)
+            };
+            var lines = BadgeOrderBuilder.Build(Report(
+                Section("cub", b => b.InvestitureItems = items.ToList()),
+                Section("scout", b => b.InvestitureItems = new List<UnitBadgeCount> { Count("Australian Scouting Badge", 1), Count("World Scouting Badge", 1) })));
+
+            Assert.IsTrue(lines.All(l => l.Group == BadgeOrderBuilder.NewMemberGroup));
+            Assert.AreEqual(3, lines.Single(l => l.Name == "Australian Scouting Badge").Count); // the same badge from two sections is one line
+            Assert.AreEqual(43723074732125L, lines.Single(l => l.Name == "Australian Scouting Badge").Shop!.VariantId);
+            Assert.AreEqual(43723205148765L, lines.Single(l => l.Name == "World Scouting Badge").Shop!.VariantId);
+            CollectionAssert.AreEquivalent(new[] { "Group Tape", "Scarf", "Scarf Badge", "Region Badge" }, lines.Where(l => !l.InShop).Select(l => l.Name).ToList());
+            StringAssert.Contains(BadgeOrderBuilder.CartLinks(lines).Single(), "43723205148765:3");
+        }
+
         [TestMethod]
         public void PeakAwardsAreListedButNotMatchedToTheShop()
         {
