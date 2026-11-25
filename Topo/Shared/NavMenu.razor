@@ -36,19 +36,7 @@
             {
                 foreach (var item in group.Items.Where(i => NavMenuItems.IsShownTo(i.Audience, viewer)))
                 {
-                    var text = item.TitleText(_storageService);
-                    <div class="nav-item px-3">
-                        @if (item.IsExternal)
-                        {
-                            <a class="nav-link" href="@item.Href" target="_blank" title="@text"><span class="oi @item.Icon" aria-hidden="true"></span> <span class="nav-text">@text</span></a>
-                        }
-                        else
-                        {
-                            <NavLink class="@LinkClass(item)" href="@item.Href" Match="item.Match" title="@text">
-                                <span class="oi @item.Icon" aria-hidden="true"></span> <span class="nav-text">@text</span>
-                            </NavLink>
-                        }
-                    </div>
+                    @NavLinkFor(item)
                 }
             }
         }
@@ -63,6 +51,21 @@
 
 @code {
     private bool collapseNavMenu = true;
+
+    // One link in the sidebar. A page's sub pages are not here: they show as tabs across the top of the page (NavTabs).
+    private RenderFragment NavLinkFor(NavItem item) => @<div class="nav-item px-3">
+        @if (item.IsExternal)
+        {
+            <a class="nav-link" href="@item.Href" target="_blank" title="@item.TitleText(_storageService)"><span class="oi @item.Icon" aria-hidden="true"></span> <span class="nav-text">@item.TitleText(_storageService)</span></a>
+        }
+        else
+        {
+            <NavLink class="@LinkClass(item)" href="@item.Href" Match="item.Match" title="@item.TitleText(_storageService)">
+                <span class="oi @item.Icon" aria-hidden="true"></span> <span class="nav-text">@item.TitleText(_storageService)</span>
+            </NavLink>
+        }
+    </div>;
+
 
     // which collapsible groups have been opened or closed; a group not in here uses its default
     private readonly Dictionary<string, bool> groupOpen = new();

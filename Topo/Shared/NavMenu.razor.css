@@ -181,6 +181,7 @@
     justify-content: center;
 }
 
+
 /* The bar is only 4rem wide and the scrollbar's gutters take 20px of it, so the usual 1rem each side would leave the icon
    less room than its own width and push it off centre */
 .icon-only .nav-item.px-3 {
