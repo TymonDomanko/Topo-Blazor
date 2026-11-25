@@ -60,6 +60,8 @@ mental-health-first-aid-badge | Mental Health First Aid Badge | Title | Default 
 messengers-of-peace-badge | Messengers of Peace | Title | Default Title=43723144265821@2.5
 scouts-of-the-world-achievement-badge | Scouts of the World - Achievement Badge | Title | Default Title=43723174019165@4.0
 duke-of-edinburgh-award-badges | Duke of Edinburgh Award Badges | Badge Type | Gold=43723096653917@2.0; Silver=43723096686685@2.0; Bronze=43723096719453@2.0
+australian-scout-flag-badge | Australian Scout Flag Badge | Title | Default Title=43723074732125@1.2
+world-membership-badge | World Membership Badge | Title | Default Title=43723205148765@1.6
 """;
 
         private static readonly Lazy<List<ShopVariant>> Variants = new Lazy<List<ShopVariant>>(Parse);
