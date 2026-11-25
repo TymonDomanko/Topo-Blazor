@@ -19,6 +19,8 @@ namespace Topo.Controller
         // The units to choose from, and the one chosen (blank for every unit)
         public Dictionary<string, string> Units = new Dictionary<string, string>();
         public string UnitId = "";
+        // How many years back to count what was awarded. Changing it needs the badges read again, so it takes effect on "Show stock plan".
+        public int HistoryYears = 1;
         // How many months the stock should last. Changing it works out the table again without reading Terrain again.
         public int CoverMonths = 3;
         public bool Loading;
@@ -50,6 +52,11 @@ namespace Topo.Controller
             Plan = new List<StockLine>();
         }
 
+        internal void YearsChange(ChangeEventArgs e)
+        {
+            HistoryYears = int.TryParse(e.Value?.ToString(), out var years) ? Math.Clamp(years, 1, StockPlanService.MostHistoryYears) : HistoryYears;
+        }
+
         internal void CoverChange(ChangeEventArgs e)
         {
             CoverMonths = int.TryParse(e.Value?.ToString(), out var months) ? Math.Clamp(months, 1, StockPlanService.MostCoverMonths) : CoverMonths;
@@ -58,7 +65,7 @@ namespace Topo.Controller
 
         private void Recalculate()
         {
-            Plan = Data == null ? new List<StockLine>() : StockPlanner.Plan(Data.History, Data.Pending, Data.Anniversaries, DateTime.Today, CoverMonths);
+            Plan = Data == null ? new List<StockLine>() : StockPlanner.Plan(Data.History, Data.Pending, Data.Anniversaries, DateTime.Today, CoverMonths, Data.HistoryYears * 12);
         }
 
         internal async Task ShowClick()
@@ -70,7 +77,7 @@ namespace Topo.Controller
             Progress = "";
             try
             {
-                Data = await _stockPlanService.ReadAsync(UnitId.Length > 0 ? new[] { UnitId } : Units.Keys, step =>
+                Data = await _stockPlanService.ReadAsync(UnitId.Length > 0 ? new[] { UnitId } : Units.Keys, HistoryYears, step =>
                 {
                     Progress = step;
                     InvokeAsync(StateHasChanged);

@@ -50,6 +50,28 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public void MoreYearsLookedBackSpreadTheAwardsOverMoreMonths()
+        {
+            // 24 awarded over two years is 1 a month, the same as 12 over one year
+            Assert.AreEqual(StockPlanner.Suggested(12, 0, 3), StockPlanner.Suggested(24, 0, 3, 24));
+            // and 24 awarded over a year is twice that
+            Assert.AreEqual(8, StockPlanner.Suggested(24, 0, 3, 12));
+        }
+
+        [TestMethod]
+        public void ThePlanUsesTheYearsLookedBackForTheMonthlyRateAndTheStock()
+        {
+            var shop = ScoutShopCatalog.Find("oas-camping-badge", "Stage 3");
+            var history = new[] { Line(BadgeOrderBuilder.OasGroup, "OAS Camping, Stage 3", 36, shop) };
+            var oneYear = StockPlanner.Plan(history, Array.Empty<BadgeOrderLine>(), Array.Empty<DatedBadge>(), Today, 3, 12).Single();
+            var threeYears = StockPlanner.Plan(history, Array.Empty<BadgeOrderLine>(), Array.Empty<DatedBadge>(), Today, 3, 36).Single();
+            Assert.AreEqual(3.0, oneYear.PerMonth, 0.001);
+            Assert.AreEqual(1.0, threeYears.PerMonth, 0.001);
+            Assert.AreEqual(11, oneYear.Suggested);
+            Assert.AreEqual(4, threeYears.Suggested);
+        }
+
+        [TestMethod]
         public void AMonthIsAtLeastOneAndMoreMonthsMeanMoreStock()
         {
             Assert.AreEqual(StockPlanner.Suggested(12, 0, 1), StockPlanner.Suggested(12, 0, 0));
