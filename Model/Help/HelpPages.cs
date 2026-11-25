@@ -21,9 +21,11 @@ namespace Topo.Model.Help
 
             // Badgework
             ["oas"] = "OAS",
+            ["oasprogress"] = "OAS-Progress",
             ["sia"] = "SIA",
             ["siaprogress"] = "SIA-Progress",
             ["milestone"] = "Milestone",
+            ["milestoneprogress"] = "Milestone-Progress",
             ["awards"] = "Additional-Awards",
             ["readytosubmit"] = "Ready-to-Submit",
 
@@ -41,6 +43,8 @@ namespace Topo.Model.Help
             ["scoutinghistory/member"] = "Scouting-History-Member",
             ["scoutinghistory/unit"] = "Scouting-History-Unit",
             ["sectionreport"] = "Section-Group-Report",
+            ["badgeorder"] = "Badge-Order",
+            ["stockplanner"] = "Stock-Planner",
 
             // Tools
             ["patrolplanner"] = "Patrol-Planner",
