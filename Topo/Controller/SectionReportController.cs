@@ -54,7 +54,9 @@ namespace Topo.Controller
             model.Calendars = await _programService.GetCalendars();
             SetPeriod(ThisQuarterStart(), ThisQuarterStart().AddMonths(3).AddDays(-1));
             if (!string.IsNullOrEmpty(_storageService.UnitId))
+            {
                 SelectUnit(_storageService.UnitId);
+            }
         }
 
         internal void UnitChange(ChangeEventArgs e)
@@ -67,21 +69,29 @@ namespace Topo.Controller
         {
             model.UnitId = unitId;
             if (unitId == SectionReportPageViewModel.WholeGroup || unitId == "")
+            {
                 return;
+            }
 
             _storageService.UnitId = unitId;
             // use the calendar named after the unit when there is one
             var match = CalendarMatcher.FindForUnit(model.Calendars, _storageService.UnitName);
             if (match != null)
+            {
                 model.SelectedCalendars = new HashSet<string> { match };
+            }
         }
 
         internal void ToggleCalendar(string calendarId, bool selected)
         {
             if (selected)
+            {
                 model.SelectedCalendars.Add(calendarId);
+            }
             else
+            {
                 model.SelectedCalendars.Remove(calendarId);
+            }
         }
 
         public List<List<KeyValuePair<string, string>>> CalendarColumns() => CalendarMatcher.Columns(model.Calendars);
@@ -111,11 +121,17 @@ namespace Topo.Controller
             model.ErrorMessage = "";
             model.Message = "";
             if (string.IsNullOrEmpty(model.UnitId))
+            {
                 model.ErrorMessage = "Please select a unit.";
+            }
             else if (model.To < model.From)
+            {
                 model.ErrorMessage = "The to date must be after the from date.";
+            }
             if (model.ErrorMessage != "")
+            {
                 return;
+            }
 
             var unitIds = IsGroup ? model.Units.Keys.ToList() : new List<string> { model.UnitId };
             var request = new SectionReportRequest
@@ -134,7 +150,9 @@ namespace Topo.Controller
                 request.CalendarIdsByUnit[unitId] = calendars;
                 var saved = await ReadRoster(unitId);
                 if (saved != null)
+                {
                     request.PreviousRosters[unitId] = saved;
+                }
             }
 
             Busy = true;
@@ -170,7 +188,9 @@ namespace Topo.Controller
         internal async Task DownloadClick(OutputType outputType)
         {
             if (Result == null)
+            {
                 return;
+            }
 
             var report = Result.Report;
             var first = report.Sections.FirstOrDefault();
