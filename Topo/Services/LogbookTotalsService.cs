@@ -6,7 +6,8 @@ namespace Topo.Services
     public interface ILogbookTotalsService
     {
         // A Scout's totals for a page: what is held if it will do (see CacheScope; without a scope, if it is in date), otherwise read from Terrain.
-        // An older copy is handed out when Terrain does not answer; null when there is nothing at all. Assumes the Scout's profile to read.
+        // An older copy is handed out when Terrain does not answer; null when there is nothing at all. Assumes the Scout's profile to read, unless
+        // the scope has its own way of preparing for a read (CacheScope.BeforeRead).
         Task<CachedRead<GetMemberLogbookMetricsResultModel>?> ForPageAsync(string memberId, CancellationToken cancellationToken = default);
         // Reads each Scout's totals again, assuming their profile for it. A Scout who cannot be read keeps what was held.
         Task RefreshAsync(IReadOnlyList<string> memberIds, Action<string>? progress = null, CancellationToken cancellationToken = default);
@@ -44,6 +45,14 @@ namespace Topo.Services
             if (held != null && Serves(held))
             {
                 return Used(held);
+            }
+
+            // a caller reading more of this Scout than the totals assumes the profile once for it all
+            var prepare = CacheScope.Current?.BeforeRead;
+            if (prepare != null)
+            {
+                await prepare();
+                return Used(await ReadAsync(memberId) ?? held);
             }
 
             using var profile = await LockProfileAsync(cancellationToken);

@@ -42,12 +42,6 @@ namespace Topo.Services
                 var memberKVP = selectedMembers[i];
                 cancellationToken.ThrowIfCancellationRequested();
                 progress?.Invoke($"{i + 1} of {selectedMembers.Count} Scouts");
-                // totals read in the last day serve; older ones are read again, and are only used if Terrain does not answer
-                var totals = await _logbookTotals.ForPageAsync(memberKVP.Key, cancellationToken);
-                var getMemberLogbookMetrics = totals?.Value ?? new GetMemberLogbookMetricsResultModel();
-                var totalNightsCamped = getMemberLogbookMetrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
-                var totalKmsHiked = (getMemberLogbookMetrics.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;
-
                 // the Scout's profile is only assumed if something of their logbook has to be read from Terrain
                 IDisposable? profile = null;
                 scope.BeforeRead = async () =>
@@ -60,6 +54,12 @@ namespace Topo.Services
                 };
                 try
                 {
+                    // totals read in the last day serve; older ones are read again, and are only used if Terrain does not answer
+                    var totals = await _logbookTotals.ForPageAsync(memberKVP.Key, cancellationToken);
+                    var getMemberLogbookMetrics = totals?.Value ?? new GetMemberLogbookMetricsResultModel();
+                    var totalNightsCamped = getMemberLogbookMetrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
+                    var totalKmsHiked = (getMemberLogbookMetrics.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;
+
                     var getMemberLogbookSummary = await _terrainAPIService.GetMemberLogbookSummary(memberKVP.Key);
                     if (getMemberLogbookSummary != null)
                     {
