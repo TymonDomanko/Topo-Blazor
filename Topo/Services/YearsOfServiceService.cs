@@ -1,4 +1,5 @@
 using Blazored.LocalStorage;
+using Topo.Model.Cache;
 using Topo.Model;
 using Topo.Model.AdditionalAwards;
 using Topo.Model.BadgeStore;
@@ -137,6 +138,8 @@ namespace Topo.Services
 
         public async Task<YearsOfServiceScanResult> ScanAsync(ICheckPacing? pacing)
         {
+            // what is changed is worked out from Terrain as it is now, whatever page asked
+            using var live = CacheScope.Outside();
             // One check at a time: the background one, "Check now" and the first look a page takes would otherwise read the same things twice
             if (Interlocked.Exchange(ref _scanning, 1) == 1)
             {
@@ -238,6 +241,8 @@ namespace Topo.Services
 
         public async Task<YearsOfServiceStatus> StatusAsync(bool refresh = false)
         {
+            // what is changed is worked out from Terrain as it is now, whatever page asked
+            using var live = CacheScope.Outside();
             var cache = await LoadCacheAsync();
             // Nothing kept yet (a new browser, or just signed in), or the last look found no records event: look in Terrain now, so an event that
             // already exists (another leader made it, or it was made from another browser) is recognised at once, not after the next daily check
@@ -316,6 +321,8 @@ namespace Topo.Services
 
         public async Task<AwardWriteSummary> PresentAsync(IEnumerable<AwardRow> rows, DateTime presented)
         {
+            // what is changed is worked out from Terrain as it is now, whatever page asked
+            using var live = CacheScope.Outside();
             var summary = new AwardWriteSummary();
             var cache = await LoadCacheAsync();
             // Read fresh just before writing, so a year a leader on another copy of Topo has just recorded is not recorded twice
@@ -371,6 +378,8 @@ namespace Topo.Services
 
         public async Task<BadgeStoreWriteResult> CreateStoreAsync()
         {
+            // what is changed is worked out from Terrain as it is now, whatever page asked
+            using var live = CacheScope.Outside();
             var result = await _badgeStoreService.CreateStoreEventAsync(GetUser(), GetUserName(), GroupId);
             if (result.Succeeded)
             {
@@ -385,6 +394,8 @@ namespace Topo.Services
 
         public async Task<BadgeStoreWriteResult> StartAsync(DateTime from)
         {
+            // what is changed is worked out from Terrain as it is now, whatever page asked
+            using var live = CacheScope.Outside();
             var cache = await LoadCacheAsync();
             BadgeStoreContents current;
             try

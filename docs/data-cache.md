@@ -5,12 +5,24 @@ read ahead. It is on by default and can be turned off on the Settings page.
 
 ## What a page does
 
+Every page that reads records from Terrain reads them through the cache.
+
 - A read made in the last day is used as it is.
-- An older one is shown straight away and read again behind the page, with a note saying it is updating to more recent data. The report buttons
-  wait until that has finished. The Patrol Planner, which is edited on the page, and the pages that read only when a report is made (Logbook,
-  Additional Awards, SIA, OAS) read old data again before using it.
+- A page that shows what it reads (Members, Wallchart, Milestone, Milestone Progress, Ready to Submit, SIA Progress, Scouting History, a Scout's
+  progress and so on) shows an older read straight away and reads it again behind the page, with a note saying it is updating to more recent data.
+  The report buttons wait until that has finished.
+- Pending Approvals and Mass awarding act on Terrain: they show what is held, always read it again, and nothing can be actioned until that is in.
+  A submission's answers and who attended an event are read from Terrain each time.
+- The Patrol Planner, which is edited on the page, and the pages that make something when asked (Logbook, Additional Awards, SIA, OAS Progress,
+  Program, Program Builder, Sign In Sheet, Attendance, Unit History, Section Report, Badge Order) read old data again before using it.
+- Anything that is about to change Terrain, and the background award checks, read Terrain as it is (`CacheScope.Outside`).
 - Pages say when their kept data was read, with a Refresh data button (or their existing refresh button).
 - Not read again for 30 days, an entry is dropped. Logging out removes everything.
+
+## What is always read from Terrain
+
+- The list of events, and which calendars are selected (see below). Program Ideas reads nothing else, so it always shows Terrain as it is.
+- Signing in and your profile.
 
 ## Events
 

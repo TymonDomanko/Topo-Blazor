@@ -99,8 +99,12 @@
     </div>
 
     <PageStatus Loading="Loading" Progress="@Progress" Error="@model.ErrorMessage" />
+    @if (_page.ReadUtc != null)
+    {
+        <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
+    }
 
-    @if (!Loading && !string.IsNullOrEmpty(model.UnitId) && model.Members.Count == 0)
+    @if (!Loading && !_page.Failed && !string.IsNullOrEmpty(model.UnitId) && model.Members.Count == 0)
     {
         <div class="mt-3 mb-3 text-muted">No youth members in this unit.</div>
     }

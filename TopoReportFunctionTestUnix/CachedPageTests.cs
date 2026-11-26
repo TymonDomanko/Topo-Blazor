@@ -225,6 +225,25 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public async Task APageThatActsOnWhatItShowsReadsAHeldCopyAgain()
+        {
+            var terrain = new Terrain();
+            var shown = new List<string>();
+            var page = new PageLoad();
+            Func<Action<string>, CancellationToken, Task<string>> read = (progress, token) => terrain.Read();
+
+            // nothing held: read once
+            await page.LoadAsync(read, shown.Add, alwaysUpdate: true);
+            Assert.AreEqual(1, terrain.Calls);
+
+            // held and in date: shown, then read again
+            shown.Clear();
+            await page.LoadAsync(read, shown.Add, alwaysUpdate: true);
+
+            CollectionAssert.AreEqual(new[] { "answer 1", "answer 2" }, shown);
+        }
+
+        [TestMethod]
         public async Task RefreshReadsAgainEvenWhenInDate()
         {
             var terrain = new Terrain();

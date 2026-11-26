@@ -37,6 +37,8 @@ namespace Topo.Model.Cache
         public DateTime? OldestUtc { get; private set; }
         // Whether anything it used was older than a day
         public bool UsedStale { get; private set; }
+        // Whether anything it used was a held copy rather than read from Terrain just now
+        public bool UsedHeld { get; private set; }
         // What has been worked out from reads in this scope and may be asked for again, such as a unit's member list
         public Dictionary<string, object> Worked { get; } = new Dictionary<string, object>();
 
@@ -55,14 +57,41 @@ namespace Topo.Model.Cache
             UsedStale |= isStale;
         }
 
+        public void Held() => UsedHeld = true;
+
+        // Reads made inside go straight to Terrain, whatever page they were started from, for work that is about to change Terrain:
+        // "using var live = CacheScope.Outside();"
+        public static IDisposable Outside()
+        {
+            var outer = Ambient.Value;
+            Ambient.Value = null;
+            return new Restore(outer);
+        }
+
         // What an inner scope used counts towards the scope around it too
         public void Dispose()
         {
-            if (_outer != null && OldestUtc != null)
+            if (_outer != null)
             {
-                _outer.Used(OldestUtc.Value, UsedStale);
+                if (OldestUtc != null)
+                {
+                    _outer.Used(OldestUtc.Value, UsedStale);
+                }
+                _outer.UsedHeld |= UsedHeld;
             }
             Ambient.Value = _outer;
+        }
+
+        private sealed class Restore : IDisposable
+        {
+            private readonly CacheScope? _scope;
+
+            public Restore(CacheScope? scope)
+            {
+                _scope = scope;
+            }
+
+            public void Dispose() => Ambient.Value = _scope;
         }
     }
 }

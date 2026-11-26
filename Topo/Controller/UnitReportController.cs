@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Topo.Model.Common;
 using Topo.Model.ReportGeneration;
 using Topo.Model.UnitReport;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -37,6 +38,17 @@ namespace Topo.Controller
         // The report is read again a moment after the unit, calendars or period change, rather than from a button
         private readonly AutoRun _auto = new AutoRun();
         private const int OptionDelayMilliseconds = 800;
+        // When the oldest of what the report on show was made from was read
+        public DateTime? ReadUtc;
+
+        // Reads everything for the report again, leaving it on show until the new one is in
+        internal async Task RefreshClick()
+        {
+            using (CacheScope.Begin(CacheMode.Reread))
+            {
+                await _auto.RunAsync(Generate);
+            }
+        }
 
         public void Dispose() => _auto.Dispose();
 
@@ -128,7 +140,13 @@ namespace Topo.Controller
             }
 
             Busy = true;
-            model.Report = null;
+            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
+            var scope = CacheScope.Current!;
+            // a report being read again stays on show until the new one is in
+            if (scope.Mode != CacheMode.Reread)
+            {
+                model.Report = null;
+            }
             try
             {
                 var from = model.AllTime ? EarliestDate : model.FromDate;
@@ -138,6 +156,7 @@ namespace Topo.Controller
                 cancellationToken.ThrowIfCancellationRequested();
                 report.AllTime = model.AllTime;
                 model.Report = report;
+                ReadUtc = scope.OldestUtc;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

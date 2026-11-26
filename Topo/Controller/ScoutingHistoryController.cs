@@ -4,11 +4,12 @@ using Newtonsoft.Json;
 using Topo.Model.History;
 using Topo.Model.Members;
 using Topo.Model.ReportGeneration;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class ScoutingHistoryController : ComponentBase
+    public class ScoutingHistoryController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -30,10 +31,10 @@ namespace Topo.Controller
 
         public ScoutingHistoryPageViewModel model = new ScoutingHistoryPageViewModel();
 
-        // Picking another member while one is still loading must not let the older answer overwrite the newer
-        private int _loadRequest;
-        public bool Loading;
-        public string Progress = "";
+        // Loading and reading again through the data cache; picking another member overtakes one still loading
+        public PageLoad _page = new PageLoad();
+        public bool Loading => _page.Loading;
+        public string Progress => _page.Progress;
 
         protected override async Task OnInitializedAsync()
         {
@@ -43,6 +44,7 @@ namespace Topo.Controller
                 return;
             }
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units ?? new Dictionary<string, string>();
             if (!string.IsNullOrEmpty(_storageService.UnitId))
@@ -59,14 +61,13 @@ namespace Topo.Controller
             model.MemberId = "";
             model.History = null;
             model.ErrorMessage = "";
-            _loadRequest++;
-            Loading = false;
-            Progress = "";
+            _page.Cancel();
             await PopulateMembers();
         }
 
         private async Task PopulateMembers()
         {
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
             model.Members = string.IsNullOrEmpty(model.UnitId)
                 ? new List<MemberListModel>()
                 : (await _membersService.GetMembersAsync(model.UnitId))
@@ -78,44 +79,48 @@ namespace Topo.Controller
             model.MemberId = e.Value?.ToString() ?? "";
             model.History = null;
             model.ErrorMessage = "";
-            var request = ++_loadRequest;
             if (string.IsNullOrEmpty(model.MemberId))
             {
-                Loading = false;
-                Progress = "";
+                _page.Cancel();
                 return;
             }
 
-            var member = model.Members.FirstOrDefault(m => m.id == model.MemberId);
-            ScoutingHistoryModel? history = null;
-            var failed = false;
-            Loading = true;
-            try
-            {
-                history = await _historyService.GetScoutingHistory(model.MemberId, $"{member?.first_name} {member?.last_name}".Trim(), member?.patrol_duty ?? "",
-                    step => { if (request == _loadRequest) { Progress = step; InvokeAsync(StateHasChanged); } });
-            }
-            catch (Exception)
-            {
-                failed = true;
-            }
+            // what the data cache holds shows at once, and is read again behind the page when it is more than a day old
+            await _page.LoadAsync(ReadHistory(), Show);
+            ShowFailure();
+        }
 
-            if (request != _loadRequest)
-            {
-                return;
-            }
-            Loading = false;
-            Progress = "";
-            model.History = history;
-            if (failed)
+        // Reads the member's history again, leaving what is shown in place until it is in
+        internal async Task RefreshClick()
+        {
+            model.ErrorMessage = "";
+            await _page.RefreshAsync(ReadHistory(), Show);
+            ShowFailure();
+        }
+
+        private Func<Action<string>, CancellationToken, Task<ScoutingHistoryModel>> ReadHistory()
+        {
+            var memberId = model.MemberId;
+            var member = model.Members.FirstOrDefault(m => m.id == memberId);
+            return (progress, cancellationToken) =>
+                _historyService.GetScoutingHistory(memberId, $"{member?.first_name} {member?.last_name}".Trim(), member?.patrol_duty ?? "", progress);
+        }
+
+        private void Show(ScoutingHistoryModel history) => model.History = history;
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
             {
                 model.ErrorMessage = "Couldn't load that member's history.";
             }
         }
 
+        public void Dispose() => _page.Dispose();
+
         internal async Task DownloadClick(OutputType outputType)
         {
-            if (model.History == null)
+            if (model.History == null || _page.Updating)
             {
                 return;
             }

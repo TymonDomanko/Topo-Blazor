@@ -1,10 +1,11 @@
 using Microsoft.AspNetCore.Components;
 using Topo.Model.Approvals;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class PendingApprovalsController : ComponentBase
+    public class PendingApprovalsController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; } = default!;
@@ -22,7 +23,13 @@ namespace Topo.Controller
         // null until the pending approvals have been read
         public PendingApprovalsSession? Session;
         public int NotActionable;
-        public bool IsLoading;
+        // Loading through the data cache. The page acts on Terrain, so what is held is always read again before anything can be done.
+        public PageLoad _page = new PageLoad();
+        public bool IsLoading => _page.Loading;
+        // Nothing can be chosen while an action is being sent or the list is being read again
+        public bool Locked => IsBusy || _page.Updating;
+
+        public void Dispose() => _page.Dispose();
         public bool IsBusy;
 
         // The action the leader has chosen and is being asked to confirm; nothing is sent until they do
@@ -75,46 +82,37 @@ namespace Topo.Controller
         {
             if (string.IsNullOrEmpty(UnitId))
             {
+                _page.Cancel();
                 return;
             }
-            IsLoading = true;
             LoadError = null;
             Notice = null;
             ClearChoice();
             var unitId = UnitId;
-            try
-            {
-                var queue = await _approvalsService.GetPendingApprovalQueue(unitId);
-                // The leader picked another unit while this was loading; that unit's own read decides what is shown
-                if (unitId != UnitId)
+            _page.Changed = () => InvokeAsync(StateHasChanged);
+            await _page.LoadAsync((progress, cancellationToken) => _approvalsService.GetPendingApprovalQueue(unitId),
+                queue =>
                 {
-                    return;
-                }
-                Session = new PendingApprovalsSession(queue.Items);
-                NotActionable = queue.NotActionable;
+                    Session = new PendingApprovalsSession(queue.Items);
+                    NotActionable = queue.NotActionable;
+                }, alwaysUpdate: true);
+            // The leader picked another unit while this was loading; that unit's own read decides what is shown
+            if (unitId != UnitId)
+            {
+                return;
             }
-            catch (Exception)
+            if (_page.Failed)
             {
                 Session = null;
                 LoadError = "Could not read the pending approvals from Terrain.";
             }
-            finally
-            {
-                if (unitId == UnitId)
-                {
-                    IsLoading = false;
-                }
-            }
-            if (unitId == UnitId)
-            {
-                await LoadDetails();
-            }
+            await LoadDetails();
         }
 
         // Skip, Back and Stop only move around; they never write anything
         internal async Task SkipClick()
         {
-            if (IsBusy)
+            if (Locked)
             {
                 return;
             }
@@ -124,7 +122,7 @@ namespace Topo.Controller
 
         internal async Task BackClick()
         {
-            if (IsBusy)
+            if (Locked)
             {
                 return;
             }
@@ -134,7 +132,7 @@ namespace Topo.Controller
 
         internal async Task StopClick()
         {
-            if (IsBusy)
+            if (Locked)
             {
                 return;
             }
@@ -144,7 +142,7 @@ namespace Topo.Controller
 
         internal async Task RestartClick()
         {
-            if (IsBusy)
+            if (Locked)
             {
                 return;
             }
@@ -167,7 +165,7 @@ namespace Topo.Controller
         private void Choose(ApprovalAction action)
         {
             var item = Session?.Current;
-            if (item == null || IsBusy)
+            if (item == null || Locked)
             {
                 return;
             }
@@ -187,7 +185,7 @@ namespace Topo.Controller
             var session = Session;
             var action = Pending;
             var item = session?.Current;
-            if (session == null || action == null || item == null || IsBusy)
+            if (session == null || action == null || item == null || Locked)
             {
                 return;
             }
@@ -279,6 +277,8 @@ namespace Topo.Controller
             SubmissionDetails? details = null;
             try
             {
+                // what is being decided on is read from Terrain as it is now; a held copy serves only when Terrain does not answer
+                using var current = CacheScope.Begin(CacheMode.Reread);
                 details = await _approvalsService.GetSubmissionDetails(item);
             }
             catch (Exception)

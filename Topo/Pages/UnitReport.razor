@@ -69,13 +69,17 @@
     }
 
     <PageStatus Loading="Busy" Progress="@Progress" Error="@model.ErrorMessage" />
+    @if (model.Report != null)
+    {
+        <DataAgeLine ReadUtc="ReadUtc" NoneText="Events that ended more than four months ago are kept until you refresh." Disabled="Busy" OnRefresh="RefreshClick" />
+    }
 </EditForm>
 
 @if (model.Report != null)
 {
     var report = model.Report;
 
-    <ReportButtons Name="Unit History" Disabled="@(report.Members.Total == 0)"
+    <ReportButtons Name="Unit History" Disabled="@(Busy || report.Members.Total == 0)"
                    OnPdf="@(() => DownloadClick(OutputType.PDF))" OnXlsx="@(() => DownloadClick(OutputType.Excel))" />
 
     <UnitReportView Report="report" />

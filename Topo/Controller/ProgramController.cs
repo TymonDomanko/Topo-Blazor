@@ -170,11 +170,12 @@ namespace Topo.Controller
             // until it is read again on request
             using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
             var scope = CacheScope.Current!;
-            await _programService.SetCalendar(model.SelectedCalendars);
             try
             {
-                var events = await _programService.GetEventsForDates(model.CalendarSearchFromDate, model.CalendarSearchToDate, cancellationToken,
-                    step => { if (!cancellationToken.IsCancellationRequested) { Progress = step; InvokeAsync(StateHasChanged); } });
+                var events = await _programService.WithCalendarsAsync(model.SelectedCalendars,
+                    () => _programService.GetEventsForDates(model.CalendarSearchFromDate, model.CalendarSearchToDate, cancellationToken,
+                        step => { if (!cancellationToken.IsCancellationRequested) { Progress = step; InvokeAsync(StateHasChanged); } }),
+                    cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 model.Events = events.OrderBy(e => e.StartDateTime).ToList();
                 _eventsReadUtc = scope.OldestUtc;
@@ -182,7 +183,6 @@ namespace Topo.Controller
             }
             finally
             {
-                await _programService.ResetCalendar();
                 if (!cancellationToken.IsCancellationRequested)
                 {
                     Loading = false;

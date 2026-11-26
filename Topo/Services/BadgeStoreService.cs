@@ -26,20 +26,19 @@ namespace Topo.Services
     // Everything that writes is asked for by a caller that has already shown the leader what will be written.
     public class BadgeStoreService : IBadgeStoreService
     {
-        // The calendar selection belongs to the account, so one read at a time switches it and puts it back
-        private static readonly SemaphoreSlim CalendarGate = new SemaphoreSlim(1, 1);
-
         private readonly ITerrainAPIService _terrainAPIService;
+        // The calendar selection belongs to the account, so one read at a time switches it and puts it back, whatever else is reading events
+        private readonly ITerrainLocks _locks;
 
-        public BadgeStoreService(ITerrainAPIService terrainAPIService)
+        public BadgeStoreService(ITerrainAPIService terrainAPIService, ITerrainLocks locks)
         {
+            _locks = locks;
             _terrainAPIService = terrainAPIService;
         }
 
         public async Task<List<Event>> FindStoreEventsAsync(string userId, string groupId)
         {
-            await CalendarGate.WaitAsync();
-            try
+            using (await _locks.CalendarsAsync())
             {
                 // Read the selection now, not from an earlier page, so what is put back is what the leader has at this moment
                 var original = await _terrainAPIService.GetCalendarsAsync(userId);
@@ -60,10 +59,6 @@ namespace Topo.Services
                         await _terrainAPIService.PutCalendarsAsync(userId, original!);
                     }
                 }
-            }
-            finally
-            {
-                CalendarGate.Release();
             }
         }
 

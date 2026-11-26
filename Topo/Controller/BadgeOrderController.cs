@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Topo.Model.BadgeOrder;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -65,7 +66,15 @@ namespace Topo.Controller
             Status = await _badgeOrderService.StatusAsync();
         }
 
-        internal async Task ShowBadgesClick()
+        // When the oldest of what the list was made from was read
+        public DateTime? ReadUtc;
+
+        // The list uses what the data cache holds while it is in date; "Refresh data" reads everything for it again
+        internal Task ShowBadgesClick() => ShowBadges(CacheMode.Fresh);
+
+        internal Task RefreshClick() => ShowBadges(CacheMode.Reread);
+
+        private async Task ShowBadges(CacheMode mode)
         {
             if (CanPickDate && From.Date > DateTime.Today)
             {
@@ -80,6 +89,7 @@ namespace Topo.Controller
             Progress = "";
             try
             {
+                using var scope = CacheScope.Begin(mode);
                 var units = ChosenUnits;
                 var result = await _badgeOrderService.BuildAsync(units.ToDictionary(u => u, FromFor), DateTime.Today, step =>
                 {
@@ -88,6 +98,7 @@ namespace Topo.Controller
                 });
                 Lines = result.Lines;
                 LinesUnits = units;
+                ReadUtc = scope.OldestUtc;
             }
             catch (Exception ex)
             {

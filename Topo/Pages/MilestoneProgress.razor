@@ -56,6 +56,10 @@
     </div>
 
     <PageStatus Loading="Loading" Progress="@Progress" Error="@model.ErrorMessage" />
+    @if (_page.ReadUtc != null)
+    {
+        <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
+    }
 
     @if (NoYouth)
     {
@@ -67,7 +71,7 @@
             @Summary
         </div>
 
-        <ReportButtons Name="Milestone Progress" OnPdf="PdfClick" OnXlsx="XlsxClick" Disabled="@(Report.Pages.Count == 0)" />
+        <ReportButtons Name="Milestone Progress" OnPdf="PdfClick" OnXlsx="XlsxClick" Disabled="@(_page.Updating || Report.Pages.Count == 0)" />
 
         <MilestoneProgressPreview Report="Report" />
     }

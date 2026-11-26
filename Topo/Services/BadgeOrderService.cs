@@ -1,4 +1,5 @@
 using Topo.Model.BadgeOrder;
+using Topo.Model.Cache;
 using Topo.Model.BadgeStore;
 using Topo.Model.Members;
 
@@ -50,6 +51,8 @@ namespace Topo.Services
 
         public async Task<BadgeOrderStatus> StatusAsync()
         {
+            // what is changed is worked out from Terrain as it is now, whatever page asked
+            using var live = CacheScope.Outside();
             try
             {
                 var contents = await ReadStoreAsync();
@@ -80,6 +83,8 @@ namespace Topo.Services
 
         public async Task<BadgeStoreWriteResult> MarkPlacedAsync(IEnumerable<string> unitIds, DateTime day)
         {
+            // what is changed is worked out from Terrain as it is now, whatever page asked
+            using var live = CacheScope.Outside();
             HashSet<string> trusted;
             try
             {

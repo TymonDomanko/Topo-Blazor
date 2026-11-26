@@ -1,4 +1,5 @@
 using Topo.Model.YearsOfService;
+using Topo.Model.Cache;
 using Blazored.LocalStorage;
 using Topo.Model.AdditionalAwards;
 using Topo.Model.Members;
@@ -98,6 +99,8 @@ namespace Topo.Services
 
         public async Task<AwardScanResult> ScanAsync(IReadOnlyList<string> unitIds, Action<string>? progress, ICheckPacing? pacing = null)
         {
+            // what is changed is worked out from Terrain as it is now, whatever page asked
+            using var live = CacheScope.Outside();
             var result = new AwardScanResult();
             var tiers = await TiersAsync();
 
@@ -354,6 +357,8 @@ namespace Topo.Services
 
         public async Task<AwardWriteSummary> PresentAsync(IEnumerable<AwardRow> rows, DateTime presented)
         {
+            // what is changed is worked out from Terrain as it is now, whatever page asked
+            using var live = CacheScope.Outside();
             var all = rows.ToList();
             // Years of service are kept in the group's store; the other awards are recorded in Terrain
             var yearsOfService = all.Where(r => YearsOfServiceAwards.IsYearsOfService(r.AwardId)).ToList();

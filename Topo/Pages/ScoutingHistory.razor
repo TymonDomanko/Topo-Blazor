@@ -38,6 +38,10 @@
 </div>
 
 <PageStatus Loading="Loading" Progress="@Progress" Error="@model.ErrorMessage" />
+@if (_page.ReadUtc != null)
+{
+    <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
+}
 
 @if (model.History != null)
 {
@@ -45,7 +49,7 @@
 
     <div class="mb-3">
         <h3>@history.MemberName</h3>
-        <ReportButtons Name="Scouting History" Disabled="@(history.Sections.Count == 0)"
+        <ReportButtons Name="Scouting History" Disabled="@(_page.Updating || history.Sections.Count == 0)"
                        OnPdf="@(() => DownloadClick(OutputType.PDF))" OnXlsx="@(() => DownloadClick(OutputType.Excel))" />
     </div>
 

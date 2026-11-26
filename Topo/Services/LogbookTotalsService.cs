@@ -45,6 +45,7 @@ namespace Topo.Services
             var held = await HeldAsync(memberId);
             if (held != null && Serves(held))
             {
+                CacheScope.Current?.Held();
                 return Used(held);
             }
 

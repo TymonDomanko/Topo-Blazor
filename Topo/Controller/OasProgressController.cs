@@ -3,6 +3,7 @@ using Microsoft.JSInterop;
 using Newtonsoft.Json;
 using Topo.Model.OAS;
 using Topo.Model.ReportGeneration;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -40,6 +41,27 @@ namespace Topo.Controller
         // The highest stage anyone in the unit has been awarded in each skill, for "one above the highest"
         private Dictionary<string, int> _highest = new Dictionary<string, int>();
         private int _loadId;
+        // When the oldest of what the page was made from was read
+        public DateTime? ReadUtc;
+
+        // Reads everything for the worksheets again
+        internal async Task RefreshClick()
+        {
+            ReadUtc = null;
+            using (CacheScope.Begin(CacheMode.Reread))
+            {
+                await UnitChange(model.UnitId);
+            }
+        }
+
+        private void NoteAge()
+        {
+            var oldest = CacheScope.Current?.OldestUtc;
+            if (oldest != null && (ReadUtc == null || oldest < ReadUtc))
+            {
+                ReadUtc = oldest;
+            }
+        }
         // The worksheets on the screen, made from what has been read for the stages picked. Each stage is read once for the unit
         // and the options that change what is read, so changing the picks only reads what is new.
         public List<OasWorksheetSheet> Sheets = new List<OasWorksheetSheet>();
@@ -85,12 +107,14 @@ namespace Topo.Controller
         // The unit's Scouts and what they have been awarded are read so levels everyone already has can be left out
         internal async Task UnitChange(string unitId)
         {
+            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
             model.UnitId = unitId;
             _storageService.UnitId = unitId;
             model.UnitName = _storageService.UnitName;
             _everyoneHas = new HashSet<string>();
             _highest = new Dictionary<string, int>();
             _answers.Clear();
+            ReadUtc = null;
             var loadId = ++_loadId;
             if (string.IsNullOrEmpty(unitId))
             {
@@ -107,6 +131,7 @@ namespace Topo.Controller
             {
                 var youth = (await _membersService.GetMembersAsync(unitId)).Where(m => m.isAdultLeader == 0).Select(m => m.id).ToList();
                 var records = await _oasService.GetUnitOasRecords(unitId);
+                NoteAge();
                 if (loadId == _loadId)
                 {
                     _everyoneHas = OasWorksheetSelection.AwardedToEveryone(youth, records.results);
@@ -231,6 +256,7 @@ namespace Topo.Controller
         // The answers for the stages, from what has been read already and reading the rest. Null if a newer choice (viewId) took over.
         private async Task<List<OASWorksheetAnswers>?> ReadWorksheets(List<OASStageListModel> stages, int? viewId)
         {
+            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
             _storageService.UseFullNames = model.UseFullNames;
             var all = new List<OASWorksheetAnswers>();
             for (var i = 0; i < stages.Count; i++)
@@ -249,6 +275,7 @@ namespace Topo.Controller
                     _answers[key] = answers;
                 }
                 all.AddRange(answers);
+                NoteAge();
             }
             return all;
         }

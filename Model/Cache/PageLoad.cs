@@ -20,16 +20,17 @@ namespace Topo.Model.Cache
         // Called when any of these change while a read is under way, for the page to draw them
         public Action? Changed { get; set; }
 
-        // read: gets the page's data, reporting its progress; show: puts it on the page
-        public Task LoadAsync<T>(Func<Action<string>, CancellationToken, Task<T>> read, Action<T> show)
+        // read: gets the page's data, reporting its progress; show: puts it on the page. alwaysUpdate: a page that acts on what it shows reads
+        // it again behind the page whenever any of it was held, however recently
+        public Task LoadAsync<T>(Func<Action<string>, CancellationToken, Task<T>> read, Action<T> show, bool alwaysUpdate = false)
         {
             var version = Start();
             ReadUtc = null;
             Loading = true;
             return RunAsync(version, async token =>
             {
-                var stale = await PassAsync(version, CacheMode.Held, read, show, token);
-                if (stale && version == _version)
+                var (stale, held) = await PassAsync(version, CacheMode.Held, read, show, token);
+                if ((stale || (alwaysUpdate && held)) && version == _version)
                 {
                     Loading = false;
                     Updating = true;
@@ -62,18 +63,18 @@ namespace Topo.Model.Cache
 
         public void Dispose() => Cancel();
 
-        private async Task<bool> PassAsync<T>(int version, CacheMode mode, Func<Action<string>, CancellationToken, Task<T>> read, Action<T> show,
+        private async Task<(bool Stale, bool Held)> PassAsync<T>(int version, CacheMode mode, Func<Action<string>, CancellationToken, Task<T>> read, Action<T> show,
             CancellationToken token)
         {
             using var scope = CacheScope.Begin(mode);
             var data = await read(step => Report(version, step), token);
             if (version != _version)
             {
-                return false;
+                return (false, false);
             }
             show(data);
             ReadUtc = scope.OldestUtc;
-            return scope.UsedStale;
+            return (scope.UsedStale, scope.UsedHeld);
         }
 
         private async Task RunAsync(int version, Func<CancellationToken, Task> work)

@@ -29,6 +29,10 @@
 </div>
 
 <PageStatus Loading="Busy" Progress="@Progress" Error="@ErrorMessage" />
+@if (ReadUtc != null)
+{
+    <DataAgeLine What="Activities" ReadUtc="ReadUtc" />
+}
 @if (!string.IsNullOrEmpty(Message))
 {
     <div class="mt-2 mb-3 text-success">@Message</div>

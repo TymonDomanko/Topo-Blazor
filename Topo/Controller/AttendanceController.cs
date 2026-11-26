@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Topo.Model.Attendance;
 using Topo.Model.Common;
 using Topo.Model.ReportGeneration;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -38,6 +39,17 @@ namespace Topo.Controller
         // The attendance is read again a moment after the unit, calendars or period change, rather than from a button
         private readonly AutoRun _auto = new AutoRun();
         private const int OptionDelayMilliseconds = 800;
+        // When the oldest of what the report on show was made from was read
+        public DateTime? ReadUtc;
+
+        // Reads everything for the report again, leaving it on show until the new one is in
+        internal async Task RefreshClick()
+        {
+            using (CacheScope.Begin(CacheMode.Reread))
+            {
+                await _auto.RunAsync(Generate);
+            }
+        }
 
         public void Dispose() => _auto.Dispose();
 
@@ -139,8 +151,12 @@ namespace Topo.Controller
         private async Task Generate(CancellationToken cancellationToken)
         {
             model.ErrorMessage = "";
-            Report = null;
-            _data = null;
+            // a report being read again stays on show until the new one is in
+            if (CacheScope.Current?.Mode != CacheMode.Reread)
+            {
+                Report = null;
+                _data = null;
+            }
             // no unit chosen yet, so there is nothing to read and nothing to complain about
             if (string.IsNullOrEmpty(model.UnitId))
             {
@@ -162,6 +178,8 @@ namespace Topo.Controller
             }
 
             Busy = true;
+            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
+            var scope = CacheScope.Current!;
             try
             {
                 var data = await _attendanceService.GetAttendance(model.UnitId, model.From, model.To, model.SelectedCalendars.ToArray(),
@@ -169,6 +187,7 @@ namespace Topo.Controller
                 cancellationToken.ThrowIfCancellationRequested();
                 _data = data;
                 Recalculate();
+                ReadUtc = scope.OldestUtc;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
