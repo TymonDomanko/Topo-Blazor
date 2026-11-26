@@ -104,6 +104,10 @@ namespace Topo.Model.Cache
                 return held.Value;
             }
 
+            if (scope.BeforeRead != null)
+            {
+                await scope.BeforeRead();
+            }
             var (succeeded, body) = await read();
             if (succeeded)
             {

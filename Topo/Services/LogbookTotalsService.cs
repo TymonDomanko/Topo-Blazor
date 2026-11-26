@@ -8,8 +8,6 @@ namespace Topo.Services
         // A Scout's totals for a page: what is held if it will do (see CacheScope; without a scope, if it is in date), otherwise read from Terrain.
         // An older copy is handed out when Terrain does not answer; null when there is nothing at all. Assumes the Scout's profile to read.
         Task<CachedRead<GetMemberLogbookMetricsResultModel>?> ForPageAsync(string memberId, CancellationToken cancellationToken = default);
-        // The same, for a caller who has assumed the Scout's profile and holds the profile lock
-        Task<CachedRead<GetMemberLogbookMetricsResultModel>?> ForAssumedProfileAsync(string memberId);
         // Reads each Scout's totals again, assuming their profile for it. A Scout who cannot be read keeps what was held.
         Task RefreshAsync(IReadOnlyList<string> memberIds, Action<string>? progress = null, CancellationToken cancellationToken = default);
         // When the oldest of the totals held for these Scouts was read; null when none are held
@@ -59,12 +57,6 @@ namespace Topo.Services
             {
                 await _terrainAPIService.RevokeAssumedProfiles();
             }
-        }
-
-        public async Task<CachedRead<GetMemberLogbookMetricsResultModel>?> ForAssumedProfileAsync(string memberId)
-        {
-            var held = await HeldAsync(memberId);
-            return held != null && Serves(held) ? Used(held) : Used(await ReadAsync(memberId) ?? held);
         }
 
         private static bool Serves(CachedRead<GetMemberLogbookMetricsResultModel> held) =>

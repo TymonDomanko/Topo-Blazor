@@ -101,6 +101,25 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public async Task WorkNeededOnlyForATerrainReadIsNotDoneWhenTheHeldCopyServes()
+        {
+            var terrain = new Terrain();
+            var prepared = 0;
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
+            scope.BeforeRead = () =>
+            {
+                prepared++;
+                return Task.CompletedTask;
+            };
+
+            await terrain.Read();
+            await terrain.Read();
+
+            Assert.AreEqual(1, prepared);
+            Assert.AreEqual(1, terrain.Calls);
+        }
+
+        [TestMethod]
         public void LeavingAScopeBringsBackTheOneAround()
         {
             Assert.IsNull(CacheScope.Current);
@@ -193,6 +212,46 @@ namespace TopoReportFunctionTest
 
             CollectionAssert.AreEqual(new[] { "second unit" }, shown);
             Assert.IsFalse(page.Loading);
+        }
+
+        [TestMethod]
+        public async Task RefreshingAReportsDataReadsItAgainAndSaysHowOldItNowIs()
+        {
+            var terrain = new Terrain();
+            using (CacheScope.Begin(CacheMode.Fresh))
+            {
+                await terrain.Read();
+            }
+            var refresh = new ReportRefresh();
+            Func<Task<DateTime?>> oldest = async () => (await terrain.Cache.GetAsync<string>("members"))?.FetchedUtc;
+            await refresh.ReadAgeAsync(oldest);
+            Assert.AreEqual(Start, refresh.ReadUtc);
+            terrain.Now = Start.AddHours(2);
+            var updating = false;
+
+            await refresh.RefreshAsync(async (progress, token) =>
+            {
+                updating = refresh.Updating;
+                await terrain.Read();
+            }, oldest);
+
+            Assert.IsTrue(updating);
+            Assert.IsFalse(refresh.Updating);
+            Assert.AreEqual(2, terrain.Calls);
+            Assert.AreEqual(Start.AddHours(2), refresh.ReadUtc);
+            Assert.IsNull(CacheScope.Current);
+        }
+
+        [TestMethod]
+        public async Task ARefreshThatFailsKeepsTheOldAgeAndSaysSo()
+        {
+            var refresh = new ReportRefresh();
+
+            await refresh.RefreshAsync((progress, token) => throw new InvalidOperationException(), () => Task.FromResult<DateTime?>(Start));
+
+            Assert.IsTrue(refresh.Failed);
+            Assert.IsFalse(refresh.Updating);
+            Assert.AreEqual(Start, refresh.ReadUtc);
         }
 
         [TestMethod]

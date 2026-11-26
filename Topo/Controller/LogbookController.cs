@@ -2,6 +2,7 @@
 using Microsoft.JSInterop;
 using Newtonsoft.Json;
 using System.Runtime.InteropServices;
+using Topo.Model.Cache;
 using Topo.Model.Logbook;
 using Topo.Model.Members;
 using Topo.Model.ReportGeneration;
@@ -70,34 +71,21 @@ namespace Topo.Controller
             await PopulateMembers();
         }
 
-        // The logbook totals kept for the Scouts listed, and whether they are being read again (the reports wait until they are)
-        public DateTime? TotalsReadUtc;
-        public bool Updating;
-        public string Progress = "";
-        private CancellationTokenSource _refresh = new CancellationTokenSource();
+        // How old what is kept for the Scouts listed is, and reading it again; the reports wait while it is
+        public ReportRefresh _data = new ReportRefresh();
 
-        private async Task ReadAge() => TotalsReadUtc = await _logbookTotals.OldestReadAsync(model.Members.Select(m => m.id));
+        private List<string> MemberIds => model.Members.Select(m => m.id).ToList();
+
+        private Task ReadAge() => _data.ReadAgeAsync(() => _LogbookService.OldestReadAsync(MemberIds));
 
         internal async Task RefreshClick()
         {
-            Updating = true;
-            try
-            {
-                await _logbookTotals.RefreshAsync(model.Members.Select(m => m.id).ToList(), step => { Progress = step; InvokeAsync(StateHasChanged); }, _refresh.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                // the page was left
-            }
-            finally
-            {
-                await ReadAge();
-                Updating = false;
-                Progress = "";
-            }
+            _data.Changed = () => InvokeAsync(StateHasChanged);
+            await _data.RefreshAsync((progress, token) => _LogbookService.GenerateLogbookData(model.Members.Select(m => new KeyValuePair<string, string>(m.id, $"{m.first_name} {m.last_name}")).ToList(), progress, token),
+                () => _LogbookService.OldestReadAsync(MemberIds));
         }
 
-        public void Dispose() => _refresh.Cancel();
+        public void Dispose() => _data.Dispose();
 
         internal async Task SelectAllChange(ChangeEventArgs e)
         {

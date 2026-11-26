@@ -40,6 +40,9 @@ namespace Topo.Model.Cache
         // What has been worked out from reads in this scope and may be asked for again, such as a unit's member list
         public Dictionary<string, object> Worked { get; } = new Dictionary<string, object>();
 
+        // Run just before a read goes to Terrain, for work that is only needed then (assuming a Scout's profile)
+        public Func<Task>? BeforeRead { get; set; }
+
         // Whether a held read serves, or has to be made again
         public bool Serves(bool isStale) => Mode == CacheMode.Held || (Mode == CacheMode.Fresh && !isStale);
 

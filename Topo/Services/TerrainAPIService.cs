@@ -41,8 +41,7 @@ namespace Topo.Services
         public Task<List<UnitMemberMetricsModel>> GetUnitMetrics(string unitId);
         public Task RevokeAssumedProfiles();
         public Task AssumeProfile(string memberId);
-        public Task<GetMemberLogbookMetricsResultModel> GetMemberLogbookMetrics(string memberId);
-        // As GetMemberLogbookMetrics, but null when Terrain did not answer with a Scout's totals (no connection, not allowed), so that is not kept
+        // A Scout's logbook totals (their profile must be assumed); null when Terrain did not answer with a Scout's totals (no connection, not allowed), so that is not kept
         public Task<GetMemberLogbookMetricsResultModel?> TryGetMemberLogbookMetrics(string memberId);
         public Task<GetMemberLogbookSummaryResultModel> GetMemberLogbookSummary(string memberId);
         public Task<GetMemberLogbookDetailResultModel> GetMemberLogbookDetail(string memberId, string logbookId);
@@ -63,6 +62,9 @@ namespace Topo.Services
         public Task<List<GroupUnit>> GetGroupUnitsAsync(string groupId);
         public Task<string> GetUnitAchievementsJsonAsync(string unitId, string type);
         public Task<string> GetTemplateJsonAsync(string templatePath);
+        // When the oldest of these Scouts' kept Special Interest Area records, or logbooks, was read; null when none are kept
+        public Task<DateTime?> HeldSiaSinceAsync(IEnumerable<string> memberIds);
+        public Task<DateTime?> HeldLogbookSinceAsync(IEnumerable<string> memberIds);
     }
 
     public class TerrainAPIService : ITerrainAPIService
@@ -317,8 +319,8 @@ namespace Topo.Services
         {
             await RefreshTokenAsync();
 
-            string requestUri = $"{achievementsAddress}members/{memberId}/achievements?type=special_interest_area";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var requestUri = SiaResultsUri(memberId);
+            var result = await CachedGet(requestUri);
             var getSIAResultsModel = DeserializeObject<GetSIAResultsModel>(result);
 
             return getSIAResultsModel ?? new GetSIAResultsModel();
@@ -403,16 +405,6 @@ namespace Topo.Services
             var result = await SendRequest(HttpMethod.Post, requestUri);
         }
 
-        public async Task<GetMemberLogbookMetricsResultModel> GetMemberLogbookMetrics(string memberId)
-        {
-            await RefreshTokenAsync();
-
-            var requestUri = $"{achievementsAddress}members/{memberId}/logbook-metrics";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
-            var getMemberLogbookMetrics = DeserializeObject<GetMemberLogbookMetricsResultModel>(result);
-
-            return getMemberLogbookMetrics ?? new GetMemberLogbookMetricsResultModel();
-        }
         public async Task<GetMemberLogbookMetricsResultModel?> TryGetMemberLogbookMetrics(string memberId)
         {
             await RefreshTokenAsync();
@@ -431,8 +423,8 @@ namespace Topo.Services
         {
             await RefreshTokenAsync();
 
-            var requestUri = $"{achievementsAddress}members/{memberId}/logbook";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var requestUri = LogbookUri(memberId);
+            var result = await CachedGet(requestUri);
             var getMemberLogbookSummary = DeserializeObject<GetMemberLogbookSummaryResultModel>(result);
 
             return getMemberLogbookSummary ?? new GetMemberLogbookSummaryResultModel();
@@ -443,7 +435,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             var requestUri = $"{achievementsAddress}members/{memberId}/logbook/{logbookId}";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var getMemberLogbookDetail = DeserializeObject<GetMemberLogbookDetailResultModel>(result);
 
             return getMemberLogbookDetail ?? new GetMemberLogbookDetailResultModel();
@@ -499,7 +491,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{achievementsAddress}members/{memberId}/achievements?type=milestone";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var getMilestoneResultModel = DeserializeObject<GetMilestoneResultModel>(result);
 
             return getMilestoneResultModel ?? new GetMilestoneResultModel();
@@ -510,7 +502,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{achievementsAddress}members/{memberId}/achievements?type=intro_scouting";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var getIntroductionResultsModel = DeserializeObject<GetIntroductionResultsModel>(result);
 
             return getIntroductionResultsModel ?? new GetIntroductionResultsModel();
@@ -521,7 +513,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{achievementsAddress}members/{memberId}/achievements?type=intro_section";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var getIntroductionResultsModel = DeserializeObject<GetIntroductionResultsModel>(result);
 
             return getIntroductionResultsModel ?? new GetIntroductionResultsModel();
@@ -532,7 +524,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{achievementsAddress}members/{memberId}/achievements?type=outdoor_adventure_skill";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             result = RemoveFileUploaderFromContent(result);
             var getUnitAchievementsResultsModel = DeserializeObject<GetUnitAchievementsResultsModel>(result);
 
@@ -544,7 +536,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{achievementsAddress}members/{memberId}/achievements?type=adventurous_journey";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var getAdventurousJourneyResultsModel = DeserializeObject<GetPeakAwardsResultsModel>(result);
 
             return getAdventurousJourneyResultsModel ?? new GetPeakAwardsResultsModel();
@@ -555,7 +547,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{achievementsAddress}members/{memberId}/achievements?type=course_reflection";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var getCourseReflectionResultsModel = DeserializeObject<GetPeakAwardsResultsModel>(result);
 
             return getCourseReflectionResultsModel ?? new GetPeakAwardsResultsModel();
@@ -566,7 +558,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{achievementsAddress}members/{memberId}/achievements?type=personal_reflection";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var getPersonalReflectionResultsModel = DeserializeObject<GetPeakAwardsResultsModel>(result);
 
             return getPersonalReflectionResultsModel ?? new GetPeakAwardsResultsModel();
@@ -638,7 +630,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{achievementsAddress}members/{memberId}/achievements?type=peak_award";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var getPeakAwardResultsModel = DeserializeObject<GetPeakAwardsResultsModel>(result);
 
             return getPeakAwardResultsModel ?? new GetPeakAwardsResultsModel();
@@ -646,7 +638,31 @@ namespace Topo.Services
 
         // A read that a page may have asked to go through the data cache (see CacheScope)
         private Task<string> CachedGet(string requestUri) =>
-            _dataCache.ReadThroughAsync($"{_storageService.CacheKeyPrefix}|get|{requestUri}", () => SendRequestWithStatus(HttpMethod.Get, requestUri));
+            _dataCache.ReadThroughAsync(CacheKey(requestUri), () => SendRequestWithStatus(HttpMethod.Get, requestUri));
+
+        private string CacheKey(string requestUri) => $"{_storageService.CacheKeyPrefix}|get|{requestUri}";
+
+        private string SiaResultsUri(string memberId) => $"{achievementsAddress}members/{memberId}/achievements?type=special_interest_area";
+
+        private string LogbookUri(string memberId) => $"{achievementsAddress}members/{memberId}/logbook";
+
+        public Task<DateTime?> HeldSiaSinceAsync(IEnumerable<string> memberIds) => OldestHeldAsync(memberIds.Select(SiaResultsUri));
+
+        public Task<DateTime?> HeldLogbookSinceAsync(IEnumerable<string> memberIds) => OldestHeldAsync(memberIds.Select(LogbookUri));
+
+        private async Task<DateTime?> OldestHeldAsync(IEnumerable<string> requestUris)
+        {
+            DateTime? oldest = null;
+            foreach (var requestUri in requestUris)
+            {
+                var held = await _dataCache.GetAsync<string>(CacheKey(requestUri));
+                if (held != null && (oldest == null || held.FetchedUtc < oldest))
+                {
+                    oldest = held.FetchedUtc;
+                }
+            }
+            return oldest;
+        }
 
         private async Task<string> SendRequest(HttpMethod httpMethod, string requestUri, string content = "", string xAmzTargetHeader = "") =>
             (await SendRequestWithStatus(httpMethod, requestUri, content, xAmzTargetHeader)).Body;
