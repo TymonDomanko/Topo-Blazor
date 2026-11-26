@@ -78,15 +78,7 @@ namespace Topo.Services
         // Terrain only shows the calendars the user has switched on, so they are switched to the chosen ones and back
         public async Task<List<UnitEventInput>> GetEventsForCalendars(DateTime from, DateTime to, string[] calendarIds)
         {
-            await _programService.SetCalendar(calendarIds);
-            try
-            {
-                return await GetEventDetails(from, to);
-            }
-            finally
-            {
-                await _programService.ResetCalendar();
-            }
+            return await _programService.WithCalendarsAsync(calendarIds, () => GetEventDetails(from, to));
         }
 
         // Every event in the range, in full (attendance, logbook data) with its scope. Asked for in 90 day windows

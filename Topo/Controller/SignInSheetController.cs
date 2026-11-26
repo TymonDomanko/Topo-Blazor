@@ -202,9 +202,7 @@ namespace Topo.Controller
             }
             else
             {
-                await _programService.SetCalendar(model.SelectedCalendars);
-                var events = await _programService.GetEventsForDates(model.CalendarSearchFromDate, model.CalendarSearchToDate);
-                await _programService.ResetCalendar();
+                var events = await _programService.GetEventsForDates(model.CalendarSearchFromDate, model.CalendarSearchToDate, model.SelectedCalendars);
                 model.Events = events.OrderBy(e => e.StartDateTime).ToList();
             }
 

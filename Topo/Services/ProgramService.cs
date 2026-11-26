@@ -10,6 +10,9 @@ namespace Topo.Services
     public interface IProgramService
     {
         public Task<Dictionary<string, string>> GetCalendars();
+        // Runs reads that need particular calendars selected in Terrain, which only shows those calendars' events: they are switched on for the
+        // reads and the selection put back afterwards. Throws when the selection can't be read or switched.
+        public Task<T> WithCalendarsAsync<T>(string[] calendarIds, Func<Task<T>> read);
         // The events on the given calendars (switched on in Terrain for the reading, then put back as they were); without any, on those selected now
         public Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate, string[]? calendarIds = null);
         public Task<EventListModel> GetAttendanceForEvent(string eventId);
@@ -76,7 +79,7 @@ namespace Topo.Services
             {
                 events = calendarIds == null
                     ? await _terrainAPIService.GetEventsAsync(GetUser(), fromDate, toDate)
-                    : await ListSelectedEventsAsync(fromDate, toDate, calendarIds);
+                    : (await SwitchedReadAsync(calendarIds, () => _terrainAPIService.GetEventsAsync(GetUser(), fromDate, toDate))).Result;
             }
             foreach (var listed in events?.results ?? Array.Empty<Event>())
             {
@@ -85,29 +88,41 @@ namespace Topo.Services
             return events;
         }
 
-        private async Task<GetEventsResultModel?> ListSelectedEventsAsync(DateTime fromDate, DateTime toDate, string[] calendarIds)
+        public async Task<T> WithCalendarsAsync<T>(string[] calendarIds, Func<Task<T>> read)
+        {
+            // not while another read has the calendars switched
+            using (await _locks.CalendarsAsync())
+            {
+                var (switched, result) = await SwitchedReadAsync(calendarIds, read);
+                // what would have been read could be another selection's
+                return switched ? result! : throw new InvalidOperationException("Couldn't read or switch the calendars in Terrain.");
+            }
+        }
+
+        // Reads with the given calendars selected in Terrain, switching to them and back if they are not what is selected already. Nothing is
+        // read when the selection can't be read or switched. The caller holds the calendar lock.
+        private async Task<(bool Switched, T? Result)> SwitchedReadAsync<T>(string[] calendarIds, Func<Task<T>> read)
         {
             // what is selected at this moment is what is put back
             var current = await _terrainAPIService.GetCalendarsAsync(GetUser());
             if (current == null)
             {
-                return null;
+                return (false, default);
             }
             _getCalendarsResultModel = current;
-            var selected = _getCalendarsResultModel.own_calendars.Where(c => c.selected).Select(c => c.id)
-                .Concat(_getCalendarsResultModel.other_calendars.Where(c => c.selected).Select(c => c.id));
+            var selected = current.own_calendars.Where(c => c.selected).Select(c => c.id)
+                .Concat(current.other_calendars.Where(c => c.selected).Select(c => c.id));
             if (new HashSet<string>(selected).SetEquals(calendarIds))
             {
-                return await _terrainAPIService.GetEventsAsync(GetUser(), fromDate, toDate);
+                return (true, await read());
             }
             try
             {
                 if (!await SetCalendar(calendarIds))
                 {
-                    // what would be read now could be another selection's events
-                    return null;
+                    return (false, default);
                 }
-                return await _terrainAPIService.GetEventsAsync(GetUser(), fromDate, toDate);
+                return (true, await read());
             }
             finally
             {
