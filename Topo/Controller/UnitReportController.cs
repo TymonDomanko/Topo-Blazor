@@ -3,6 +3,7 @@ using Microsoft.JSInterop;
 using Newtonsoft.Json;
 using Topo.Model.ReportGeneration;
 using Topo.Model.UnitReport;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -83,7 +84,15 @@ namespace Topo.Controller
                 model.SelectedCalendars.Remove(calendarId);
         }
 
-        internal async Task GenerateClick()
+        // When the oldest of what the report on show was made from was read
+        public DateTime? ReadUtc;
+
+        // The report uses what the data cache holds while it is in date; "Refresh data" reads everything for it again
+        internal Task GenerateClick() => Generate(CacheMode.Fresh);
+
+        internal Task RefreshClick() => Generate(CacheMode.Reread);
+
+        private async Task Generate(CacheMode mode)
         {
             model.ErrorMessage = "";
             if (string.IsNullOrEmpty(model.UnitId))
@@ -96,15 +105,21 @@ namespace Topo.Controller
                 return;
 
             Busy = true;
-            model.Report = null;
+            // a report being read again stays on show until the new one is in
+            if (mode != CacheMode.Reread)
+            {
+                model.Report = null;
+            }
             try
             {
+                using var scope = CacheScope.Begin(mode);
                 var from = model.AllTime ? EarliestDate : model.FromDate;
                 var to = model.AllTime ? DateTime.Today : model.ToDate;
                 var report = await _unitReportService.GetUnitReport(model.UnitId, from, to, model.SelectedCalendars.ToArray(),
                     step => { Progress = step; InvokeAsync(StateHasChanged); });
                 report.AllTime = model.AllTime;
                 model.Report = report;
+                ReadUtc = scope.OldestUtc;
             }
             catch (Exception)
             {
@@ -119,8 +134,10 @@ namespace Topo.Controller
 
         internal async Task DownloadClick(OutputType outputType)
         {
-            if (model.Report == null)
+            if (model.Report == null || Busy)
+            {
                 return;
+            }
 
             var section = model.Report.Section;
             var report = await _reportService.GetUnitReport(_storageService.GroupName ?? "Group Name", section, model.Report.UnitName, outputType, JsonConvert.SerializeObject(model.Report));

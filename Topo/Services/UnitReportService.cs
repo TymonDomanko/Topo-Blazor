@@ -96,6 +96,7 @@ namespace Topo.Services
                 {
                     if (!seen.Add(summary.id))
                         continue;
+                    await _terrainAPIService.CheckListedEventAsync(summary);
                     var detail = await _terrainAPIService.GetEventAsync(summary.id);
                     if (detail != null)
                         events.Add(new UnitEventInput { Scope = summary.invitee_type, Event = detail });

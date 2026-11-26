@@ -56,6 +56,7 @@ namespace Topo.Controller
 
         internal async Task UnitChange(string unitId)
         {
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
             if (string.IsNullOrEmpty(unitId))
             {
                 model.UnitId = unitId;
@@ -117,6 +118,7 @@ namespace Topo.Controller
 
         internal async Task<byte[]> AwardsReport(OutputType outputType = OutputType.PDF)
         {
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
             if (!model.Members.Any(m => m.selected))
             {
                 foreach (var member in model.Members)

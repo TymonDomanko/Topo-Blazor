@@ -6,6 +6,21 @@ namespace TopoReportFunctionTest
     [TestClass]
     public class DataCacheTests
     {
+        [TestMethod]
+        public void WhatAnInnerScopeUsedCountsForTheOneAroundIt()
+        {
+            var old = new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc);
+            using var outer = CacheScope.Begin(CacheMode.Held);
+            using (var inner = CacheScope.Begin(CacheMode.Held))
+            {
+                inner.Used(old, true);
+            }
+
+            Assert.AreEqual(old, outer.OldestUtc);
+            Assert.IsTrue(outer.UsedStale);
+            Assert.AreSame(outer, CacheScope.Current);
+        }
+
         // Stands in for the browser's store
         private class Store : ICacheStore
         {

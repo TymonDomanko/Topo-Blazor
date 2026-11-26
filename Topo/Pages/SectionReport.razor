@@ -103,9 +103,11 @@
 
 @if (Result != null)
 {
+    <DataAgeLine ReadUtc="ReadUtc" NoneText="Events that ended more than four months ago are kept until you refresh." Disabled="Busy" OnRefresh="RefreshClick" />
+
     <div class="mb-3">
-        <button type="button" class="btn btn-primary" @onclick="@(() => DownloadClick(OutputType.PDF))">Section Report (pdf)</button>
-        <button type="button" class="btn btn-success" @onclick="@(() => DownloadClick(OutputType.Excel))">Section Report (xlsx)</button>
+        <button type="button" class="btn btn-primary" disabled="@Busy" @onclick="@(() => DownloadClick(OutputType.PDF))">Section Report (pdf)</button>
+        <button type="button" class="btn btn-success" disabled="@Busy" @onclick="@(() => DownloadClick(OutputType.Excel))">Section Report (xlsx)</button>
         @if (!string.IsNullOrEmpty(model.Message))
         {
             <span class="ms-3 text-success">@model.Message</span>

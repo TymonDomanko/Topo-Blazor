@@ -106,6 +106,7 @@ namespace Topo.Controller
 
         private async Task PopulateMembers()
         {
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
             var allMembers = await _membersService.GetMembersAsync(model.UnitId);
             if (model.IncludeLeaders)
                 model.Members = allMembers.OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();

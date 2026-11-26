@@ -109,6 +109,7 @@ namespace Topo.Controller
 
         private async Task<byte[]> PatrolList(bool includeLeaders, OutputType outputType = OutputType.PDF)
         {
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
             var groupName = _storageService.GroupName ?? "Group Name";
             var unitName = _storageService.UnitName ?? "Unit Name";
             var section = _storageService.Section;

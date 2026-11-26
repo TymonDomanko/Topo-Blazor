@@ -55,6 +55,14 @@ namespace Topo.Model.Cache
             UsedStale |= isStale;
         }
 
-        public void Dispose() => Ambient.Value = _outer;
+        // What an inner scope used counts towards the scope around it too
+        public void Dispose()
+        {
+            if (_outer != null && OldestUtc != null)
+            {
+                _outer.Used(OldestUtc.Value, UsedStale);
+            }
+            Ambient.Value = _outer;
+        }
     }
 }

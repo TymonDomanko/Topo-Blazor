@@ -52,6 +52,7 @@ namespace Topo.Controller
 
         internal async Task UnitChange(string unitId)
         {
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
             if (string.IsNullOrEmpty(unitId))
             {
                 model.UnitId = unitId;
