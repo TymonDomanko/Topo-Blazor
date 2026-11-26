@@ -51,7 +51,7 @@ namespace Topo.Services
             using var profile = await LockProfileAsync(cancellationToken);
             try
             {
-                await _terrainAPIService.RevokeAssumedProfiles();
+                // assuming a Scout's profile replaces any other, so only handing it back is needed
                 await _terrainAPIService.AssumeProfile(memberId);
                 return Used(await ReadAsync(memberId) ?? held);
             }
