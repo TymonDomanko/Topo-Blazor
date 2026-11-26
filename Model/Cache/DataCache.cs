@@ -21,7 +21,7 @@ namespace Topo.Model.Cache
         public bool IsKept { get; }
     }
 
-    // Keeps what pages have read from Terrain (docs/background-cache-design.md): nothing is read ahead. A read is in date for a day; an older one
+    // Keeps what pages have read from Terrain (docs/data-cache.md): nothing is read ahead. A read is in date for a day; an older one
     // is still handed out, marked stale, for the page to show while it reads it again; after 30 days it is dropped. Everything is asked of the
     // browser's store, so what one tab drops after writing to Terrain is gone for the others too.
     public class DataCache

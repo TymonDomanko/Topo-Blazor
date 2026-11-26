@@ -88,8 +88,12 @@ namespace Topo.Services
         private async Task<GetEventsResultModel?> ListSelectedEventsAsync(DateTime fromDate, DateTime toDate, string[] calendarIds)
         {
             // what is selected at this moment is what is put back
-            _getCalendarsResultModel = await _terrainAPIService.GetCalendarsAsync(GetUser())
-                ?? throw new InvalidOperationException("Couldn't read the calendars from Terrain.");
+            var current = await _terrainAPIService.GetCalendarsAsync(GetUser());
+            if (current == null)
+            {
+                return null;
+            }
+            _getCalendarsResultModel = current;
             var selected = _getCalendarsResultModel.own_calendars.Where(c => c.selected).Select(c => c.id)
                 .Concat(_getCalendarsResultModel.other_calendars.Where(c => c.selected).Select(c => c.id));
             if (new HashSet<string>(selected).SetEquals(calendarIds))
@@ -101,7 +105,7 @@ namespace Topo.Services
                 if (!await SetCalendar(calendarIds))
                 {
                     // what would be read now could be another selection's events
-                    throw new InvalidOperationException("Couldn't switch the calendars in Terrain.");
+                    return null;
                 }
                 return await _terrainAPIService.GetEventsAsync(GetUser(), fromDate, toDate);
             }
