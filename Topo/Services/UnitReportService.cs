@@ -125,7 +125,13 @@ namespace Topo.Services
             cancellationToken.ThrowIfCancellationRequested();
 
             var seen = new HashSet<string>();
-            return lists.SelectMany(l => l?.results ?? new Topo.Model.Program.Event[0]).Where(e => seen.Add(e.id)).Select(e => (e, e.invitee_type)).ToList();
+            var listed = lists.SelectMany(l => l?.results ?? new Topo.Model.Program.Event[0]).Where(e => seen.Add(e.id)).ToList();
+            // an event whose list entry has changed since it was last listed has what the data cache kept of it dropped
+            foreach (var entry in listed)
+            {
+                await _terrainAPIService.CheckListedEventAsync(entry);
+            }
+            return listed.Select(e => (e, e.invitee_type)).ToList();
         }
 
         // Each event in full (attendance, logbook data) with its scope: a request of its own, as the list has no attendance. They are read a few at a

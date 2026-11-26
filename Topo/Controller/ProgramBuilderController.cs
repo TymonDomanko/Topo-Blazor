@@ -7,6 +7,7 @@ using Topo.Model.Common;
 using Topo.Model.Program;
 using Topo.Model.ProgramBuilder;
 using Topo.Model.ReportGeneration;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -45,6 +46,8 @@ namespace Topo.Controller
         public List<string> Patrols = new List<string>();
         public List<TerrainLeader> Leaders = new List<TerrainLeader>();
         public bool Busy;
+        // When the oldest of the activities last read from Terrain was read
+        public DateTime? ReadUtc;
         public string Progress = "";
         public string ErrorMessage = "";
         public string Message = "";
@@ -137,6 +140,7 @@ namespace Topo.Controller
                 // not being able to remember the unit costs only choosing it again next time
             }
 
+            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
             var people = await _programBuilderService.GetPeople(unitId);
             Patrols = people.Patrols;
             Leaders = people.Leaders;
@@ -344,6 +348,8 @@ namespace Topo.Controller
                 Message = "";
                 Busy = true;
                 await InvokeAsync(StateHasChanged);
+                using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
+                var scope = CacheScope.Current!;
                 try
                 {
                     // the youth's proposals are offered as ideas whether or not the unit has a calendar to read; they are asked for together with the events
@@ -375,6 +381,7 @@ namespace Topo.Controller
                         return;
                     }
                     _terrainEvents = events;
+                    ReadUtc = scope.OldestUtc;
                     if (fill)
                     {
                         var (filled, added) = ProgramFill.Apply(draft, events);
@@ -405,7 +412,14 @@ namespace Topo.Controller
             }, delayMilliseconds);
         }
 
-        internal async Task RefreshFromTerrainClick() => await ReadTerrain(fill: true);
+        internal async Task RefreshFromTerrainClick()
+        {
+            // asked for, so everything is read from Terrain again
+            using (CacheScope.Begin(CacheMode.Reread))
+            {
+                await ReadTerrain(fill: true);
+            }
+        }
 
         // The dates are taken only when whole, as a date box gives a part of one at a time while it is typed
         internal async Task SetStart(ChangeEventArgs e)

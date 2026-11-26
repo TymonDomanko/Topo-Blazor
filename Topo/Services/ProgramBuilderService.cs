@@ -1,4 +1,5 @@
 using Topo.Model;
+using Topo.Model.Cache;
 using Topo.Model.Members;
 using Topo.Model.Program;
 using Topo.Model.ProgramBuilder;
@@ -94,6 +95,8 @@ namespace Topo.Services
 
         public async Task<ProgramPushPlan> PreparePush(ProgramDraft draft, TerrainContext context, Action<string>? progress = null, CancellationToken cancellationToken = default)
         {
+            // what is changed is worked out from Terrain as it is now, whatever page asked
+            using var live = CacheScope.Outside();
             progress?.Invoke("Reading Terrain");
             var events = await GetTerrainEvents(context.UnitId, draft.Start, draft.End, progress, cancellationToken);
             if (events == null)
@@ -131,6 +134,8 @@ namespace Topo.Services
 
         public async Task<ProgramPushResult> Push(ProgramPushPlan plan, ProgramDraft draft, TerrainContext context, Action<string>? progress = null, CancellationToken cancellationToken = default)
         {
+            // what is changed is worked out from Terrain as it is now, whatever page asked
+            using var live = CacheScope.Outside();
             // the new ones first, then the changes
             var result = await ProgramPush.Run(plan.Items.Concat(plan.Updates), item => item.Kind == ProgramPushKind.Update
                 ? _terrainAPIService.UpdateEventAsync(item.EventId, item.BodyJson)

@@ -85,6 +85,10 @@
     }
 
     <PageStatus Loading="Loading" Progress="@Progress" Error="@model.ErrorMessage" />
+    @if (ReadUtc != null)
+    {
+        <DataAgeLine ReadUtc="ReadUtc" Disabled="Loading" OnRefresh="RefreshClick" />
+    }
 
     @if (!string.IsNullOrEmpty(model.Skill) && !Loading)
     {

@@ -3,6 +3,7 @@ using Microsoft.JSInterop;
 using Newtonsoft.Json;
 using Topo.Model.ReadyToSubmit;
 using Topo.Model.ReportGeneration;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -28,18 +29,15 @@ namespace Topo.Controller
         public IReadyToSubmitService _readyToSubmitService { get; set; }
 
         public ReadyToSubmitPageViewModel model = new ReadyToSubmitPageViewModel();
-        public bool Loading;
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public bool Loading => _page.Loading;
+        public string Progress => _page.Progress;
         // The unit has no youth, so there is nothing to read
         public bool NoYouth;
-        public string Progress = "";
         // Worked out again whenever an option changes, from what was read for the unit
         public ReadyToSubmitReport? Report;
         private ReadyToSubmitData? _data;
-        // The unit can be changed while one is still being read, so a read that has been overtaken is dropped
-        private int _loadId;
-        // Stops the read for a unit that was changed away from, or when the page is left, so it doesn't carry on in the background
-        private CancellationTokenSource? _loading;
-
         protected override async Task OnInitializedAsync()
         {
             if (!_storageService.IsAuthenticated)
@@ -48,6 +46,7 @@ namespace Topo.Controller
                 return;
             }
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             if (!string.IsNullOrEmpty(_storageService.UnitId))
@@ -65,61 +64,56 @@ namespace Topo.Controller
             Report = null;
             _data = null;
             NoYouth = false;
-            var loadId = ++_loadId;
-            _loading?.Cancel();
-            _loading = new CancellationTokenSource();
-            var token = _loading.Token;
             if (string.IsNullOrEmpty(unitId))
             {
-                Loading = false;
-                Progress = "";
+                _page.Cancel();
                 return;
             }
 
             _storageService.UnitId = unitId;
-            Loading = true;
-            try
+            // what the data cache holds shows at once, and is read again behind the page when it is more than a day old
+            await _page.LoadAsync(Read(unitId), Show);
+            ShowFailure();
+        }
+
+        // Reads everything on the page again, leaving what is shown in place until the new list is in
+        internal async Task RefreshClick()
+        {
+            model.ErrorMessage = "";
+            await _page.RefreshAsync(Read(model.UnitId), Show);
+            ShowFailure();
+        }
+
+        // Null when the unit has no youth, so there is nothing to read
+        private Func<Action<string>, CancellationToken, Task<ReadyToSubmitData?>> Read(string unitId) =>
+            async (progress, cancellationToken) =>
             {
                 var members = await _membersService.GetMembersAsync(unitId);
                 var youth = members.Where(m => m.isAdultLeader == 0).ToList();
+                cancellationToken.ThrowIfCancellationRequested();
                 if (youth.Count == 0)
                 {
-                    NoYouth = loadId == _loadId;
-                    return;
+                    return null;
                 }
-                var data = await _readyToSubmitService.LoadAsync(unitId, youth, _storageService.Section, step => { if (loadId == _loadId) { Progress = step; InvokeAsync(StateHasChanged); } }, token);
-                if (loadId != _loadId)
-                {
-                    return;
-                }
-                _data = data;
-                Recalculate();
-            }
-            catch (OperationCanceledException)
+                return await _readyToSubmitService.LoadAsync(unitId, youth, _storageService.Section, progress, cancellationToken);
+            };
+
+        private void Show(ReadyToSubmitData? data)
+        {
+            NoYouth = data == null;
+            _data = data;
+            Recalculate();
+        }
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
             {
-            }
-            catch (Exception)
-            {
-                if (loadId == _loadId)
-                {
-                    model.ErrorMessage = "Couldn't read the badges from Terrain.";
-                }
-            }
-            finally
-            {
-                if (loadId == _loadId)
-                {
-                    Loading = false;
-                    Progress = "";
-                }
+                model.ErrorMessage = "Couldn't read the badges from Terrain.";
             }
         }
 
-        public void Dispose()
-        {
-            _loading?.Cancel();
-            _loading?.Dispose();
-        }
+        public void Dispose() => _page.Dispose();
 
         // The preview follows the options as they are ticked, without reading Terrain again
         internal void OptionChanged() => Recalculate();
@@ -149,7 +143,7 @@ namespace Topo.Controller
 
         private async Task Download(OutputType outputType)
         {
-            if (Report == null)
+            if (Report == null || _page.Updating)
             {
                 return;
             }

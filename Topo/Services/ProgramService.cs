@@ -20,6 +20,8 @@ namespace Topo.Services
         public Task SetCalendar(string calendarId);
         public Task SetCalendar(string[] calendarIds);
         public Task ResetCalendar();
+        // Reads with the given calendars switched on, one such read at a time, and puts the selection back
+        public Task<T> WithCalendarsAsync<T>(string[] calendarIds, Func<Task<T>> read, CancellationToken cancellationToken = default);
         public Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate, CancellationToken cancellationToken = default, Action<string>? progress = null);
         public Task<List<AwardEventChoice>> GetEventChoices(DateTime fromDate, DateTime toDate, string unitId);
         public Task<HashSet<string>> GetAttendedMemberIds(string eventId);
@@ -74,8 +76,24 @@ namespace Topo.Services
             }
         }
 
+        public async Task<T> WithCalendarsAsync<T>(string[] calendarIds, Func<Task<T>> read, CancellationToken cancellationToken = default)
+        {
+            using var calendarLock = await _locks.CalendarsAsync(cancellationToken);
+            await SetCalendar(calendarIds);
+            try
+            {
+                return await read();
+            }
+            finally
+            {
+                await ResetCalendar();
+            }
+        }
+
         public async Task<Dictionary<string, string>> GetCalendars()
         {
+            // not while a read has other calendars switched on
+            using var calendarLock = await _locks.CalendarsAsync();
             await ReadCalendars();
             if (_getCalendarsResultModel != null && _getCalendarsResultModel.own_calendars != null)
             {
@@ -413,20 +431,8 @@ namespace Topo.Services
 
         // The unit's events, whichever calendars happen to be on in Terrain: the unit's calendar (a unit's calendar has the unit's id) is the only one
         // switched on while they are read, and the calendars are put back as they were
-        private async Task<GetEventsResultModel?> GetUnitEventsAsync(string unitId, DateTime from, DateTime to)
-        {
-            // what is on now is what gets put back, so it is read first
-            await GetCalendars();
-            await SetCalendar(unitId);
-            try
-            {
-                return await _terrainAPIService.GetEventsAsync(GetUser(), from, to);
-            }
-            finally
-            {
-                await ResetCalendar();
-            }
-        }
+        private Task<GetEventsResultModel?> GetUnitEventsAsync(string unitId, DateTime from, DateTime to) =>
+            WithCalendarsAsync(new[] { unitId }, () => _terrainAPIService.GetEventsAsync(GetUser(), from, to));
 
         // Terrain's events API does not take a minimum date, so "all of the unit's history" starts well before Terrain existed
         private static readonly DateTime EarliestEventDate = new DateTime(2015, 1, 1);
@@ -434,16 +440,21 @@ namespace Topo.Services
         public async Task<List<ProgramIdeaItemModel>?> GetProgramIdeas(DateTime fromDate, DateTime? highlightFromDate, string[] selectedCalendars)
         {
             TextInfo myTI = new CultureInfo("en-AU", false).TextInfo;
-            await SetCalendar(selectedCalendars);
             // Matches GetEventsForDates' own fromDate.AddDays(-1) above - without the day of buffer,
             // an event right at the lookback boundary can be silently excluded.
-            var getEventsResultModel = await _terrainAPIService.GetEventsAsync(GetUser(), fromDate.AddDays(-1), DateTime.Now);
-            await ResetCalendar();
+            var getEventsResultModel = await WithCalendarsAsync(selectedCalendars,
+                () => _terrainAPIService.GetEventsAsync(GetUser(), fromDate.AddDays(-1), DateTime.Now));
 
             // null (not an empty list) distinguishes "the request failed" from "genuinely no matches",
             // since TerrainAPIService swallows request failures and returns a null result model.
             if (getEventsResultModel == null || getEventsResultModel.results == null)
+            {
                 return null;
+            }
+            foreach (var listed in getEventsResultModel.results)
+            {
+                await _terrainAPIService.CheckListedEventAsync(listed);
+            }
 
             // Only the four SIA challenge areas get a sheet/section in the report (matching the other
             // reports' convention) - filtering here too keeps the on-page list consistent with what
@@ -473,10 +484,7 @@ namespace Topo.Services
         {
             var attendanceReport = new AttendanceReportModel();
             var attendanceReportItems = new List<AttendanceReportItemModel>();
-            await SetCalendar(selectedCalendars);
-
-            var programEvents = await GetEventsForDates(fromDate, toDate);
-            await ResetCalendar();
+            var programEvents = await WithCalendarsAsync(selectedCalendars, () => GetEventsForDates(fromDate, toDate));
             foreach (var programEvent in programEvents.OrderBy(pe => pe.StartDateTime))
             {
                 var eventListModel = await GetAttendanceForEvent(programEvent.Id);

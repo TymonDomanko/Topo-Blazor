@@ -5,6 +5,7 @@ using Topo.Model.Members;
 using Topo.Model.ReportGeneration;
 using Topo.Model.UnitReport;
 using Topo.Model.SectionReport;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -62,6 +63,7 @@ namespace Topo.Controller
         internal async Task ShowLeadersClick()
         {
             LoadingLeaders = true;
+            using var leadersScope = CacheScope.Begin(CacheMode.Fresh);
             try
             {
                 foreach (var unitId in model.Units.Keys.Where(model.SelectedUnits.Contains))
@@ -213,7 +215,15 @@ namespace Topo.Controller
 
         internal void ThisYear() => SetPeriod(new DateTime(DateTime.Today.Year, 1, 1), new DateTime(DateTime.Today.Year, 12, 31));
 
-        internal async Task GenerateClick()
+        // When the oldest of what the report on show was made from was read
+        public DateTime? ReadUtc;
+
+        // The report uses what the data cache holds while it is in date; "Refresh data" reads everything for it again
+        internal Task GenerateClick() => Generate(CacheMode.Fresh);
+
+        internal Task RefreshClick() => Generate(CacheMode.Reread);
+
+        private async Task Generate(CacheMode mode)
         {
             model.ErrorMessage = "";
             model.Message = "";
@@ -254,10 +264,16 @@ namespace Topo.Controller
             }
 
             Busy = true;
-            Result = null;
+            // a report being read again stays on show until the new one is in
+            if (mode != CacheMode.Reread)
+            {
+                Result = null;
+            }
             try
             {
+                using var scope = CacheScope.Begin(mode);
                 Result = await _sectionReportService.GetSectionReport(request, step => { Progress = step; InvokeAsync(StateHasChanged); });
+                ReadUtc = scope.OldestUtc;
             }
             catch (Exception)
             {
@@ -285,7 +301,7 @@ namespace Topo.Controller
 
         internal async Task DownloadClick(OutputType outputType)
         {
-            if (Result == null)
+            if (Result == null || Busy)
             {
                 return;
             }

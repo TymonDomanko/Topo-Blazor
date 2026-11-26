@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Topo.Model.Milestone;
 using Topo.Model.ReadyToSubmit;
 using Topo.Model.ReportGeneration;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -30,18 +31,16 @@ namespace Topo.Controller
         public IMilestoneProgressService _milestoneProgressService { get; set; }
 
         public MilestoneProgressPageViewModel model = new MilestoneProgressPageViewModel();
-        public bool Loading;
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public bool Loading => _page.Loading;
         // The unit has no youth, so there is nothing to read
         public bool NoYouth;
-        public string Progress = "";
+        public string Progress => _page.Progress;
         // Worked out again whenever an option changes, from what was read for the unit
         public MilestoneProgressReport? Report;
         private List<MilestoneProgressMember>? _members;
         private MilestoneProgressData? _data;
-        // The unit can be changed while one is still being read, so a read that has been overtaken is dropped
-        private int _loadId;
-        private CancellationTokenSource? _loading;
-
         protected override async Task OnInitializedAsync()
         {
             if (!_storageService.IsAuthenticated)
@@ -50,6 +49,7 @@ namespace Topo.Controller
                 return;
             }
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             if (!string.IsNullOrEmpty(_storageService.UnitId))
@@ -68,61 +68,55 @@ namespace Topo.Controller
             _data = null;
             _members = null;
             NoYouth = false;
-            var loadId = ++_loadId;
-            _loading?.Cancel();
-            _loading = new CancellationTokenSource();
-            var token = _loading.Token;
             if (string.IsNullOrEmpty(unitId))
             {
-                Loading = false;
-                Progress = "";
+                _page.Cancel();
                 return;
             }
 
             _storageService.UnitId = unitId;
             model.UnitName = _storageService.UnitName;
-            Loading = true;
-            Progress = "the unit's Scouts";
-            try
+            // what the data cache holds shows at once, and is read again behind the page when it is more than a day old
+            await _page.LoadAsync(Read(unitId), Show);
+            ShowFailure();
+        }
+
+        // Reads everything on the page again, leaving what is shown in place until the new pages are in
+        internal async Task RefreshClick()
+        {
+            model.ErrorMessage = "";
+            await _page.RefreshAsync(Read(model.UnitId), Show);
+            ShowFailure();
+        }
+
+        private Func<Action<string>, CancellationToken, Task<(List<MilestoneProgressMember> Youth, MilestoneProgressData? Data)>> Read(string unitId) =>
+            async (progress, cancellationToken) =>
             {
+                progress("the unit's Scouts");
                 // The Unit Leader, Patrol Leaders and Assistant Patrol Leaders are youth; the unit is listed in the order the reports use
-                var youth = ReadyToSubmitBuilder.InPatrolOrder((await _membersService.GetMembersAsync(unitId)).Where(m => m.isAdultLeader == 0).ToList());
-                if (loadId != _loadId)
-                {
-                    return;
-                }
+                var youth = ReadyToSubmitBuilder.InPatrolOrder((await _membersService.GetMembersAsync(unitId)).Where(m => m.isAdultLeader == 0).ToList())
+                    .Select(m => new MilestoneProgressMember { MemberId = m.id, FirstName = m.first_name, LastName = m.last_name, Patrol = m.patrol_name }).ToList();
+                cancellationToken.ThrowIfCancellationRequested();
                 if (youth.Count == 0)
                 {
-                    NoYouth = true;
-                    return;
+                    return (youth, null);
                 }
-                var data = await _milestoneProgressService.LoadAsync(unitId, _storageService.Section,
-                    step => { if (loadId == _loadId) { Progress = step; InvokeAsync(StateHasChanged); } }, token);
-                if (loadId != _loadId)
-                {
-                    return;
-                }
-                _members = youth.Select(m => new MilestoneProgressMember { MemberId = m.id, FirstName = m.first_name, LastName = m.last_name, Patrol = m.patrol_name }).ToList();
-                _data = data;
-                Recalculate();
-            }
-            catch (OperationCanceledException)
+                return (youth, await _milestoneProgressService.LoadAsync(unitId, _storageService.Section, progress, cancellationToken));
+            };
+
+        private void Show((List<MilestoneProgressMember> Youth, MilestoneProgressData? Data) read)
+        {
+            NoYouth = read.Youth.Count == 0;
+            _members = read.Youth;
+            _data = read.Data;
+            Recalculate();
+        }
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
             {
-            }
-            catch (Exception)
-            {
-                if (loadId == _loadId)
-                {
-                    model.ErrorMessage = "Couldn't read the milestones from Terrain.";
-                }
-            }
-            finally
-            {
-                if (loadId == _loadId)
-                {
-                    Loading = false;
-                    Progress = "";
-                }
+                model.ErrorMessage = "Couldn't read the milestones from Terrain.";
             }
         }
 
@@ -186,7 +180,7 @@ namespace Topo.Controller
         // The report is made from what is on the page, so it is the same as the preview
         private async Task Download(OutputType outputType, string extension, string contentType)
         {
-            if (Report == null || Report.Pages.Count == 0)
+            if (Report == null || Report.Pages.Count == 0 || _page.Updating)
             {
                 return;
             }
@@ -203,10 +197,6 @@ namespace Topo.Controller
             }
         }
 
-        public void Dispose()
-        {
-            _loading?.Cancel();
-            _loading?.Dispose();
-        }
+        public void Dispose() => _page.Dispose();
     }
 }

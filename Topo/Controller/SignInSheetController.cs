@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Topo.Model.Members;
 using Topo.Model.Program;
 using Topo.Model.ReportGeneration;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -48,6 +49,27 @@ namespace Topo.Controller
         private bool _syncCalendarSelection;
         private bool _loadingEvents;
         private bool _reloadEvents;
+        // When the oldest of what the event list and the sheet were made from was read
+        private DateTime? _eventsReadUtc;
+        private DateTime? _previewReadUtc;
+        public bool Refreshing;
+        public DateTime? ReadUtc => _eventsReadUtc == null || _previewReadUtc < _eventsReadUtc ? _previewReadUtc : _eventsReadUtc;
+
+        // Reads the events and the sheet's people again
+        internal async Task RefreshClick()
+        {
+            Refreshing = true;
+            try
+            {
+                using var scope = CacheScope.Begin(CacheMode.Reread);
+                await LoadEventsAsync();
+                await RefreshPreview();
+            }
+            finally
+            {
+                Refreshing = false;
+            }
+        }
 
         protected override async Task OnAfterRenderAsync(bool firstRender)
         {
@@ -233,10 +255,13 @@ namespace Topo.Controller
             }
             else
             {
-                await _programService.SetCalendar(model.SelectedCalendars);
-                var events = await _programService.GetEventsForDates(model.CalendarSearchFromDate, model.CalendarSearchToDate);
-                await _programService.ResetCalendar();
+                // the list is always read from Terrain; an event's details come from the data cache while in date
+                using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
+                var scope = CacheScope.Current!;
+                var events = await _programService.WithCalendarsAsync(model.SelectedCalendars,
+                    () => _programService.GetEventsForDates(model.CalendarSearchFromDate, model.CalendarSearchToDate));
                 model.Events = events.OrderBy(e => e.StartDateTime).ToList();
+                _eventsReadUtc = scope.OldestUtc;
             }
 
             // the previously chosen event may no longer be in the list
@@ -265,6 +290,9 @@ namespace Topo.Controller
             }
 
             List<MemberListModel>? members = null;
+            // the people come from the data cache while in date
+            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
+            var scope = CacheScope.Current!;
             try
             {
                 var unitIds = SelectedUnitIds();
@@ -284,6 +312,7 @@ namespace Topo.Controller
             }
             PreviewMembers = members;
             PreviewFailed = members == null;
+            _previewReadUtc = scope.OldestUtc;
         }
 
         internal async Task FullNamesChange(ChangeEventArgs e)

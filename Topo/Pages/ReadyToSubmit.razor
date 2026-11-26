@@ -24,6 +24,10 @@
     </div>
 
     <PageStatus Loading="Loading" Progress="@Progress" Error="@model.ErrorMessage" />
+    @if (_page.ReadUtc != null)
+    {
+        <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
+    }
 
     <div class="form-group mb-3 row">
         <label class="col-sm-2 col-form-label">Badges</label>
@@ -73,7 +77,7 @@
     }
     else if (Report != null)
     {
-        <ReportButtons Name="Ready to Submit" OnPdf="PdfClick" OnXlsx="XlsxClick" Disabled="@(Report.Items.Count == 0)" />
+        <ReportButtons Name="Ready to Submit" OnPdf="PdfClick" OnXlsx="XlsxClick" Disabled="@(_page.Updating || Report.Items.Count == 0)" />
 
         <div class="mt-3 mb-3 row">
             <label class="col-sm-2 col-form-label">Preview</label>

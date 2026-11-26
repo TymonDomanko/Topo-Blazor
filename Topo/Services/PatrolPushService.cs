@@ -1,4 +1,5 @@
 using Topo.Model.Members;
+using Topo.Model.Cache;
 using Topo.Model.PatrolPlanner;
 
 namespace Topo.Services
@@ -25,6 +26,8 @@ namespace Topo.Services
 
         public async Task<PatrolPushPlan> PrepareAsync(string unitId, IEnumerable<PatrolPlannerMember> board, IEnumerable<string> patrolsRemovedFromBoard)
         {
+            // what is changed is worked out from Terrain as it is now, whatever page asked
+            using var live = CacheScope.Outside();
             var members = await _terrainAPIService.GetMembersAsync(unitId);
             var patrols = await _terrainAPIService.GetUnitPatrolsAsync(unitId);
             if (members == null || members.results == null || patrols == null)
@@ -37,6 +40,8 @@ namespace Topo.Services
 
         public async Task<PatrolPushResult> PushAsync(PatrolPushPlan plan, Action<string>? progress = null)
         {
+            // what is changed is worked out from Terrain as it is now, whatever page asked
+            using var live = CacheScope.Outside();
             var result = new PatrolPushResult();
             var patrolIds = new Dictionary<string, string>(StringComparer.Ordinal);
             var cannotCreate = new Dictionary<string, string>(StringComparer.Ordinal);

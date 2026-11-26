@@ -25,6 +25,10 @@
     </div>
 </div>
 
+@if (_page.ReadUtc != null)
+{
+    <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Progress="@_page.Progress" />
+}
 @if (IsLoading)
 {
     <p>Reading the pending approvals from Terrain...</p>
@@ -241,8 +245,8 @@ else
                         <div class="form-text">@Comment.Length / @ApprovalAction.MaxCommentLength</div>
                     </div>
                     <p class="text-muted mb-2">We recommend going through this submission with the youth member in person before or after requesting an improvement.</p>
-                    <button type="button" class="btn btn-success" id="approve" @onclick="ApproveClick">Approve</button>
-                    <button type="button" class="btn btn-outline-primary" id="improve" @onclick="ImproveClick">Request improvement</button>
+                    <button type="button" class="btn btn-success" id="approve" @onclick="ApproveClick" disabled="@Locked">Approve</button>
+                    <button type="button" class="btn btn-outline-primary" id="improve" @onclick="ImproveClick" disabled="@Locked">Request improvement</button>
                     @if (!string.IsNullOrEmpty(ValidationMessage))
                     {
                         <div class="text-danger mt-2" id="validation">@ValidationMessage</div>
@@ -252,9 +256,9 @@ else
         }
 
         <div class="mb-3">
-            <button type="button" class="btn btn-outline-secondary" id="back" @onclick="BackClick" disabled="@(!Session.CanGoBack || IsBusy)">Back</button>
-            <button type="button" class="btn btn-outline-secondary" id="skip" @onclick="SkipClick" disabled="@IsBusy">Skip</button>
-            <button type="button" class="btn btn-outline-danger" id="stop" @onclick="StopClick" disabled="@IsBusy">Stop</button>
+            <button type="button" class="btn btn-outline-secondary" id="back" @onclick="BackClick" disabled="@(!Session.CanGoBack || Locked)">Back</button>
+            <button type="button" class="btn btn-outline-secondary" id="skip" @onclick="SkipClick" disabled="@Locked">Skip</button>
+            <button type="button" class="btn btn-outline-danger" id="stop" @onclick="StopClick" disabled="@Locked">Stop</button>
         </div>
     }
 }

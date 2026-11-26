@@ -7,6 +7,18 @@ namespace TopoReportFunctionTest
     public class DataCacheTests
     {
         [TestMethod]
+        public void ReadsOutsideALeftScopeAreNotCachedAndTheScopeComesBack()
+        {
+            using var page = CacheScope.Begin(CacheMode.Held);
+            using (CacheScope.Outside())
+            {
+                Assert.IsNull(CacheScope.Current);
+            }
+
+            Assert.AreSame(page, CacheScope.Current);
+        }
+
+        [TestMethod]
         public void WhatAnInnerScopeUsedCountsForTheOneAroundIt()
         {
             var old = new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc);

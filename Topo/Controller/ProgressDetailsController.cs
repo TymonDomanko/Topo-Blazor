@@ -163,6 +163,7 @@ namespace Topo.Controller
 
         private async Task<byte[]> OASWorksheet(List<OASSummary> startedOASStages, OutputType outputType = OutputType.PDF)
         {
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
             var stages = await _oasService.GetOASStagesList();
             var sortedAnswers = new List<OASWorksheetAnswers>();
             foreach (var selectedStageTemplate in startedOASStages)

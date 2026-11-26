@@ -26,6 +26,10 @@
     </div>
 </div>
 
+@if (_page.ReadUtc != null)
+{
+    <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Progress="@_page.Progress" />
+}
 @if (IsLoading)
 {
     <p>Reading the pending awards from Terrain...</p>
@@ -96,10 +100,10 @@ else
     <div class="mb-3" id="toolbar">
         <strong id="selected-count">@Selection.Count selected</strong>
         <span class="text-muted">of @Shown.Total pending awards for @Shown.People.Count @(Shown.People.Count == 1 ? "person" : "people")@(Shown.Total != Awards.Total ? $" ({Awards.Total} awards in all)" : "")</span>
-        <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="select-all" @onclick="SelectAllClick" disabled="@IsAwarding">Select all</button>
-        <button type="button" class="btn btn-outline-secondary btn-sm" id="clear" @onclick="ClearClick" disabled="@(Selection.Count == 0 || IsAwarding)">Clear</button>
-        <button type="button" class="btn btn-outline-secondary btn-sm" id="refresh" @onclick="RefreshClick" disabled="@IsAwarding">Read Terrain again</button>
-        <button type="button" class="btn btn-success btn-sm ms-3" id="award" @onclick="AwardClick" disabled="@(Selection.Count == 0 || IsAwarding)">Award @Selection.Count selected</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="select-all" @onclick="SelectAllClick" disabled="@Locked">Select all</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="clear" @onclick="ClearClick" disabled="@(Selection.Count == 0 || Locked)">Clear</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="refresh" @onclick="RefreshClick" disabled="@Locked">Read Terrain again</button>
+        <button type="button" class="btn btn-success btn-sm ms-3" id="award" @onclick="AwardClick" disabled="@(Selection.Count == 0 || Locked)">Award @Selection.Count selected</button>
         @if (!string.IsNullOrEmpty(AwardMessage))
         {
             <span class="text-danger ms-2" id="award-message">@AwardMessage</span>
@@ -186,7 +190,7 @@ else
                 <div class="form-check">
                     <input class="form-check-input person-toggle" type="checkbox" id="person-@person.MemberId"
                            checked="@Selection.IsPersonFullySelected(person.MemberId)"
-                           disabled="@(selectable == 0 || IsAwarding)"
+                           disabled="@(selectable == 0 || Locked)"
                            @onchange="() => TogglePerson(person.MemberId)" />
                     <label class="form-check-label fw-bold" for="person-@person.MemberId">@person.Name</label>
                     <span class="text-muted ms-2">
@@ -202,7 +206,7 @@ else
                         <div class="form-check">
                             <input class="form-check-input award-toggle" type="checkbox" id="award-@id"
                                    checked="@Selection.IsSelected(id)"
-                                   disabled="@(!award.CanAward || IsAwarding)"
+                                   disabled="@(!award.CanAward || Locked)"
                                    @onchange="() => ToggleAward(id)" />
                             <label class="form-check-label" for="award-@id">@award.Item.AchievementName</label>
                             <span class="text-muted ms-2">@(award.IsTopoAward ? $"earned {award.Item.SubmissionDate:dd/MM/yyyy}" : $"submitted {award.Item.SubmissionDate.ToLocalTime():dd/MM/yyyy}")</span>

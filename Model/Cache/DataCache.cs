@@ -113,6 +113,7 @@ namespace Topo.Model.Cache
             var held = await GetAsync<string>(key);
             if (held != null && scope.Serves(held.IsStale))
             {
+                scope.Held();
                 Note(scope, held);
                 return held.Value;
             }
@@ -130,6 +131,7 @@ namespace Topo.Model.Cache
             }
             if (held != null)
             {
+                scope.Held();
                 Note(scope, held);
                 return held.Value;
             }

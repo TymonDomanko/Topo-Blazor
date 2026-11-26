@@ -1,4 +1,5 @@
 using Topo.Model;
+using Topo.Model.Cache;
 using Topo.Model.History;
 using Topo.Model.Logbook;
 
@@ -90,14 +91,29 @@ namespace Topo.Services
             return names;
         }
 
-        // The logbook needs the member's profile taken on, as the logbook report does
+        // The logbook needs the member's profile taken on, as the logbook report does. Reading through the data cache, the profile is only locked
+        // and taken on if something of the logbook has to be read from Terrain.
         private async Task<List<GetMemberLogbookDetailResultModel>> GetLogbook(string memberId)
         {
             var entries = new List<GetMemberLogbookDetailResultModel>();
-            using var profile = await _locks.ProfileAsync();
-            await _terrainAPIService.AssumeProfile(memberId);
+            IDisposable? profile = null;
+            Task? assuming = null;
+            async Task AssumeAsync()
+            {
+                profile = await _locks.ProfileAsync();
+                await _terrainAPIService.AssumeProfile(memberId);
+            }
+            using var scope = CacheScope.Current == null ? null : CacheScope.Begin(CacheScope.Current.Mode);
+            if (scope != null)
+            {
+                scope.BeforeRead = () => assuming ??= AssumeAsync();
+            }
             try
             {
+                if (scope == null)
+                {
+                    await AssumeAsync();
+                }
                 var summary = await _terrainAPIService.GetMemberLogbookSummary(memberId);
                 if (summary != null)
                 {
@@ -114,7 +130,17 @@ namespace Topo.Services
             }
             finally
             {
-                await _terrainAPIService.RevokeAssumedProfiles();
+                if (profile != null)
+                {
+                    try
+                    {
+                        await _terrainAPIService.RevokeAssumedProfiles();
+                    }
+                    finally
+                    {
+                        profile.Dispose();
+                    }
+                }
             }
             return entries;
         }

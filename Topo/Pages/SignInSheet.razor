@@ -123,7 +123,8 @@
 
     @if (PreviewMembers != null)
     {
-        <ReportButtons Name="Sign In Sheet" Disabled="@(PreviewMembers.Count == 0)"
+        <DataAgeLine ReadUtc="ReadUtc" Disabled="Refreshing" OnRefresh="RefreshClick" />
+        <ReportButtons Name="Sign In Sheet" Disabled="@(Refreshing || PreviewMembers.Count == 0)"
                        OnPdf="@(() => DownloadClick(OutputType.PDF))" OnXlsx="@(() => DownloadClick(OutputType.Excel))" />
         <div class="mt-3 mb-3 row">
             <label class="col-sm-2 col-form-label">Preview</label>

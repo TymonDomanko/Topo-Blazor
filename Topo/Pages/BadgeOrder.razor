@@ -72,6 +72,10 @@ else if (Status != null && !Status.StoreFound)
 </div>
 
 <PageStatus Loading="Loading" Progress="@Progress" Error="@Error" />
+@if (Lines != null)
+{
+    <DataAgeLine ReadUtc="ReadUtc" NoneText="Events that ended more than four months ago are kept until you refresh." Disabled="Loading" OnRefresh="RefreshClick" />
+}
 
 @if (Lines != null)
 {

@@ -3,11 +3,12 @@ using Microsoft.JSInterop;
 using Newtonsoft.Json;
 using Topo.Model.ReportGeneration;
 using Topo.Model.SiaProgress;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class SiaProgressController : ComponentBase
+    public class SiaProgressController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -28,8 +29,10 @@ namespace Topo.Controller
         public ISiaProgressService _siaProgressService { get; set; }
 
         public SiaProgressPageViewModel model = new SiaProgressPageViewModel();
-        public bool Loading;
-        public string Progress = "";
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public bool Loading => _page.Loading;
+        public string Progress => _page.Progress;
         // Worked out again whenever an option changes, from what was read for the Scout or unit
         public SiaProgressReport? Report;
         private SiaProgressInput? _data;
@@ -37,7 +40,7 @@ namespace Topo.Controller
         public bool NeedsMember => model.Scope != SiaScope.WholeUnit;
         public bool NeedsProject => model.Scope == SiaScope.OneProject;
         // Nothing to download when no project was found, unless the summary was asked for
-        public bool CanExport => Report != null && (Report.Projects.Count > 0 || Report.IncludeSummary);
+        public bool CanExport => Report != null && !_page.Updating && (Report.Projects.Count > 0 || Report.IncludeSummary);
 
         protected override async Task OnInitializedAsync()
         {
@@ -47,6 +50,7 @@ namespace Topo.Controller
                 return;
             }
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             if (!string.IsNullOrEmpty(_storageService.UnitId))
@@ -61,19 +65,12 @@ namespace Topo.Controller
         {
             model.UnitId = unitId;
             model.MemberId = "";
-            model.ProjectId = "";
-            model.Projects = new List<SiaProjectChoice>();
             model.ErrorMessage = "";
-            Clear();
-            if (string.IsNullOrEmpty(unitId))
+            model.Members = new List<Topo.Model.Members.MemberListModel>();
+            if (!string.IsNullOrEmpty(unitId))
             {
-                model.Members = new List<Topo.Model.Members.MemberListModel>();
-                return;
+                _storageService.UnitId = unitId;
             }
-
-            _storageService.UnitId = unitId;
-            var allMembers = await _membersService.GetMembersAsync(unitId);
-            model.Members = allMembers.Where(m => m.isAdultLeader == 0).OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();
             await Load();
         }
 
@@ -97,54 +94,83 @@ namespace Topo.Controller
             _data = null;
         }
 
-        // Reads the projects of the Scout, or of the whole unit, once; the preview then follows the options
+        // Reads the projects of the Scout, or of the whole unit; the preview then follows the options. What the data cache holds shows at once,
+        // and is read again behind the page when it is more than a day old.
         private async Task Load()
         {
             Clear();
             model.ProjectId = "";
             model.Projects = new List<SiaProjectChoice>();
-            if (string.IsNullOrEmpty(model.UnitId) || (NeedsMember && string.IsNullOrEmpty(model.MemberId)))
+            if (string.IsNullOrEmpty(model.UnitId))
             {
+                _page.Cancel();
                 return;
             }
 
-            Loading = true;
-            try
+            await _page.LoadAsync(Read(), Show);
+            ShowFailure();
+        }
+
+        // Reads everything on the page again, leaving what is shown in place until the new projects are in
+        internal async Task RefreshClick()
+        {
+            model.ErrorMessage = "";
+            await _page.RefreshAsync(Read(), Show);
+            ShowFailure();
+        }
+
+        // The unit's youth and, when enough has been chosen, the projects asked for
+        private Func<Action<string>, CancellationToken, Task<(List<Topo.Model.Members.MemberListModel> Youth, SiaProgressInput? Data)>> Read()
+        {
+            var unitId = model.UnitId;
+            var scope = model.Scope;
+            var memberId = model.MemberId;
+            return async (progress, cancellationToken) =>
             {
-                _data = await _siaProgressService.LoadAsync(new SiaProgressRequest
+                var allMembers = await _membersService.GetMembersAsync(unitId);
+                var youth = allMembers.Where(m => m.isAdultLeader == 0).OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();
+                cancellationToken.ThrowIfCancellationRequested();
+                if (scope != SiaScope.WholeUnit && string.IsNullOrEmpty(memberId))
                 {
-                    Scope = model.Scope,
+                    return (youth, null);
+                }
+                var data = await _siaProgressService.LoadAsync(new SiaProgressRequest
+                {
+                    Scope = scope,
                     UnitName = _storageService.UnitName ?? "",
                     Section = _storageService.Section,
-                    UnitId = model.UnitId,
-                    Members = model.Members,
-                    MemberId = model.MemberId
-                }, step => { Progress = step; InvokeAsync(StateHasChanged); });
+                    UnitId = unitId,
+                    Members = youth,
+                    MemberId = memberId
+                }, progress);
+                return (youth, data);
+            };
+        }
 
-                if (NeedsProject)
-                {
-                    model.Projects = SiaProgressBuilder.ProjectChoices(_data.Members.FirstOrDefault()?.Results ?? new Topo.Model.SIA.GetSIAResultsModel(), _storageService.Section);
-                    if (model.Projects.Count == 1)
-                    {
-                        model.ProjectId = model.Projects[0].Id;
-                    }
-                    else if (model.Projects.Count == 0)
-                    {
-                        model.ErrorMessage = "This Scout has no Special Interest Area projects in this section.";
-                    }
-                }
-                Recalculate();
+        private void Show((List<Topo.Model.Members.MemberListModel> Youth, SiaProgressInput? Data) read)
+        {
+            model.Members = read.Youth;
+            _data = read.Data;
+            if (_data != null && NeedsProject)
+            {
+                // the project already chosen stays chosen when it is read again
+                var chosen = model.ProjectId;
+                model.Projects = SiaProgressBuilder.ProjectChoices(_data.Members.FirstOrDefault()?.Results ?? new Topo.Model.SIA.GetSIAResultsModel(), _storageService.Section);
+                model.ProjectId = model.Projects.Any(p => p.Id == chosen) ? chosen : model.Projects.Count == 1 ? model.Projects[0].Id : "";
+                model.ErrorMessage = model.Projects.Count == 0 ? "This Scout has no Special Interest Area projects in this section." : "";
             }
-            catch (Exception)
+            Recalculate();
+        }
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
             {
                 model.ErrorMessage = "Couldn't read the projects from Terrain.";
             }
-            finally
-            {
-                Loading = false;
-                Progress = "";
-            }
         }
+
+        public void Dispose() => _page.Dispose();
 
         // The preview follows the options as they are changed, without reading Terrain again
         internal void OptionChanged() => Recalculate();

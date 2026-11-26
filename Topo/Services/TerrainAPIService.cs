@@ -241,7 +241,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{membersAddress}patrols/{patrolId}/members";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var getMembersResultModel = DeserializeObject<GetMembersResultModel>(result);
 
             return getMembersResultModel;
@@ -470,7 +470,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{achievementsAddress}members/{memberId}/achievements/{achievementId}?type=special_interest_area";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var getSIAResultModel = DeserializeObject<GetSIAResultModel>(result);
 
             return getSIAResultModel ?? new GetSIAResultModel();
@@ -572,7 +572,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             var requestUri = $"{templatesAddress}additional-awards/specifications.json";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             result = result.Replace("\n", "");
             var getAditionalAwardsSpecifications = DeserializeObject<GetAdditionalAwardsSpecificationsResultModel>("{ \"AwardDescriptions\": " + result + "}");
 
@@ -646,7 +646,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             var requestUri = $"{achievementsAddress}members/{Uri.EscapeDataString(memberId)}/achievements/{Uri.EscapeDataString(achievementId)}?type={Uri.EscapeDataString(achievementType)}";
-            return await SendRequest(HttpMethod.Get, requestUri);
+            return await CachedGet(requestUri);
         }
 
         // A template file such as sia/scout/plan/2.json; a path that does not exist comes back as something that is not JSON
@@ -654,7 +654,7 @@ namespace Topo.Services
         {
             await RefreshTokenAsync();
 
-            return await SendRequest(HttpMethod.Get, $"{templatesAddress}{path}");
+            return await CachedGet($"{templatesAddress}{path}");
         }
 
         public async Task<GetMemberAchievementResultModel> GetMemberAchievementResult(string member_id, string achievement_id, string achievement_type)
@@ -662,7 +662,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{achievementsAddress}members/{member_id}/achievements/{achievement_id}?type={achievement_type}";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var getMemberAchievementResultModel = DeserializeObject<GetMemberAchievementResultModel>(result);
 
             return getMemberAchievementResultModel ?? new GetMemberAchievementResultModel();
@@ -776,7 +776,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             var requestUri = $"{membersAddress}units/{unitId}/patrols";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             return DeserializeObject<GetUnitPatrolsResultModel>(result)?.results;
         }
 

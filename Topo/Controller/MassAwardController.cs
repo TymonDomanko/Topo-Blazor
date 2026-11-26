@@ -2,11 +2,12 @@ using Microsoft.AspNetCore.Components;
 using Syncfusion.Blazor.Calendars;
 using Topo.Model.AdditionalAwards;
 using Topo.Model.Approvals;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class MassAwardController : ComponentBase
+    public class MassAwardController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; } = default!;
@@ -60,7 +61,13 @@ namespace Topo.Controller
         private HashSet<string>? _attended;
         // How many people the chosen event lists as attending, so a short list can be told from an event nobody was ticked on
         public int AttendedCount => _attended?.Count ?? 0;
-        public bool IsLoading;
+        // Loading through the data cache. The page acts on Terrain, so what is held is always read again before anything can be awarded.
+        public PageLoad _page = new PageLoad();
+        public bool IsLoading => _page.Loading;
+        // Nothing can be ticked or awarded while awards are being sent or the list is being read again
+        public bool Locked => IsAwarding || _page.Updating;
+
+        public void Dispose() => _page.Dispose();
         public string? LoadError;
         // The Camper, Walkabout and Years of Service awards to hand over are listed with the pending awards, as one more badge. They have no
         // award request in Terrain, so awarding one records it instead: a Camper or Walkabout Award in Terrain's additional awards, a Years of
@@ -104,41 +111,31 @@ namespace Topo.Controller
         {
             if (string.IsNullOrEmpty(UnitId))
             {
+                _page.Cancel();
                 return;
             }
             var unitId = UnitId;
-            IsLoading = true;
             LoadError = null;
-            try
-            {
-                var awards = await WithTopoAwardsAsync(unitId, await _approvalsService.GetAwardRequests(unitId));
-                // The leader picked another unit while this was loading; that unit's own read decides what is shown
-                if (unitId != UnitId)
+            _page.Changed = () => InvokeAsync(StateHasChanged);
+            await _page.LoadAsync(async (progress, cancellationToken) => await WithTopoAwardsAsync(unitId, await _approvalsService.GetAwardRequests(unitId)),
+                awards =>
                 {
-                    return;
-                }
-                Awards = awards;
-                ShowEveryone();
+                    Awards = awards;
+                    ShowEveryone();
+                }, alwaysUpdate: true);
+            // The leader picked another unit while this was loading; that unit's own read decides what is shown
+            if (unitId != UnitId)
+            {
+                return;
             }
-            catch (Exception)
+            if (_page.Failed)
             {
-                if (unitId != UnitId)
-                {
-                    return;
-                }
                 Awards = null;
                 Shown = null;
                 Selection = null;
                 LoadError = "Could not read the pending awards from Terrain.";
             }
-            finally
-            {
-                if (unitId == UnitId)
-                {
-                    IsLoading = false;
-                }
-            }
-            if (unitId == UnitId && Awards != null)
+            if (Awards != null)
             {
                 await LoadEvents();
             }
@@ -247,6 +244,8 @@ namespace Topo.Controller
             EventsLoading = true;
             try
             {
+                // who came decides what is ticked, so it is read from Terrain as it is now
+                using var current = CacheScope.Begin(CacheMode.Reread);
                 var attended = await _programService.GetAttendedMemberIds(eventId);
                 if (eventId != SelectedEventId)
                 {
@@ -299,7 +298,7 @@ namespace Topo.Controller
         // What was ticked is what the confirmation shows, so any change to the ticks closes it
         private void ChangeTicks(Action change)
         {
-            if (IsAwarding)
+            if (Locked)
             {
                 return;
             }
@@ -311,7 +310,7 @@ namespace Topo.Controller
         // Checks there is something to award and a good date, then shows what will be sent. Nothing is sent yet.
         internal void AwardClick()
         {
-            if (IsAwarding || Selection == null)
+            if (Locked || Selection == null)
             {
                 return;
             }
@@ -343,7 +342,7 @@ namespace Topo.Controller
         // The leader confirmed: award the ticked requests one after another, then read Terrain's list again
         internal async Task ConfirmAwardClick()
         {
-            if (IsAwarding || Selection == null || !ConfirmOpen)
+            if (Locked || Selection == null || !ConfirmOpen)
             {
                 return;
             }
