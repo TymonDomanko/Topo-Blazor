@@ -22,17 +22,18 @@ namespace Topo.Model.Cache
     }
 
     // Keeps what pages have read from Terrain (docs/background-cache-design.md): nothing is read ahead. A read is in date for a day; an older one
-    // is still handed out, marked stale, for the page to show while it reads it again; after 30 days it is dropped. The copy in memory saves
-    // asking the browser's store twice in a session.
+    // is still handed out, marked stale, for the page to show while it reads it again; after 30 days it is dropped. Everything is asked of the
+    // browser's store, so what one tab drops after writing to Terrain is gone for the others too.
     public class DataCache
     {
         // Raise when what is kept changes shape, so older entries are left behind
         public const int Version = 1;
         public static readonly TimeSpan Fresh = TimeSpan.FromDays(1);
         public static readonly TimeSpan Dropped = TimeSpan.FromDays(30);
+        // The entry that says when something was last dropped because Terrain was written to
+        private const string ChangedKey = "changed";
 
         private readonly ICacheStore _store;
-        private readonly Dictionary<string, CacheEntry> _memory = new Dictionary<string, CacheEntry>();
         private bool _swept;
 
         public DataCache(ICacheStore store)
@@ -53,14 +54,10 @@ namespace Topo.Model.Cache
             {
                 return null;
             }
-            if (!_memory.TryGetValue(key, out var entry))
+            var entry = await _store.GetAsync(key);
+            if (entry == null)
             {
-                entry = await _store.GetAsync(key);
-                if (entry == null)
-                {
-                    return null;
-                }
-                _memory[key] = entry;
+                return null;
             }
 
             var fetched = DateTimeOffset.FromUnixTimeMilliseconds(entry.FetchedAt).UtcDateTime;
@@ -82,10 +79,11 @@ namespace Topo.Model.Cache
             return value == null ? null : new CachedRead<T>(value, fetched, age >= Fresh, entry.Keep);
         }
 
-        public async Task<CachedRead<T>> PutAsync<T>(string key, T value, bool keep = false)
+        // readFrom: when the read that gave the value started. Something written to Terrain since then may not be in it, so it is not kept.
+        public async Task<CachedRead<T>> PutAsync<T>(string key, T value, bool keep = false, DateTime? readFrom = null)
         {
             var now = UtcNow();
-            if (!Enabled)
+            if (!Enabled || (readFrom != null && (await _store.GetAsync(ChangedKey))?.FetchedAt >= Milliseconds(readFrom.Value)))
             {
                 return new CachedRead<T>(value, now, false);
             }
@@ -97,7 +95,6 @@ namespace Topo.Model.Cache
                 Keep = keep,
                 Version = Version
             };
-            _memory[key] = entry;
             await _store.PutAsync(entry);
             return new CachedRead<T>(value, now, false, keep);
         }
@@ -124,10 +121,11 @@ namespace Topo.Model.Cache
             {
                 await scope.BeforeRead();
             }
+            var started = UtcNow();
             var (succeeded, body) = await read();
             if (succeeded)
             {
-                Note(scope, await PutAsync(key, body, keep?.Invoke(body) ?? false));
+                Note(scope, await PutAsync(key, body, keep?.Invoke(body) ?? false, started));
                 return body;
             }
             if (held != null)
@@ -146,10 +144,20 @@ namespace Topo.Model.Cache
             }
         }
 
+        // Drops what a write to Terrain may have made wrong (see WriteEffects)
+        public async Task ForgetAsync(Func<string, bool> affected)
+        {
+            var keys = (await _store.KeysAsync()).Where(k => k != ChangedKey && affected(k)).ToList();
+            if (keys.Count > 0)
+            {
+                await _store.RemoveAsync(keys);
+            }
+            await _store.PutAsync(new CacheEntry { Key = ChangedKey, FetchedAt = Milliseconds(UtcNow()), Version = Version });
+        }
+
         // Everything goes: the cache holds young people's records, so it does not stay behind after logging out
         public async Task ClearAsync()
         {
-            _memory.Clear();
             await _store.ClearAsync();
         }
 

@@ -50,6 +50,15 @@ window.topoCache = (function () {
         persist: async function () {
             return !!(navigator.storage && navigator.storage.persist) && await navigator.storage.persist();
         },
+        keys: async function () {
+            return await run("readonly", function (store) { return store.getAllKeys(); });
+        },
+        remove: async function (keys) {
+            await run("readwrite", function (store) {
+                keys.forEach(function (key) { store.delete(key); });
+                return null;
+            });
+        },
         clear: async function () {
             await run("readwrite", function (store) { return store.clear(); });
         },

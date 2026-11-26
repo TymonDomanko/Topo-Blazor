@@ -18,6 +18,8 @@ namespace Topo.Model.Cache
     {
         Task<CacheEntry?> GetAsync(string key);
         Task PutAsync(CacheEntry entry);
+        Task<IReadOnlyList<string>> KeysAsync();
+        Task RemoveAsync(IReadOnlyList<string> keys);
         Task ClearAsync();
         // Removes every entry fetched before the given time (milliseconds since 1970, UTC)
         Task RemoveFetchedBeforeAsync(long fetchedAt);

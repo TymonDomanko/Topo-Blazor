@@ -14,6 +14,8 @@ namespace TopoReportFunctionTest
                 _entries[entry.Key] = entry;
                 return Task.CompletedTask;
             }
+            public Task<IReadOnlyList<string>> KeysAsync() => Task.FromResult<IReadOnlyList<string>>(_entries.Keys.ToList());
+            public Task RemoveAsync(IReadOnlyList<string> keys) => Task.CompletedTask;
             public Task ClearAsync() => Task.CompletedTask;
             public Task RemoveFetchedBeforeAsync(long fetchedAt) => Task.CompletedTask;
         }

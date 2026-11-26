@@ -28,6 +28,20 @@ namespace Topo.Services
 
         public Task PutAsync(CacheEntry entry) => Try("topoCache.put", entry);
 
+        public async Task<IReadOnlyList<string>> KeysAsync()
+        {
+            try
+            {
+                return await _js.InvokeAsync<string[]>("topoCache.keys");
+            }
+            catch (JSException)
+            {
+                return Array.Empty<string>();
+            }
+        }
+
+        public Task RemoveAsync(IReadOnlyList<string> keys) => Try("topoCache.remove", keys);
+
         public Task ClearAsync() => Try("topoCache.clear");
 
         public Task RemoveFetchedBeforeAsync(long fetchedAt) => Try("topoCache.removeFetchedBefore", fetchedAt);

@@ -42,7 +42,10 @@ builder.Services.AddScoped<DisplaySpinnerAutomaticallyHttpMessageHandler>();
 builder.Services.AddScoped(s =>
 {
     var accessTokenHandler = s.GetRequiredService<DisplaySpinnerAutomaticallyHttpMessageHandler>();
-    accessTokenHandler.InnerHandler = new HttpClientHandler();
+    accessTokenHandler.InnerHandler = new CacheInvalidationHandler(s.GetRequiredService<DataCache>(), s.GetRequiredService<StorageService>())
+    {
+        InnerHandler = new HttpClientHandler()
+    };
     var uriHelper = s.GetRequiredService<NavigationManager>();
     return new HttpClient(accessTokenHandler)
     {

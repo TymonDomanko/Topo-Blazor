@@ -84,8 +84,9 @@ namespace Topo.Services
         // Reads the totals from Terrain and keeps them; null when Terrain did not answer
         private async Task<CachedRead<GetMemberLogbookMetricsResultModel>?> ReadAsync(string memberId)
         {
+            var started = _dataCache.UtcNow();
             var totals = await _terrainAPIService.TryGetMemberLogbookMetrics(memberId);
-            return totals == null ? null : await _dataCache.PutAsync(Key(memberId), totals);
+            return totals == null ? null : await _dataCache.PutAsync(Key(memberId), totals, readFrom: started);
         }
 
         public async Task RefreshAsync(IReadOnlyList<string> memberIds, Action<string>? progress = null, CancellationToken cancellationToken = default)

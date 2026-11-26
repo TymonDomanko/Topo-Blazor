@@ -25,6 +25,17 @@ namespace TopoReportFunctionTest
                 return Task.CompletedTask;
             }
 
+            public Task<IReadOnlyList<string>> KeysAsync() => Task.FromResult<IReadOnlyList<string>>(Entries.Keys.ToList());
+
+            public Task RemoveAsync(IReadOnlyList<string> keys)
+            {
+                foreach (var key in keys)
+                {
+                    Entries.Remove(key);
+                }
+                return Task.CompletedTask;
+            }
+
             public Task ClearAsync()
             {
                 Entries.Clear();
@@ -98,18 +109,50 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
-        public async Task TheStoreIsSweptOnceASessionAndEachEntryReadOnce()
+        public async Task TheStoreIsSweptOnceASession()
         {
             var (store, _) = await Holding(12);
             var cache = new DataCache(store) { UtcNow = () => Read };
             var sweeps = store.Sweeps;
-            var reads = store.Reads;
 
             await cache.GetAsync<GetMemberLogbookMetricsResultModel>("a");
             await cache.GetAsync<GetMemberLogbookMetricsResultModel>("a");
 
             Assert.AreEqual(sweeps + 1, store.Sweeps);
-            Assert.AreEqual(reads + 1, store.Reads);
+        }
+
+        [TestMethod]
+        public async Task WhatAWriteMayHaveChangedIsDroppedForEveryTabAndTheRestKept()
+        {
+            var (store, cache) = await Holding(12);
+            await cache.PutAsync("b", Totals(3));
+            // another tab, which has read "a" already
+            var other = new DataCache(store) { UtcNow = () => Read };
+            Assert.IsNotNull(await other.GetAsync<GetMemberLogbookMetricsResultModel>("a"));
+
+            await cache.ForgetAsync(key => key == "a");
+
+            Assert.IsNull(await cache.GetAsync<GetMemberLogbookMetricsResultModel>("a"));
+            Assert.IsNull(await other.GetAsync<GetMemberLogbookMetricsResultModel>("a"));
+            Assert.IsNotNull(await cache.GetAsync<GetMemberLogbookMetricsResultModel>("b"));
+        }
+
+        [TestMethod]
+        public async Task AReadThatWasUnderWayDuringAWriteIsNotKept()
+        {
+            var (store, cache) = await Holding(12);
+            var started = Read.AddMinutes(1);
+            cache.UtcNow = () => Read.AddMinutes(2);
+            await cache.ForgetAsync(key => true);
+            cache.UtcNow = () => Read.AddMinutes(3);
+
+            var read = await cache.PutAsync("a", Totals(12), readFrom: started);
+            Assert.AreEqual(12, read.Value.results.Single().value);
+            Assert.IsNull(await cache.GetAsync<GetMemberLogbookMetricsResultModel>("a"));
+
+            // one started after the write is kept
+            await cache.PutAsync("a", Totals(13), readFrom: Read.AddMinutes(3));
+            Assert.IsNotNull(await cache.GetAsync<GetMemberLogbookMetricsResultModel>("a"));
         }
 
         [TestMethod]
