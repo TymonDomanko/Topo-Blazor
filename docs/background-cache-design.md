@@ -16,6 +16,9 @@ Decisions:
 4. **The background checks stay** as background tasks: the Camper and Walkabout awards check and the Years of Service check work out what is waiting to be handed over, which is separate from this cache (2026-11-26).
 5. Pages with a time period load **6 months back and 6 months forward** by default, and load more from the page on request.
 6. A page's Refresh data button refreshes only the data that page needs.
+7. The cache is stored in **IndexedDB** (2026-11-26).
+8. The cache is **on by default and configurable** in Settings (2026-11-26).
+9. **Reports** made from cached data are fine, except while a page is still updating and showing the old data (2026-11-26). Proposed handling: the report buttons wait until the update has finished.
 
 ## What things cost (measured)
 
@@ -99,7 +102,7 @@ Nothing else is read. The lanes above still decide which of a page's reads can o
 
 - Entries: key, data, fetched-at time, lifetime class (day or until-refresh), and a schema version so a code change can drop old entries.
 - Keyed by group and signed-in user, so two accounts in one browser do not mix.
-- Size: the Scout Unit's logbook entries are about 460 entries and one unit's event history about 780 events. That is likely a few MB across a group, which is over the 5 MB limit of local storage (`Blazored.LocalStorage`, what Topo uses now). Proposal: use the browser's IndexedDB through a small wrapper, and ask the browser to keep it (`navigator.storage.persist()`).
+- Size: the Scout Unit's logbook entries are about 460 entries and one unit's event history about 780 events. That is likely a few MB across a group, which is over the 5 MB limit of local storage (`Blazored.LocalStorage`, what Topo uses now). So the cache uses the browser's IndexedDB through a small wrapper, and asks the browser to keep it (`navigator.storage.persist()`).
 - A memory copy in front of the stored copy, as `StorageService` has today.
 
 ## What is shown and when it refreshes
@@ -110,6 +113,8 @@ Nothing else is read. The lanes above still decide which of a page's reads can o
   - While a read is in progress the same line shows a count ("Reading 12 of 39 Scouts") instead, so the long pages (Logbook ~30s, Wallchart ~24s) also give progress.
   - The line is one shared component fed by the cache, not something each page writes for itself, so a new page gets it by listing the keys it needs.
 - **Stale while refreshing:** data past its lifetime is still shown straight away, with the note that it is updating to more recent data, and re-read behind it; the page updates when the new data arrives. If the re-read fails, the older data stays on screen and the line says when it was read.
+- **Reports:** a report is made from the data the page holds. While the page is still updating and showing old data, its report buttons wait for the update to finish, so a report is not printed from data that is about to be replaced.
+- **Setting:** the cache is on unless the leader changes it in Settings.
 - Topo's own writes (Mass awarding, patrol and program pushes) drop the keys they change.
 - Logging out clears the whole cache. It holds young people's names, attendance and logbooks, so it should not stay behind on a shared computer.
 
