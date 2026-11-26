@@ -38,7 +38,6 @@ namespace Topo.Controller
         public string EventId = "";
         public List<MemberListModel>? PreviewMembers;
         public bool PreviewFailed;
-        private int _previewRequest;
 
         private const string OptionsKey = "SignInSheetOptions";
 
@@ -47,27 +46,24 @@ namespace Topo.Controller
         private DotNetObjectReference<SignInSheetController>? _selfReference;
         // set when the calendar selection was changed in code, so the select2 box can be refreshed to show it
         private bool _syncCalendarSelection;
-        private bool _loadingEvents;
-        private bool _reloadEvents;
+        // Loading and reading again through the data cache: the event list and the sheet's people each load on their own
+        public PageLoad _eventsPage = new PageLoad();
+        public PageLoad _previewPage = new PageLoad();
+        public bool Reading => _eventsPage.Loading || _previewPage.Loading;
+        public bool Updating => _eventsPage.Updating || _previewPage.Updating;
         // When the oldest of what the event list and the sheet were made from was read
-        private DateTime? _eventsReadUtc;
-        private DateTime? _previewReadUtc;
-        public bool Refreshing;
-        public DateTime? ReadUtc => _eventsReadUtc == null || _previewReadUtc < _eventsReadUtc ? _previewReadUtc : _eventsReadUtc;
+        public DateTime? ReadUtc => _eventsPage.ReadUtc == null || _previewPage.ReadUtc < _eventsPage.ReadUtc ? _previewPage.ReadUtc : _eventsPage.ReadUtc;
 
-        // Reads the events and the sheet's people again
+        // Reads the events and the sheet's people again, leaving what is shown in place until they are in
         internal async Task RefreshClick()
         {
-            Refreshing = true;
-            try
+            if (model.SelectedCalendars.Length > 0 && model.CalendarSearchToDate >= model.CalendarSearchFromDate)
             {
-                using var scope = CacheScope.Begin(CacheMode.Reread);
-                await LoadEventsAsync();
-                await RefreshPreview();
+                await _eventsPage.RefreshAsync(ReadEvents(), ShowEvents);
             }
-            finally
+            if (model.SelectedUnits.Count > 0)
             {
-                Refreshing = false;
+                await _previewPage.RefreshAsync(ReadPreview(), ShowPreview);
             }
         }
 
@@ -90,6 +86,8 @@ namespace Topo.Controller
         public void Dispose()
         {
             _selfReference?.Dispose();
+            _eventsPage.Dispose();
+            _previewPage.Dispose();
         }
 
         protected override async Task OnInitializedAsync()
@@ -100,6 +98,8 @@ namespace Topo.Controller
                 return;
             }
 
+            _eventsPage.Changed = () => InvokeAsync(StateHasChanged);
+            _previewPage.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units ?? new Dictionary<string, string>();
             model.Calendars = await _programService.GetCalendars();
@@ -213,64 +213,46 @@ namespace Topo.Controller
             StateHasChanged();
         }
 
-        // Loads the events for the chosen calendars and dates. Reloads happen on every change, but only one
-        // load runs at a time (each one has to switch the calendars over in Terrain and back); a change made
-        // while one is running triggers one more load afterwards.
+        // Loads the events for the chosen calendars and dates, from the data cache first and then from Terrain. A later change overtakes an
+        // earlier one that is still being read.
         internal async Task LoadEventsAsync()
-        {
-            if (_loadingEvents)
-            {
-                _reloadEvents = true;
-                return;
-            }
-
-            _loadingEvents = true;
-            try
-            {
-                do
-                {
-                    _reloadEvents = false;
-                    await LoadEventsOnce();
-                } while (_reloadEvents);
-            }
-            finally
-            {
-                _loadingEvents = false;
-            }
-        }
-
-        private async Task LoadEventsOnce()
         {
             model.CalendarErrorMessage = "";
             model.DateErrorMessage = "";
             if (model.SelectedCalendars.Length == 0)
             {
                 model.CalendarErrorMessage = "Please select at least one calendar";
+                _eventsPage.Cancel();
                 model.Events = null;
             }
             else if (model.CalendarSearchToDate < model.CalendarSearchFromDate)
             {
                 model.DateErrorMessage = "The search to date must be after the search from date.";
+                _eventsPage.Cancel();
                 model.Events = null;
             }
             else
             {
-                // the list is always read from Terrain; an event's details come from the data cache while in date
-                using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
-                var scope = CacheScope.Current!;
-                var events = await _programService.WithCalendarsAsync(model.SelectedCalendars,
-                    () => _programService.GetEventsForDates(model.CalendarSearchFromDate, model.CalendarSearchToDate));
-                model.Events = events.OrderBy(e => e.StartDateTime).ToList();
-                _eventsReadUtc = scope.OldestUtc;
+                await _eventsPage.LoadAsync(ReadEvents(), ShowEvents);
             }
 
             // the previously chosen event may no longer be in the list
-            if (EventId != "" && (model.Events == null || !model.Events.Any(e => e.Id == EventId)))
+            if (EventId != "" && !_eventsPage.Loading && !_eventsPage.Updating && (model.Events == null || !model.Events.Any(e => e.Id == EventId)))
             {
                 EventId = "";
                 await RefreshPreview();
             }
         }
+
+        private Func<Action<string>, CancellationToken, Task<List<EventListModel>>> ReadEvents()
+        {
+            var from = model.CalendarSearchFromDate;
+            var to = model.CalendarSearchToDate;
+            var calendars = model.SelectedCalendars;
+            return (progress, cancellationToken) => _programService.GetEventsForDates(from, to, calendars, cancellationToken);
+        }
+
+        private void ShowEvents(List<EventListModel> events) => model.Events = events.OrderBy(e => e.StartDateTime).ToList();
 
         internal async Task EventChange(ChangeEventArgs e)
         {
@@ -280,39 +262,36 @@ namespace Topo.Controller
 
         private async Task RefreshPreview()
         {
-            var request = ++_previewRequest;
             PreviewFailed = false;
             // the sheet is for a unit; with no event it has a blank title
             if (model.SelectedUnits.Count == 0)
             {
+                _previewPage.Cancel();
                 PreviewMembers = null;
                 return;
             }
 
-            List<MemberListModel>? members = null;
-            // the people come from the data cache while in date
-            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
-            var scope = CacheScope.Current!;
-            try
+            await _previewPage.LoadAsync(ReadPreview(), ShowPreview);
+            if (_previewPage.Failed)
             {
-                var unitIds = SelectedUnitIds();
-                members = string.IsNullOrEmpty(EventId)
-                    ? await _programService.GetMembersForUnits(unitIds)
-                    : await _programService.GetInviteesForEvent(EventId, unitIds);
+                PreviewMembers = null;
+                PreviewFailed = true;
             }
-            catch (Exception)
-            {
-                // reported below as a message
-            }
+        }
 
-            // ignore the answer if the user has picked something else in the meantime
-            if (request != _previewRequest)
-            {
-                return;
-            }
+        private Func<Action<string>, CancellationToken, Task<List<MemberListModel>?>> ReadPreview()
+        {
+            var eventId = EventId;
+            var unitIds = SelectedUnitIds();
+            return async (progress, cancellationToken) => string.IsNullOrEmpty(eventId)
+                ? await _programService.GetMembersForUnits(unitIds)
+                : await _programService.GetInviteesForEvent(eventId, unitIds);
+        }
+
+        private void ShowPreview(List<MemberListModel>? members)
+        {
             PreviewMembers = members;
             PreviewFailed = members == null;
-            _previewReadUtc = scope.OldestUtc;
         }
 
         internal async Task FullNamesChange(ChangeEventArgs e)
@@ -347,7 +326,7 @@ namespace Topo.Controller
 
         internal async Task DownloadClick(OutputType outputType)
         {
-            if (PreviewMembers == null)
+            if (PreviewMembers == null || Updating)
             {
                 return;
             }

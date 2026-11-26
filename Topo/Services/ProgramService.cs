@@ -22,7 +22,11 @@ namespace Topo.Services
         public Task ResetCalendar();
         // Reads with the given calendars switched on, one such read at a time, and puts the selection back
         public Task<T> WithCalendarsAsync<T>(string[] calendarIds, Func<Task<T>> read, CancellationToken cancellationToken = default);
-        public Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate, CancellationToken cancellationToken = default, Action<string>? progress = null);
+        // A list of events through the data cache: a page showing what is held gets the kept list first, and it is read from Terrain every time
+        // (see DataCache.CheckedReadAsync). read lists them, giving null when Terrain would not. Null when there is no list to give.
+        public Task<List<Event>?> ListedEventsAsync(string[]? calendarIds, DateTime from, DateTime to, Func<Task<IEnumerable<Event>?>> read);
+        // The events between the dates on the given calendars, which are switched on while they are listed
+        public Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate, string[] calendarIds, CancellationToken cancellationToken = default, Action<string>? progress = null);
         public Task<List<AwardEventChoice>> GetEventChoices(DateTime fromDate, DateTime toDate, string unitId);
         public Task<HashSet<string>> GetAttendedMemberIds(string eventId);
         public Task<EventListModel> GetAttendanceForEvent(string eventId);
@@ -48,8 +52,11 @@ namespace Topo.Services
 
         private readonly ITerrainLocks _locks;
 
-        public ProgramService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, ITerrainLocks locks)
+        private readonly Topo.Model.Cache.DataCache _dataCache;
+
+        public ProgramService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, ITerrainLocks locks, Topo.Model.Cache.DataCache dataCache)
         {
+            _dataCache = dataCache;
             _locks = locks;
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
@@ -74,6 +81,22 @@ namespace Topo.Services
             {
                 _getCalendarsResultModel = read;
             }
+        }
+
+        public Task<List<Event>?> ListedEventsAsync(string[]? calendarIds, DateTime from, DateTime to, Func<Task<IEnumerable<Event>?>> read)
+        {
+            var calendars = calendarIds == null ? "selected" : string.Join(",", calendarIds.OrderBy(c => c, StringComparer.Ordinal));
+            var key = $"{_storageService.CacheKeyPrefix}|list|{calendars}|{from:yyyy-MM-dd}|{to:yyyy-MM-dd}";
+            return _dataCache.CheckedReadAsync(key, async () =>
+            {
+                var events = (await read())?.ToList();
+                // an event whose entry in the list is new or has changed has what was kept of it dropped, so that it is read again
+                foreach (var listed in events ?? new List<Event>())
+                {
+                    await _terrainAPIService.CheckListedEventAsync(listed);
+                }
+                return events;
+            });
         }
 
         public async Task<T> WithCalendarsAsync<T>(string[] calendarIds, Func<Task<T>> read, CancellationToken cancellationToken = default)
@@ -169,17 +192,14 @@ namespace Topo.Services
             _switched = false;
         }
 
-        public async Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate, CancellationToken cancellationToken = default, Action<string>? progress = null)
+        public async Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate, string[] calendarIds, CancellationToken cancellationToken = default, Action<string>? progress = null)
         {
             TextInfo myTI = new CultureInfo("en-AU", false).TextInfo;
-            var getEventsResultModel = await _terrainAPIService.GetEventsAsync(GetUser(), fromDate.AddDays(-1), toDate);
-            if (getEventsResultModel != null && getEventsResultModel.results != null)
+            var listed = await ListedEventsAsync(calendarIds, fromDate.AddDays(-1), toDate, async () => (await WithCalendarsAsync(calendarIds,
+                () => _terrainAPIService.GetEventsAsync(GetUser(), fromDate.AddDays(-1), toDate), cancellationToken))?.results);
+            if (listed != null)
             {
-                // an event whose list entry has changed since it was last listed has what the data cache kept of it dropped
-                foreach (var listed in getEventsResultModel.results)
-                {
-                    await _terrainAPIService.CheckListedEventAsync(listed);
-                }
+                var getEventsResultModel = new GetEventsResultModel { results = listed.ToArray() };
                 var eventList = new List<EventListModel>();
                 // The list has no organisers, leads or assists, so each event is read for those. They are read a few at a time
                 // instead of one after another, and come back in the order the events are listed.
@@ -248,10 +268,13 @@ namespace Topo.Services
         // The unit's events between two days, as Terrain returns them for the calendars currently selected on the account
         public async Task<List<AwardEventChoice>> GetEventChoices(DateTime fromDate, DateTime toDate, string unitId)
         {
-            // not while another read has other calendars switched on
-            using var calendarLock = await _locks.CalendarsAsync();
-            var events = await _terrainAPIService.GetEventsAsync(GetUser(), fromDate.Date.AddDays(-1), toDate.Date.AddDays(1));
-            return AwardEventChoice.ForUnit(events?.results ?? new Event[0], unitId);
+            var listed = await ListedEventsAsync(null, fromDate.Date.AddDays(-1), toDate.Date.AddDays(1), async () =>
+            {
+                // not while another read has other calendars switched on
+                using var calendarLock = await _locks.CalendarsAsync();
+                return (await _terrainAPIService.GetEventsAsync(GetUser(), fromDate.Date.AddDays(-1), toDate.Date.AddDays(1)))?.results;
+            });
+            return AwardEventChoice.ForUnit(listed?.ToArray() ?? new Event[0], unitId);
         }
 
         public async Task<HashSet<string>> GetAttendedMemberIds(string eventId)
@@ -433,8 +456,12 @@ namespace Topo.Services
 
         // The unit's events, whichever calendars happen to be on in Terrain: the unit's calendar (a unit's calendar has the unit's id) is the only one
         // switched on while they are read, and the calendars are put back as they were
-        private Task<GetEventsResultModel?> GetUnitEventsAsync(string unitId, DateTime from, DateTime to) =>
-            WithCalendarsAsync(new[] { unitId }, () => _terrainAPIService.GetEventsAsync(GetUser(), from, to));
+        private async Task<GetEventsResultModel?> GetUnitEventsAsync(string unitId, DateTime from, DateTime to)
+        {
+            var listed = await ListedEventsAsync(new[] { unitId }, from, to, async () => (await WithCalendarsAsync(new[] { unitId },
+                () => _terrainAPIService.GetEventsAsync(GetUser(), from, to)))?.results);
+            return listed == null ? null : new GetEventsResultModel { results = listed.ToArray() };
+        }
 
         // Terrain's events API does not take a minimum date, so "all of the unit's history" starts well before Terrain existed
         private static readonly DateTime EarliestEventDate = new DateTime(2015, 1, 1);
@@ -444,18 +471,15 @@ namespace Topo.Services
             TextInfo myTI = new CultureInfo("en-AU", false).TextInfo;
             // Matches GetEventsForDates' own fromDate.AddDays(-1) above - without the day of buffer,
             // an event right at the lookback boundary can be silently excluded.
-            var getEventsResultModel = await WithCalendarsAsync(selectedCalendars,
-                () => _terrainAPIService.GetEventsAsync(GetUser(), fromDate.AddDays(-1), DateTime.Now));
+            var listedEvents = await ListedEventsAsync(selectedCalendars, fromDate.AddDays(-1), DateTime.Now, async () => (await WithCalendarsAsync(selectedCalendars,
+                () => _terrainAPIService.GetEventsAsync(GetUser(), fromDate.AddDays(-1), DateTime.Now)))?.results);
+            var getEventsResultModel = listedEvents == null ? null : new GetEventsResultModel { results = listedEvents.ToArray() };
 
             // null (not an empty list) distinguishes "the request failed" from "genuinely no matches",
             // since TerrainAPIService swallows request failures and returns a null result model.
             if (getEventsResultModel == null || getEventsResultModel.results == null)
             {
                 return null;
-            }
-            foreach (var listed in getEventsResultModel.results)
-            {
-                await _terrainAPIService.CheckListedEventAsync(listed);
             }
 
             // Only the four SIA challenge areas get a sheet/section in the report (matching the other
@@ -486,7 +510,7 @@ namespace Topo.Services
         {
             var attendanceReport = new AttendanceReportModel();
             var attendanceReportItems = new List<AttendanceReportItemModel>();
-            var programEvents = await WithCalendarsAsync(selectedCalendars, () => GetEventsForDates(fromDate, toDate));
+            var programEvents = await GetEventsForDates(fromDate, toDate, selectedCalendars);
             foreach (var programEvent in programEvents.OrderBy(pe => pe.StartDateTime))
             {
                 var eventListModel = await GetAttendanceForEvent(programEvent.Id);

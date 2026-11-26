@@ -80,12 +80,12 @@
     <PageStatus Loading="Busy" Progress="@Progress" Error="@model.ErrorMessage" />
     @if (Report != null)
     {
-        <DataAgeLine ReadUtc="ReadUtc" NoneText="Events that ended more than four months ago are kept until you refresh." Disabled="Busy" OnRefresh="RefreshClick" />
+        <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
     }
 
     @if (Report != null)
     {
-        <ReportButtons Name="Attendance" OnPdf="@(() => DownloadClick(OutputType.PDF))" OnXlsx="@(() => DownloadClick(OutputType.Excel))" Disabled="@(Busy || Report.Tables.Count == 0)" />
+        <ReportButtons Name="Attendance" OnPdf="@(() => DownloadClick(OutputType.PDF))" OnXlsx="@(() => DownloadClick(OutputType.Excel))" Disabled="@(Busy || _page.Updating || Report.Tables.Count == 0)" />
 
         <AttendancePreview Report="Report" />
     }

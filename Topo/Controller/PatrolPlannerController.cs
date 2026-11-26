@@ -47,12 +47,18 @@ namespace Topo.Controller
         // How many Scout nights the attendance figures look back over
         private const int RecentNightsCount = 10;
 
-        public bool Loading;
-        public string Progress = "";
+        // The attendance loads through the data cache
+        public PageLoad _attendance = new PageLoad();
+        public bool Loading => _attendance.Loading;
+        public string Progress => _attendance.Progress;
         // The attendance is read after the board is up, and again when the unit changes; the one before is stopped
         private readonly AutoRun _auto = new AutoRun();
 
-        public void Dispose() => _auto.Dispose();
+        public void Dispose()
+        {
+            _auto.Dispose();
+            _attendance.Dispose();
+        }
 
         // When the members on show were read
         public DateTime? MembersReadUtc;
@@ -66,6 +72,7 @@ namespace Topo.Controller
             if (!_storageService.IsAuthenticated)
                 NavigationManager.NavigateTo("index");
 
+            _attendance.Changed = () => InvokeAsync(StateHasChanged);
             model.Units = _storageService.Units;
             model.GroupName = _storageService.GroupNameDisplay;
             if (!string.IsNullOrEmpty(_storageService.UnitId))
@@ -93,7 +100,7 @@ namespace Topo.Controller
                 model.AttendanceNote = "";
                 MembersReadUtc = null;
                 _auto.Stop();
-                Loading = false;
+                _attendance.Cancel();
                 return;
             }
 
@@ -135,50 +142,53 @@ namespace Topo.Controller
             _ = _auto.RunAsync(LoadAttendance);
         }
 
-        // How many of the last Scout nights each youth came to, from the calendar named after the unit
+        // How many of the last Scout nights each youth came to, from the calendar named after the unit: from the data cache first, then with the
+        // lists of events read from Terrain
         private async Task LoadAttendance(CancellationToken cancellationToken)
         {
             // the Reading line says what is happening, so the spinner is not put over the board
             _spinnerService.BeQuiet();
-            Loading = true;
-            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
-            try
+            var unitId = model.UnitId;
+            Func<Action<string>, CancellationToken, Task<Topo.Model.Attendance.RecentNights?>> read =
+                (progress, token) => _attendanceService.GetRecentNights(unitId, RecentNightsCount, progress, token);
+            using var overtaken = cancellationToken.Register(_attendance.Cancel);
+            // asked to read from Terrain again, there is nothing held to show first
+            if (CacheScope.Current?.Mode == CacheMode.Reread)
             {
-                var recent = await _attendanceService.GetRecentNights(model.UnitId, RecentNightsCount,
-                    step => { if (!cancellationToken.IsCancellationRequested) { Progress = step; InvokeAsync(StateHasChanged); } }, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                if (recent == null)
-                {
-                    model.AttendanceNote = "Attendance isn't shown because there is no calendar named after this unit.";
-                    return;
-                }
-                if (recent.Nights == 0)
-                {
-                    model.AttendanceNote = "Attendance isn't shown because no Scout nights with attendance were found in the last six months.";
-                    return;
-                }
-
-                foreach (var member in model.Members)
-                {
-                    member.NightsCounted = recent.PossibleByMemberId.TryGetValue(member.Id, out var possible) ? possible : recent.Nights;
-                    member.NightsAttended = recent.AttendedByMemberId.TryGetValue(member.Id, out var attended) ? attended : 0;
-                }
-                model.AttendanceNote = $"Attendance is the share of the last {recent.Nights} Scout nights each youth came to, counting only those since they joined the section.";
+                _attendance.Cancel();
+                await _attendance.RefreshAsync(read, ShowAttendance);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            else
+            {
+                await _attendance.LoadAsync(read, ShowAttendance);
+            }
+            if (_attendance.Failed)
             {
                 model.AttendanceNote = "Couldn't read the attendance from Terrain.";
             }
-            finally
+            // nothing is waiting on this, so the page has to be told it has finished
+            await InvokeAsync(StateHasChanged);
+        }
+
+        private void ShowAttendance(Topo.Model.Attendance.RecentNights? recent)
+        {
+            if (recent == null)
             {
-                if (!cancellationToken.IsCancellationRequested)
-                {
-                    Loading = false;
-                    Progress = "";
-                }
-                // nothing is waiting on this, so the page has to be told it has finished
-                await InvokeAsync(StateHasChanged);
+                model.AttendanceNote = "Attendance isn't shown because there is no calendar named after this unit.";
+                return;
             }
+            if (recent.Nights == 0)
+            {
+                model.AttendanceNote = "Attendance isn't shown because no Scout nights with attendance were found in the last six months.";
+                return;
+            }
+
+            foreach (var member in model.Members)
+            {
+                member.NightsCounted = recent.PossibleByMemberId.TryGetValue(member.Id, out var possible) ? possible : recent.Nights;
+                member.NightsAttended = recent.AttendedByMemberId.TryGetValue(member.Id, out var attended) ? attended : 0;
+            }
+            model.AttendanceNote = $"Attendance is the share of the last {recent.Nights} Scout nights each youth came to, counting only those since they joined the section.";
         }
 
         internal async Task RefreshClick()

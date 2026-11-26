@@ -31,27 +31,28 @@ namespace Topo.Controller
 
         public AttendancePageViewModel model = new AttendancePageViewModel();
         public AttendanceReport? Report;
-        public bool Busy;
-        public string Progress = "";
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public bool Busy => _page.Loading;
+        public string Progress => _page.Progress;
 
         // What was read for the unit and period; the options then only lay it out again, without reading Terrain again
         private AttendanceData? _data;
         // The attendance is read again a moment after the unit, calendars or period change, rather than from a button
         private readonly AutoRun _auto = new AutoRun();
         private const int OptionDelayMilliseconds = 800;
-        // When the oldest of what the report on show was made from was read
-        public DateTime? ReadUtc;
-
         // Reads everything for the report again, leaving it on show until the new one is in
         internal async Task RefreshClick()
         {
-            using (CacheScope.Begin(CacheMode.Reread))
-            {
-                await _auto.RunAsync(Generate);
-            }
+            await _page.RefreshAsync(ReadAttendance(), Show);
+            ShowFailure();
         }
 
-        public void Dispose() => _auto.Dispose();
+        public void Dispose()
+        {
+            _auto.Dispose();
+            _page.Dispose();
+        }
 
         protected override async Task OnInitializedAsync()
         {
@@ -61,6 +62,7 @@ namespace Topo.Controller
                 return;
             }
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units ?? new Dictionary<string, string>();
             model.Calendars = await _programService.GetCalendars();
@@ -147,20 +149,17 @@ namespace Topo.Controller
 
         private void Recalculate() => Report = _data == null ? null : AttendanceLayout.Build(_data, model.BreakByPatrol, model.UseFullNames);
 
-        // Reads who came to what for the unit, calendars and period chosen. A read that has been overtaken by a newer change stops, and leaves the page to the newer one.
+        // Shows who came to what for the unit, calendars and period chosen: from the data cache first, then with the lists of events read from
+        // Terrain. A read that has been overtaken by a newer change stops, and leaves the page to the newer one.
         private async Task Generate(CancellationToken cancellationToken)
         {
             model.ErrorMessage = "";
-            // a report being read again stays on show until the new one is in
-            if (CacheScope.Current?.Mode != CacheMode.Reread)
-            {
-                Report = null;
-                _data = null;
-            }
+            Report = null;
+            _data = null;
             // no unit chosen yet, so there is nothing to read and nothing to complain about
             if (string.IsNullOrEmpty(model.UnitId))
             {
-                Busy = false;
+                _page.Cancel();
                 return;
             }
             if (model.SelectedCalendars.Count == 0)
@@ -173,39 +172,41 @@ namespace Topo.Controller
             }
             if (model.ErrorMessage != "")
             {
-                Busy = false;
+                _page.Cancel();
                 return;
             }
 
-            Busy = true;
-            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
-            var scope = CacheScope.Current!;
-            try
-            {
-                var data = await _attendanceService.GetAttendance(model.UnitId, model.From, model.To, model.SelectedCalendars.ToArray(),
-                    step => { if (!cancellationToken.IsCancellationRequested) { Progress = step; InvokeAsync(StateHasChanged); } }, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                _data = data;
-                Recalculate();
-                ReadUtc = scope.OldestUtc;
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            using var overtaken = cancellationToken.Register(_page.Cancel);
+            await _page.LoadAsync(ReadAttendance(), Show);
+            ShowFailure();
+        }
+
+        private Func<Action<string>, CancellationToken, Task<AttendanceData>> ReadAttendance()
+        {
+            var unitId = model.UnitId;
+            var from = model.From;
+            var to = model.To;
+            var calendars = model.SelectedCalendars.ToArray();
+            return (progress, token) => _attendanceService.GetAttendance(unitId, from, to, calendars, progress, token);
+        }
+
+        private void Show(AttendanceData data)
+        {
+            _data = data;
+            Recalculate();
+        }
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
             {
                 model.ErrorMessage = "Couldn't read the attendance from Terrain.";
-            }
-            finally
-            {
-                if (!cancellationToken.IsCancellationRequested)
-                {
-                    Busy = false;
-                    Progress = "";
-                }
             }
         }
 
         internal async Task DownloadClick(OutputType outputType)
         {
-            if (Report == null)
+            if (Report == null || _page.Updating)
             {
                 return;
             }

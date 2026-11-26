@@ -81,39 +81,23 @@ namespace Topo.Services
             return UnitReportBuilder.Build(input);
         }
 
-        // Terrain only shows the calendars the user has switched on, so they are switched to the chosen ones and back. The switch back is made
-        // as soon as the events are listed, while their details are being read, as the details do not depend on which calendars are on.
+        // Terrain only shows the calendars the user has switched on, so they are switched to the chosen ones and back while the events are listed.
+        // Their details are read afterwards, as they do not depend on which calendars are on.
         public async Task<List<UnitEventInput>> GetEventsForCalendars(DateTime from, DateTime to, string[] calendarIds, CancellationToken cancellationToken = default, Action<string>? progress = null,
             IDictionary<string, Topo.Model.Program.GetEventResultModel>? eventsRead = null)
         {
-            // one read at a time switches the calendars, whatever page asked for it
-            using var calendarLock = await _programService.LockCalendarsAsync(cancellationToken);
-            await _programService.SetCalendar(calendarIds);
-            List<(Topo.Model.Program.Event Summary, string Scope)> summaries;
-            try
+            var listed = await _programService.ListedEventsAsync(calendarIds, from, to,
+                () => _programService.WithCalendarsAsync(calendarIds, () => ListEvents(from, to, cancellationToken, progress), cancellationToken));
+            if (listed == null)
             {
-                summaries = await ListEvents(from, to, cancellationToken, progress);
+                throw new InvalidOperationException("Couldn't read the events from Terrain.");
             }
-            catch
-            {
-                await _programService.ResetCalendar();
-                throw;
-            }
-
-            var reset = _programService.ResetCalendar();
-            try
-            {
-                return await ReadEventDetails(summaries, cancellationToken, progress, eventsRead);
-            }
-            finally
-            {
-                await reset;
-            }
+            return await ReadEventDetails(listed.Select(e => (e, e.invitee_type)).ToList(), cancellationToken, progress, eventsRead);
         }
 
         // Every event in the range, as the list has it. Asked for in 90 day windows so that "all time" is many small requests rather than one very
         // large one; the windows don't depend on each other, so they are asked for together. An event that shows up in two windows is listed once.
-        private async Task<List<(Topo.Model.Program.Event Summary, string Scope)>> ListEvents(DateTime from, DateTime to, CancellationToken cancellationToken, Action<string>? progress)
+        private async Task<IEnumerable<Topo.Model.Program.Event>?> ListEvents(DateTime from, DateTime to, CancellationToken cancellationToken, Action<string>? progress)
         {
             var userId = _storageService.GetProfilesResult?.profiles?.FirstOrDefault()?.member?.id ?? "";
             var windows = new List<(DateTime start, DateTime end)>();
@@ -124,14 +108,14 @@ namespace Topo.Services
             var lists = await Task.WhenAll(windows.Select(w => _terrainAPIService.GetEventsAsync(userId, w.start.AddDays(-1), w.end.AddDays(1))));
             cancellationToken.ThrowIfCancellationRequested();
 
-            var seen = new HashSet<string>();
-            var listed = lists.SelectMany(l => l?.results ?? new Topo.Model.Program.Event[0]).Where(e => seen.Add(e.id)).ToList();
-            // an event whose list entry has changed since it was last listed has what the data cache kept of it dropped
-            foreach (var entry in listed)
+            // part of the list missing leaves it not to be relied on
+            if (lists.Any(l => l?.results == null))
             {
-                await _terrainAPIService.CheckListedEventAsync(entry);
+                return null;
             }
-            return listed.Select(e => (e, e.invitee_type)).ToList();
+
+            var seen = new HashSet<string>();
+            return lists.SelectMany(l => l!.results).Where(e => seen.Add(e.id)).ToList();
         }
 
         // Each event in full (attendance, logbook data) with its scope: a request of its own, as the list has no attendance. They are read a few at a

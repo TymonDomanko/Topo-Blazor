@@ -1,7 +1,8 @@
 namespace Topo.Model.Cache
 {
-    // Loads what a page shows through the data cache: what is held shows at once, and if any of it is older than a day it is then read again
-    // behind the page. A later load (another unit picked, the page left) overtakes an earlier one, which then changes nothing on the page.
+    // Loads what a page shows through the data cache: what is held shows at once, and if any of it is older than a day, or is read every time (a
+    // list of events), it is then read again behind the page: what is in date serves, the rest comes from Terrain. A later load (another unit
+    // picked, the page left) overtakes an earlier one, which then changes nothing on the page.
     public class PageLoad : IDisposable
     {
         private int _version;
@@ -37,7 +38,8 @@ namespace Topo.Model.Cache
                     // the first pass's progress does not stand for the second
                     Progress = "";
                     Changed?.Invoke();
-                    await PassAsync(version, CacheMode.Reread, read, show, token);
+                    // a page that acts on what it shows reads it all again
+                    await PassAsync(version, alwaysUpdate ? CacheMode.Reread : CacheMode.Fresh, read, show, token);
                 }
             });
         }
@@ -74,7 +76,7 @@ namespace Topo.Model.Cache
             }
             show(data);
             ReadUtc = scope.OldestUtc;
-            return (scope.UsedStale, scope.UsedHeld);
+            return (scope.UsedStale || scope.ToCheck, scope.UsedHeld);
         }
 
         private async Task RunAsync(int version, Func<CancellationToken, Task> work)
