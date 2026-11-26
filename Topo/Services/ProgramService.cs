@@ -13,7 +13,7 @@ namespace Topo.Services
         public Task SetCalendar(string calendarId);
         public Task SetCalendar(string[] calendarIds);
         public Task ResetCalendar();
-        public Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate);
+        public Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate, CancellationToken cancellationToken = default, Action<string>? progress = null);
         public Task<EventListModel> GetAttendanceForEvent(string eventId);
         public Task<AttendanceReportModel> GenerateAttendanceReportData(DateTime fromDate, DateTime toDate, string[] selectedCalendars);
         public Task<List<MemberListModel>> GetInviteesForEvent(string eventId, SignInSheetOptions? options = null);
@@ -105,15 +105,18 @@ namespace Topo.Services
             await _terrainAPIService.PutCalendarsAsync(GetUser(), _getCalendarsResultModel);
         }
 
-        public async Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate)
+        public async Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate, CancellationToken cancellationToken = default, Action<string>? progress = null)
         {
             TextInfo myTI = new CultureInfo("en-AU", false).TextInfo;
             var getEventsResultModel = await _terrainAPIService.GetEventsAsync(GetUser(), fromDate.AddDays(-1), toDate);
             if (getEventsResultModel != null && getEventsResultModel.results != null)
             {
                 var eventList = new List<EventListModel>();
+                var eventsRead = 0;
                 foreach (var eventResult in getEventsResultModel.results)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    progress?.Invoke($"{eventResult.title} ({++eventsRead} of {getEventsResultModel.results.Length})");
                     var getEventResultModel = await _terrainAPIService.GetEventAsync(eventResult.id);
                     var leads = getEventResultModel.attendance.leader_members.Select(a => string.Concat(a.first_name, " ", a.last_name.AsSpan(0, 1)));
                     var leadNames = string.Join(", ", leads);
