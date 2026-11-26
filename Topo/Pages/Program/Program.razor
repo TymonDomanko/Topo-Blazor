@@ -75,6 +75,10 @@
         {
             <div class="mb-3 text-danger">Couldn't read the events again from Terrain.</div>
         }
+        <div class="mb-2 d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="load-earlier" disabled="@_data.Updating" @onclick="LoadEarlierClick">6 months earlier</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="load-later" disabled="@_data.Updating" @onclick="LoadLaterClick">6 months later</button>
+        </div>
         <div class="row header">
             <div class="col-sm-2">
                 <strong>Date</strong>

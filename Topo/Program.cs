@@ -17,6 +17,7 @@ builder.Services.AddSingleton<StorageService>();
 builder.Services.AddScoped<ITerrainAPIService, TerrainAPIService>();
 builder.Services.AddScoped<ICacheStore, IndexedDbCacheStore>();
 builder.Services.AddScoped<DataCache>();
+builder.Services.AddScoped<ITerrainLocks, TerrainLocks>();
 builder.Services.AddScoped<ILogbookTotalsService, LogbookTotalsService>();
 builder.Services.AddScoped<IMembersService, MembersService>();
 builder.Services.AddScoped<ILoginService, LoginService>();

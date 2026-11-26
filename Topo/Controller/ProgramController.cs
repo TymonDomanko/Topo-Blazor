@@ -61,10 +61,9 @@ namespace Topo.Controller
             model.Units = _storageService.Units;
             var calendars = await _programService.GetCalendars();
             model.Calendars = calendars;
-            var quarter = (DateTime.Now.Month + 2) / 3;
-            var quarterStartMonth = (quarter - 1) * 3 + 1;
-            model.CalendarSearchFromDate = new DateTime(DateTime.Now.Year, quarterStartMonth, 1);
-            model.CalendarSearchToDate = model.CalendarSearchFromDate.AddMonths(4).AddDays(-1);
+            // six months each way to start with; more on request
+            model.CalendarSearchFromDate = DateTime.Today.AddMonths(-MoreMonths);
+            model.CalendarSearchToDate = DateTime.Today.AddMonths(MoreMonths);
             model.DateErrorMessage = "";
             if (!string.IsNullOrEmpty(_storageService.UnitId))
             {
@@ -123,11 +122,24 @@ namespace Topo.Controller
         {
             using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
             var scope = CacheScope.Current!;
-            await _programService.SetCalendar(model.SelectedCalendars);
-            var events = await _programService.GetEventsForDates(model.CalendarSearchFromDate, model.CalendarSearchToDate);
-            await _programService.ResetCalendar();
+            var events = await _programService.GetEventsForDates(model.CalendarSearchFromDate, model.CalendarSearchToDate, model.SelectedCalendars);
             model.Events = events.OrderBy(e => e.StartDateTime).ToList();
             _eventsReadUtc = scope.OldestUtc;
+        }
+
+        // How far each way the page starts, and how much more each request adds
+        private const int MoreMonths = 6;
+
+        internal async Task LoadEarlierClick()
+        {
+            model.CalendarSearchFromDate = model.CalendarSearchFromDate.AddMonths(-MoreMonths);
+            await ShowUnitCalendarClick();
+        }
+
+        internal async Task LoadLaterClick()
+        {
+            model.CalendarSearchToDate = model.CalendarSearchToDate.AddMonths(MoreMonths);
+            await ShowUnitCalendarClick();
         }
 
         internal async Task RefreshClick()

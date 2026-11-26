@@ -136,6 +136,19 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public async Task TurnedOffNothingIsHandedOutOrKept()
+        {
+            var (store, cache) = await Holding(12);
+            cache.Enabled = false;
+
+            Assert.IsNull(await cache.GetAsync<GetMemberLogbookMetricsResultModel>("a"));
+            var read = await cache.PutAsync("b", Totals(3));
+
+            Assert.AreEqual(3, read.Value.results.Single().value);
+            Assert.IsFalse(store.Entries.ContainsKey("b"));
+        }
+
+        [TestMethod]
         public void WhenDataWasReadIsSaidAsTodayYesterdayOrDaysAgo()
         {
             var now = new DateTime(2026, 11, 26, 16, 30, 0);

@@ -70,7 +70,7 @@
         <div class="col-sm-2">
         </div>
         <div class="col-sm-3">
-            <button type="submit" name="button" class="btn btn-primary" @onclick="ShowProgramIdeasClick">Show Program Ideas</button>
+            <button type="submit" name="button" class="btn btn-primary" disabled="@_data.Updating" @onclick="ShowProgramIdeasClick">Show Program Ideas</button>
         </div>
         <div class="col-sm-7">
         </div>
@@ -78,6 +78,11 @@
 
     @if (model.Ideas != null)
     {
+        <DataAgeLine What="Events" ReadUtc="_data.ReadUtc" NoneText="Events from more than four months ago are kept until you refresh." Updating="_data.Updating" Progress="@_data.Progress" OnRefresh="RefreshClick" />
+        @if (_data.Failed)
+        {
+            <div class="mb-3 text-danger">Couldn't read the events again from Terrain.</div>
+        }
         @if (model.FetchFailed)
         {
             <div class="row">
@@ -90,8 +95,8 @@
         {
             <div class="mt-3 mb-3 row">
                 <div class="col-sm">
-                    <button type="submit" name="button" @onclick="ProgramIdeasReportPdfClick" class="btn btn-primary">Program Ideas (pdf)</button> &nbsp;
-                    <button type="submit" name="button" @onclick="ProgramIdeasReportXlsxClick" class="btn btn-success">Program Ideas (xlsx)</button>
+                    <button type="submit" name="button" @onclick="ProgramIdeasReportPdfClick" disabled="@_data.Updating" class="btn btn-primary">Program Ideas (pdf)</button> &nbsp;
+                    <button type="submit" name="button" @onclick="ProgramIdeasReportXlsxClick" disabled="@_data.Updating" class="btn btn-success">Program Ideas (xlsx)</button>
                 </div>
             </div>
 

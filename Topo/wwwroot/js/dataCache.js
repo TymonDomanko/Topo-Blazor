@@ -46,6 +46,10 @@ window.topoCache = (function () {
         put: async function (entry) {
             await run("readwrite", function (store) { return store.put(entry); });
         },
+        // Asks the browser not to throw the store away when it is short of space; true when it agrees
+        persist: async function () {
+            return !!(navigator.storage && navigator.storage.persist) && await navigator.storage.persist();
+        },
         clear: async function () {
             await run("readwrite", function (store) { return store.clear(); });
         },

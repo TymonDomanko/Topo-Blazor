@@ -104,6 +104,7 @@ namespace Topo.Services
             _storageService.Groups = GetGroups();
             _storageService.GroupId = _storageService.Groups.Count == 1 ? _storageService.Groups.FirstOrDefault().Key : "";
             _storageService.GroupName = _storageService.Groups.Count == 1 ? _storageService.Groups.FirstOrDefault().Value : "";
+            await CacheSetting.ApplyAsync(_localStorageService, _dataCache);
         }
 
         public async Task PersistSessionAsync()

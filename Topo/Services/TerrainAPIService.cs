@@ -26,8 +26,12 @@ namespace Topo.Services
         public Task<GetMembersResultModel?> GetMembersAsync(string selectedUnitId);
         public Task<GetMembersResultModel?> GetMembersForPatrolAsync(string patrolId);
         public Task<GetCalendarsResultModel?> GetCalendarsAsync(string userId);
-        public Task PutCalendarsAsync(string userId, GetCalendarsResultModel putCalendarsResultModel);
+        // Selects the account's calendars; false when Terrain did not take the change
+        public Task<bool> PutCalendarsAsync(string userId, GetCalendarsResultModel putCalendarsResultModel);
         public Task<GetEventsResultModel?> GetEventsAsync(string userId, DateTime fromDate, DateTime toDate);
+        // The events of one half year (see EventBlocks), through the data cache inside a CacheScope. calendarKey names the calendars selected for
+        // the read, as the answer depends on them. Null when Terrain could not be read.
+        public Task<GetEventsResultModel?> GetEventsBlockAsync(string userId, DateTime fromDate, DateTime toDate, string calendarKey);
         public Task<GetEventResultModel?> GetEventAsync(string eventId);
         public Task<List<ProposedActivityModel>?> GetProposedActivitiesAsync(string unitId);
         public Task<GetOASTreeResultsModel?> GetOASTreeAsync(string stream);
@@ -225,13 +229,13 @@ namespace Topo.Services
             return getCalendarsResultModel;
         }
 
-        public async Task PutCalendarsAsync(string userId, GetCalendarsResultModel putCalendarsResultModel)
+        public async Task<bool> PutCalendarsAsync(string userId, GetCalendarsResultModel putCalendarsResultModel)
         {
             await RefreshTokenAsync();
 
             string requestUri = $"{eventsAddress}members/{userId}/calendars";
             var content = JsonConvert.SerializeObject(putCalendarsResultModel);
-            await SendRequest(HttpMethod.Put, requestUri, content);
+            return (await SendRequestWithStatus(HttpMethod.Put, requestUri, content)).Succeeded;
         }
 
         public async Task<GetEventsResultModel?> GetEventsAsync(string userId, DateTime fromDate, DateTime toDate)
@@ -245,6 +249,22 @@ namespace Topo.Services
             var getEventsResultModel = DeserializeObject<GetEventsResultModel>(result);
 
             return getEventsResultModel;
+        }
+
+        public async Task<GetEventsResultModel?> GetEventsBlockAsync(string userId, DateTime fromDate, DateTime toDate, string calendarKey)
+        {
+            await RefreshTokenAsync();
+
+            string requestUri = $"{eventsAddress}members/{userId}/events?start_datetime={fromDate.ToString("s")}&end_datetime={toDate.ToString("s")}";
+            var result = await _dataCache.ReadThroughAsync($"{_storageService.CacheKeyPrefix}|events|{calendarKey}|{requestUri}",
+                async () =>
+                {
+                    var answer = await SendRequestWithStatus(HttpMethod.Get, requestUri);
+                    return (answer.Succeeded && answer.Body.Contains("\"results\""), answer.Body);
+                },
+                body => Topo.Model.Cache.EventBlocks.IsOld(toDate, DateTime.Now));
+
+            return result.Contains("\"results\"") ? DeserializeObject<GetEventsResultModel>(result) : null;
         }
 
         public async Task<GetEventResultModel?> GetEventAsync(string eventId)
@@ -264,7 +284,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{eventsAddress}units/{unitId}/proposals";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             return ProposedActivities.Parse(result);
         }
 
@@ -273,7 +293,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{templatesAddress}oas/{stream}/tree.json";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var getOASTreeResultsModel = DeserializeObject<GetOASTreeResultsModel>(result);
 
             return getOASTreeResultsModel;
@@ -284,7 +304,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{templatesAddress}{stream}/latest.json";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var getOASTemplateResultModel = DeserializeObject<GetOASTemplateResultModel>(result);
 
             return getOASTemplateResultModel;
@@ -294,7 +314,7 @@ namespace Topo.Services
         {
             await RefreshTokenAsync();
             string requestUri = $"{achievementsAddress}units/{unit}/achievements?type=outdoor_adventure_skill&stream={stream}&branch={branch}&stage={stage}";
-            var responseContentResult = await SendRequest(HttpMethod.Get, requestUri);
+            var responseContentResult = await CachedGet(requestUri);
             // Remove uploaded files from response before deserialising
             responseContentResult = responseContentResult.Replace("\"file_uploader\": [],", "");
             responseContentResult = responseContentResult.Replace("\"file_uploader\": []", "");

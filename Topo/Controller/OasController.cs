@@ -6,13 +6,14 @@ using Newtonsoft.Json;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Topo.Model.Cache;
 using Topo.Model.OAS;
 using Topo.Model.ReportGeneration;
 using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class OASController : ComponentBase
+    public class OASController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -30,6 +31,9 @@ namespace Topo.Controller
         public IOASService _oasService { get; set; }
 
         public OASPageViewModel model = new OASPageViewModel();
+        // How old the kept records behind the last worksheet are, and reading them again
+        public ReportRefresh _data = new ReportRefresh();
+        private DateTime? _recordsReadUtc;
 
         public ElementReference _select2Reference;
 
@@ -48,7 +52,10 @@ namespace Topo.Controller
 
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
-            model.Stages = await _oasService.GetOASStagesList();
+            using (CacheScope.Begin(CacheMode.Fresh))
+            {
+                model.Stages = await _oasService.GetOASStagesList();
+            }
             model.SuppressLastName = _storageService.SuppressLastName;
             if (!string.IsNullOrEmpty(_storageService.UnitId))
             {
@@ -93,17 +100,42 @@ namespace Topo.Controller
             await JS.InvokeVoidAsync("BlazorDownloadFile", fileName, "application/vnd.ms-excel", report);
         }
 
-        private async Task<byte[]> OASWorksheet(OutputType outputType = OutputType.PDF)
+        internal async Task RefreshClick()
         {
+            if (!await GetSelections(_select2Reference))
+            {
+                return;
+            }
+            _data.Changed = () => InvokeAsync(StateHasChanged);
+            await _data.RefreshAsync((progress, token) => ReadAnswers(progress), () => Task.FromResult(_recordsReadUtc));
+        }
+
+        public void Dispose() => _data.Dispose();
+
+        // The worksheet's answers for the chosen stages. Records come from the data cache while in date.
+        private async Task<List<OASWorksheetAnswers>> ReadAnswers(Action<string>? progress = null)
+        {
+            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
+            var scope = CacheScope.Current!;
             _storageService.SuppressLastName = model.SuppressLastName;
             var sortedAnswers = new List<OASWorksheetAnswers>();
+            var read = 0;
             foreach (var selectedStageTemplate in model.SelectedStages)
             {
+                progress?.Invoke($"{++read} of {model.SelectedStages.Length} stages");
                 var templateList = await _oasService.GetOASTemplate(selectedStageTemplate.Replace("/latest.json", ""));
                 var selectedStage = model.Stages.Where(s => s.TemplateLink == selectedStageTemplate).FirstOrDefault() ?? new OASStageListModel();
                 var sortedTemplateAnswers = await _oasService.GenerateOASWorksheetAnswers(model.UnitId, selectedStage, model.HideCompletedMembers, templateList);
                 sortedAnswers.AddRange(sortedTemplateAnswers);
             }
+            _recordsReadUtc = scope.OldestUtc;
+            return sortedAnswers;
+        }
+
+        private async Task<byte[]> OASWorksheet(OutputType outputType = OutputType.PDF)
+        {
+            var sortedAnswers = await ReadAnswers();
+            await _data.ReadAgeAsync(() => Task.FromResult(_recordsReadUtc));
 
             var groupName = _storageService.GroupName ?? "";
             var unitName = _storageService.UnitName ?? "";

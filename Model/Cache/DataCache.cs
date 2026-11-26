@@ -40,12 +40,19 @@ namespace Topo.Model.Cache
             _store = store;
         }
 
+        // Turned off, nothing is handed out or kept, and every read goes to Terrain
+        public bool Enabled { get; set; } = true;
+
         // The clock, which the tests set
         public Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
 
         public async Task<CachedRead<T>?> GetAsync<T>(string key)
         {
             await SweepAsync();
+            if (!Enabled)
+            {
+                return null;
+            }
             if (!_memory.TryGetValue(key, out var entry))
             {
                 entry = await _store.GetAsync(key);
@@ -78,6 +85,10 @@ namespace Topo.Model.Cache
         public async Task<CachedRead<T>> PutAsync<T>(string key, T value, bool keep = false)
         {
             var now = UtcNow();
+            if (!Enabled)
+            {
+                return new CachedRead<T>(value, now, false);
+            }
             var entry = new CacheEntry
             {
                 Key = key,

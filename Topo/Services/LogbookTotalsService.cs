@@ -24,10 +24,11 @@ namespace Topo.Services
         private readonly ITerrainAPIService _terrainAPIService;
         private readonly StorageService _storageService;
         private readonly DataCache _dataCache;
-        private readonly SemaphoreSlim _profileLock = new SemaphoreSlim(1, 1);
+        private readonly ITerrainLocks _locks;
 
-        public LogbookTotalsService(ITerrainAPIService terrainAPIService, StorageService storageService, DataCache dataCache)
+        public LogbookTotalsService(ITerrainAPIService terrainAPIService, StorageService storageService, DataCache dataCache, ITerrainLocks locks)
         {
+            _locks = locks;
             _terrainAPIService = terrainAPIService;
             _storageService = storageService;
             _dataCache = dataCache;
@@ -112,22 +113,6 @@ namespace Topo.Services
             return oldest;
         }
 
-        public async Task<IDisposable> LockProfileAsync(CancellationToken cancellationToken = default)
-        {
-            await _profileLock.WaitAsync(cancellationToken);
-            return new Release(_profileLock);
-        }
-
-        private sealed class Release : IDisposable
-        {
-            private SemaphoreSlim? _lock;
-
-            public Release(SemaphoreSlim profileLock)
-            {
-                _lock = profileLock;
-            }
-
-            public void Dispose() => Interlocked.Exchange(ref _lock, null)?.Release();
-        }
+        public Task<IDisposable> LockProfileAsync(CancellationToken cancellationToken = default) => _locks.ProfileAsync(cancellationToken);
     }
 }

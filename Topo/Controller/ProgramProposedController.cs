@@ -1,13 +1,14 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Newtonsoft.Json;
+using Topo.Model.Cache;
 using Topo.Model.Program;
 using Topo.Model.ReportGeneration;
 using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class ProgramProposedController : ComponentBase
+    public class ProgramProposedController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -30,12 +31,12 @@ namespace Topo.Controller
         public DateTime SinceDate = DateTime.Now.AddYears(-1);
         // The date the proposals on show were counted from, which is what the report says
         private DateTime? _countedSince;
-        public bool Loading = true;
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public bool Loading => _page.Loading;
         public bool FetchFailed;
         // No unit has been chosen (a leader of several units picks one on the Program page), so there is nothing to read
         public bool NoUnit;
-        // Counts the reads, so one that finishes after a newer one was asked for does not replace its answer
-        private int _loadNumber;
         public List<ProposedActivityModel> Proposals = new List<ProposedActivityModel>();
 
         public ProposedActivitySortColumn SortColumn = ProposedActivitySortColumn.Submitted;
@@ -53,35 +54,50 @@ namespace Topo.Controller
                 return;
             }
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             GroupName = _storageService.GroupNameDisplay;
             await Load();
         }
 
+        // What the data cache holds shows at once, and is read again behind the page when it is more than a day old
         internal async Task Load()
         {
             NoUnit = string.IsNullOrEmpty(_storageService.UnitId);
             if (NoUnit)
             {
-                Loading = false;
+                _page.Cancel();
                 return;
             }
 
-            var load = ++_loadNumber;
-            Loading = true;
             FetchFailed = false;
             var since = Since;
-            var proposals = await _programService.GetProposedActivities(since);
-            if (load != _loadNumber)
-                return;
+            await _page.LoadAsync(Read(since), proposals => Show(proposals, since));
+            FetchFailed |= _page.Failed;
+        }
 
+        internal async Task RefreshClick()
+        {
+            var since = Since;
+            await _page.RefreshAsync(Read(since), proposals => Show(proposals, since));
+            FetchFailed |= _page.Failed;
+        }
+
+        private Func<Action<string>, CancellationToken, Task<List<ProposedActivityModel>?>> Read(DateTime? since) =>
+            (progress, token) => _programService.GetProposedActivities(since);
+
+        private void Show(List<ProposedActivityModel>? proposals, DateTime? since)
+        {
             _countedSince = since;
             FetchFailed = proposals == null;
             Proposals = proposals ?? new List<ProposedActivityModel>();
             // the area being shown may not have a proposal any more
             if (AreaFilter != "" && !Proposals.Any(p => p.ChallengeArea == AreaFilter))
+            {
                 AreaFilter = "";
-            Loading = false;
+            }
         }
+
+        public void Dispose() => _page.Dispose();
 
         // Where the run counts start, or null for all of the unit's events
         internal DateTime? Since => SinceRange switch
