@@ -18,7 +18,7 @@ Decisions:
 6. A page's Refresh data button refreshes only the data that page needs.
 7. The cache is stored in **IndexedDB** (2026-11-26).
 8. The cache is **on by default and configurable** in Settings (2026-11-26).
-9. **Reports** made from cached data are fine, except while a page is still updating and showing the old data (2026-11-26). Proposed handling: the report buttons wait until the update has finished.
+9. **Reports** made from cached data are fine, except while a page is still updating and showing the old data (2026-11-26): the report buttons wait until the update has finished.
 
 ## What things cost (measured)
 
