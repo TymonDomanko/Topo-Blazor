@@ -29,9 +29,8 @@ namespace Topo.Services
         // Selects the account's calendars; false when Terrain did not take the change
         public Task<bool> PutCalendarsAsync(string userId, GetCalendarsResultModel putCalendarsResultModel);
         public Task<GetEventsResultModel?> GetEventsAsync(string userId, DateTime fromDate, DateTime toDate);
-        // One calendar's events of one half year (see EventBlocks), through the data cache inside a CacheScope. Terrain answers for the calendars
-        // selected at the time, so calendarId must be the only one selected if it has to be read. Null when Terrain could not be read.
-        public Task<GetEventsResultModel?> GetEventsBlockAsync(string userId, DateTime fromDate, DateTime toDate, string calendarId);
+        // Compares an event as the list now shows it with when it was last listed, and drops what is kept of it if it differs (see EventListCheck)
+        public Task CheckListedEventAsync(Topo.Model.Program.Event listed);
         public Task<GetEventResultModel?> GetEventAsync(string eventId);
         public Task<List<ProposedActivityModel>?> GetProposedActivitiesAsync(string unitId);
         public Task<GetOASTreeResultsModel?> GetOASTreeAsync(string stream);
@@ -251,27 +250,21 @@ namespace Topo.Services
             return getEventsResultModel;
         }
 
-        public async Task<GetEventsResultModel?> GetEventsBlockAsync(string userId, DateTime fromDate, DateTime toDate, string calendarId)
+        public async Task CheckListedEventAsync(Topo.Model.Program.Event listed)
         {
-            await RefreshTokenAsync();
-
-            string requestUri = $"{eventsAddress}members/{userId}/events?start_datetime={fromDate.ToString("s")}&end_datetime={toDate.ToString("s")}";
-            var result = await _dataCache.ReadThroughAsync($"{_storageService.CacheKeyPrefix}|events|{calendarId}|{requestUri}",
-                async () =>
-                {
-                    var answer = await SendRequestWithStatus(HttpMethod.Get, requestUri);
-                    return (answer.Succeeded && answer.Body.Contains("\"results\""), answer.Body);
-                },
-                body => Topo.Model.Cache.EventBlocks.IsOld(toDate, DateTime.Now));
-
-            return result.Contains("\"results\"") ? DeserializeObject<GetEventsResultModel>(result) : null;
+            if (await Topo.Model.Cache.EventListCheck.ChangedAsync(_dataCache, $"{_storageService.CacheKeyPrefix}|listed|{listed.id}", listed))
+            {
+                await _dataCache.RemoveAsync(CacheKey(EventUri(listed.id)));
+            }
         }
+
+        private string EventUri(string eventId) => $"{eventsAddress}events/{eventId}";
 
         public async Task<GetEventResultModel?> GetEventAsync(string eventId)
         {
             await RefreshTokenAsync();
 
-            string requestUri = $"{eventsAddress}events/{eventId}";
+            string requestUri = EventUri(eventId);
             var result = await CachedGet(requestUri, body => Topo.Model.Cache.OldEvents.IsOld(body, DateTime.UtcNow));
             var getEventResultModel = DeserializeObject<GetEventResultModel>(result);
 

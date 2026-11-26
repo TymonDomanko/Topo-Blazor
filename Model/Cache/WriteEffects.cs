@@ -32,7 +32,7 @@ namespace Topo.Model.Cache
 
             if (requestUri.Contains(Events))
             {
-                // the account's selected calendars: event lists are kept by the calendars they were read from, so none is made wrong
+                // the account's selected calendars: nothing kept depends on them
                 if (path[^1] == "calendars")
                 {
                     return null;
@@ -43,8 +43,8 @@ namespace Topo.Model.Cache
                 var isComment = path.Contains("comments");
                 // changing or removing an event can change the credits Terrain works out from who came
                 var changesCredits = eventUri != null && !isComment;
-                return key => key.Contains("|events|")
-                    || key.Contains("/proposals")
+                // (event lists are read every time, so there are none to drop)
+                return key => key.Contains("/proposals")
                     || (eventUri != null && key.EndsWith(eventUri, StringComparison.Ordinal))
                     || (changesCredits && (IsAchievement(key) || key.EndsWith("/metrics", StringComparison.Ordinal)));
             }

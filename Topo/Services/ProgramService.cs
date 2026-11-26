@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using System.Globalization;
-using Topo.Model.Cache;
 using Topo.Model.Program;
 using System;
 using Topo.Model.Members;
@@ -30,8 +29,6 @@ namespace Topo.Services
         private GetCalendarsResultModel _getCalendarsResultModel;
 
         private readonly ITerrainLocks _locks;
-        // The most half years of events read at once
-        private const int BlocksAtOnce = 6;
 
         public ProgramService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, ITerrainLocks locks)
         {
@@ -68,117 +65,50 @@ namespace Topo.Services
             return new Dictionary<string, string>();
         }
 
-        // The events between the dates, on the given calendars or on those selected in Terrain now. Inside a CacheScope each calendar's events come
-        // through the data cache on their own, half a year at a time, so any mix of calendars already read needs nothing from Terrain; a calendar
-        // is switched on, by itself, only if something of it has to be read. Null when Terrain could not be read.
+        // The events between the dates, on the given calendars (selected in Terrain for the read, then put back as they were) or on those selected
+        // now. The list is read from Terrain every time; an event whose entry in it is new or has changed has what was kept of it dropped, so that
+        // it is read again. Null when Terrain could not be read.
         private async Task<GetEventsResultModel?> ListEventsAsync(DateTime fromDate, DateTime toDate, string[]? calendarIds)
         {
-            IDisposable? calendarLock = null;
-            // set once the selection in Terrain has been changed, so it is put back
-            var switched = false;
-            // the calendars selected before any switching, and which are selected at this moment
-            string[]? selected = null;
-
-            async Task LockAndReadSelectionAsync()
+            GetEventsResultModel? events;
+            // not while another read has the calendars switched
+            using (await _locks.CalendarsAsync())
             {
-                if (calendarLock != null)
-                {
-                    return;
-                }
-                calendarLock = await _locks.CalendarsAsync();
-                // what is selected at this moment is what is put back
-                _getCalendarsResultModel = await _terrainAPIService.GetCalendarsAsync(GetUser())
-                    ?? throw new InvalidOperationException("Couldn't read the calendars from Terrain.");
-                selected = _getCalendarsResultModel.own_calendars.Where(c => c.selected).Select(c => c.id)
-                    .Concat(_getCalendarsResultModel.other_calendars.Where(c => c.selected).Select(c => c.id))
-                    .ToArray();
+                events = calendarIds == null
+                    ? await _terrainAPIService.GetEventsAsync(GetUser(), fromDate, toDate)
+                    : await ListSelectedEventsAsync(fromDate, toDate, calendarIds);
             }
-
-            // selects just these calendars in Terrain, unless they are what is selected already
-            string[]? now = null;
-            async Task SelectAsync(string[] wanted)
+            foreach (var listed in events?.results ?? Array.Empty<Event>())
             {
-                await LockAndReadSelectionAsync();
-                if (new HashSet<string>(now ?? selected!).SetEquals(wanted))
-                {
-                    return;
-                }
-                switched = true;
-                if (!await SetCalendar(wanted))
+                await _terrainAPIService.CheckListedEventAsync(listed);
+            }
+            return events;
+        }
+
+        private async Task<GetEventsResultModel?> ListSelectedEventsAsync(DateTime fromDate, DateTime toDate, string[] calendarIds)
+        {
+            // what is selected at this moment is what is put back
+            _getCalendarsResultModel = await _terrainAPIService.GetCalendarsAsync(GetUser())
+                ?? throw new InvalidOperationException("Couldn't read the calendars from Terrain.");
+            var selected = _getCalendarsResultModel.own_calendars.Where(c => c.selected).Select(c => c.id)
+                .Concat(_getCalendarsResultModel.other_calendars.Where(c => c.selected).Select(c => c.id));
+            if (new HashSet<string>(selected).SetEquals(calendarIds))
+            {
+                return await _terrainAPIService.GetEventsAsync(GetUser(), fromDate, toDate);
+            }
+            try
+            {
+                if (!await SetCalendar(calendarIds))
                 {
                     // what would be read now could be another selection's events
                     throw new InvalidOperationException("Couldn't switch the calendars in Terrain.");
                 }
-                now = wanted;
-            }
-
-            var scope = CacheScope.Current;
-            var prepare = scope?.BeforeRead;
-            try
-            {
-                if (scope == null)
-                {
-                    if (calendarIds == null)
-                    {
-                        await LockAndReadSelectionAsync();
-                    }
-                    else
-                    {
-                        await SelectAsync(calendarIds);
-                    }
-                    return await _terrainAPIService.GetEventsAsync(GetUser(), fromDate, toDate);
-                }
-
-                if (calendarIds == null)
-                {
-                    await LockAndReadSelectionAsync();
-                }
-                var events = new List<Event>();
-                // one calendar at a time: Terrain answers for whatever is selected
-                foreach (var calendarId in (calendarIds ?? selected!).Distinct())
-                {
-                    Task? selecting = null;
-                    scope.BeforeRead = () => selecting ??= SelectAsync(new[] { calendarId });
-                    var blocks = await ReadBlocksAsync(calendarId, fromDate, toDate);
-                    if (blocks.Any(b => b?.results == null))
-                    {
-                        return null;
-                    }
-                    events.AddRange(blocks.SelectMany(b => b!.results));
-                }
-                // an event on more than one of the calendars is listed once
-                return new GetEventsResultModel { results = EventBlocks.Merge(events, fromDate, toDate) };
+                return await _terrainAPIService.GetEventsAsync(GetUser(), fromDate, toDate);
             }
             finally
             {
-                if (scope != null)
-                {
-                    scope.BeforeRead = prepare;
-                }
-                if (switched)
-                {
-                    await ResetCalendar();
-                }
-                calendarLock?.Dispose();
+                await ResetCalendar();
             }
-        }
-
-        // One calendar's half years of events covering the dates, a few at a time
-        private async Task<GetEventsResultModel?[]> ReadBlocksAsync(string calendarId, DateTime fromDate, DateTime toDate)
-        {
-            using var limit = new SemaphoreSlim(BlocksAtOnce);
-            return await Task.WhenAll(EventBlocks.Between(fromDate, toDate).Select(async block =>
-            {
-                await limit.WaitAsync();
-                try
-                {
-                    return await _terrainAPIService.GetEventsBlockAsync(GetUser(), block.From, block.To, calendarId);
-                }
-                finally
-                {
-                    limit.Release();
-                }
-            }));
         }
 
         private async Task<bool> SetCalendar(string[] calendarIds)

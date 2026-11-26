@@ -25,7 +25,6 @@ namespace TopoReportFunctionTest
             ["another's totals"] = "me|g|logbook-totals|m2",
             ["event"] = $"me|g|get|{Events}events/e1",
             ["another event"] = $"me|g|get|{Events}events/e2",
-            ["event list"] = $"me|g|events|c1|{Events}members/me/events?start_datetime=a&end_datetime=b",
             ["proposals"] = $"me|g|get|{Events}units/u1/proposals",
             ["templates"] = $"me|g|get|{Templates}oas/camping/tree.json"
         };
@@ -64,25 +63,25 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
-        public void CreatingAnEventDropsTheListsAndProposals()
+        public void CreatingAnEventDropsTheProposals()
         {
-            CollectionAssert.AreEquivalent(new[] { "event list", "proposals" }, Dropped("POST", $"{Events}units/u1/events"));
-            CollectionAssert.AreEquivalent(new[] { "event list", "proposals" }, Dropped("POST", $"{Events}groups/g/events"));
+            CollectionAssert.AreEquivalent(new[] { "proposals" }, Dropped("POST", $"{Events}units/u1/events"));
+            CollectionAssert.AreEquivalent(new[] { "proposals" }, Dropped("POST", $"{Events}groups/g/events"));
         }
 
         [TestMethod]
         public void ChangingOrRemovingAnEventAlsoDropsItAndWhatItsAttendanceFeeds()
         {
-            var expected = new[] { "event", "event list", "proposals", "metrics", "unit records", "approvals", "scout records" };
+            var expected = new[] { "event", "proposals", "metrics", "unit records", "approvals", "scout records" };
 
             CollectionAssert.AreEquivalent(expected, Dropped("PATCH", $"{Events}events/e1"));
             CollectionAssert.AreEquivalent(expected, Dropped("DELETE", $"{Events}events/e1"));
         }
 
         [TestMethod]
-        public void ACommentOnAnEventDropsThatEventAndTheListsButNoRecords()
+        public void ACommentOnAnEventDropsThatEventButNoRecords()
         {
-            var expected = new[] { "event", "event list", "proposals" };
+            var expected = new[] { "event", "proposals" };
 
             CollectionAssert.AreEquivalent(expected, Dropped("POST", $"{Events}events/e1/comments"));
             CollectionAssert.AreEquivalent(expected, Dropped("DELETE", $"{Events}events/e1/comments/c9"));

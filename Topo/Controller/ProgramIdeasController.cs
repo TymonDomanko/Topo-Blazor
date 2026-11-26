@@ -1,14 +1,13 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Newtonsoft.Json;
-using Topo.Model.Cache;
 using Topo.Model.Program;
 using Topo.Model.ReportGeneration;
 using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class ProgramIdeasController : ComponentBase, IDisposable
+    public class ProgramIdeasController : ComponentBase
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -28,9 +27,6 @@ namespace Topo.Controller
         public ElementReference _select2Reference;
 
         public ProgramIdeasPageViewModel model = new ProgramIdeasPageViewModel();
-        // How old the kept events behind the ideas are, and reading them again
-        public ReportRefresh _data = new ReportRefresh();
-        private DateTime? _eventsReadUtc;
 
         private bool _select2Bound;
 
@@ -91,23 +87,6 @@ namespace Topo.Controller
             if (!await GetSelections())
                 return;
 
-            await ShowIdeas();
-            await _data.ReadAgeAsync(() => Task.FromResult(_eventsReadUtc));
-        }
-
-        internal async Task RefreshClick()
-        {
-            _data.Changed = () => InvokeAsync(StateHasChanged);
-            await _data.RefreshAsync((progress, token) => ShowIdeas(), () => Task.FromResult(_eventsReadUtc));
-        }
-
-        public void Dispose() => _data.Dispose();
-
-        // The ideas for the chosen calendars and dates. Events come from the data cache while in date; long past ones are kept until read again.
-        private async Task ShowIdeas()
-        {
-            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
-            var scope = CacheScope.Current!;
             var fromDate = ResolveFromDate(model.HistoryRange, model.HistoryFromDate);
             DateTime? highlightFromDate = model.HighlightRange == ProgramIdeasRangeOption.None
                 ? null
@@ -116,7 +95,6 @@ namespace Topo.Controller
             var ideas = await _programService.GetProgramIdeas(fromDate, highlightFromDate, model.SelectedCalendars);
             model.FetchFailed = ideas == null;
             model.Ideas = ApplySort(ideas ?? new List<ProgramIdeaItemModel>(), model.SortColumn, model.SortDescending);
-            _eventsReadUtc = scope.OldestUtc;
         }
 
         // One shared sort state applies across every Challenge Area group/sheet, not per-group.

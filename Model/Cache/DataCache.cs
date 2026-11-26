@@ -144,6 +144,8 @@ namespace Topo.Model.Cache
             }
         }
 
+        public Task RemoveAsync(string key) => _store.RemoveAsync(new[] { key });
+
         // Drops what a write to Terrain may have made wrong (see WriteEffects)
         public async Task ForgetAsync(Func<string, bool> affected)
         {
