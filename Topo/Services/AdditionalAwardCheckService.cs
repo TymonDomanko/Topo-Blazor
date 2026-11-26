@@ -250,7 +250,11 @@ namespace Topo.Services
             }
             finally
             {
-                await _terrainAPIService.RevokeAssumedProfiles();
+                // not while a page has a Scout's profile taken on for its own reading
+                using (await _locks.ProfileAsync())
+                {
+                    await _terrainAPIService.RevokeAssumedProfiles();
+                }
             }
             if (result.Stopped)
             {
