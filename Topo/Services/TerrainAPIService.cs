@@ -29,9 +29,9 @@ namespace Topo.Services
         // Selects the account's calendars; false when Terrain did not take the change
         public Task<bool> PutCalendarsAsync(string userId, GetCalendarsResultModel putCalendarsResultModel);
         public Task<GetEventsResultModel?> GetEventsAsync(string userId, DateTime fromDate, DateTime toDate);
-        // The events of one half year (see EventBlocks), through the data cache inside a CacheScope. calendarKey names the calendars selected for
-        // the read, as the answer depends on them. Null when Terrain could not be read.
-        public Task<GetEventsResultModel?> GetEventsBlockAsync(string userId, DateTime fromDate, DateTime toDate, string calendarKey);
+        // One calendar's events of one half year (see EventBlocks), through the data cache inside a CacheScope. Terrain answers for the calendars
+        // selected at the time, so calendarId must be the only one selected if it has to be read. Null when Terrain could not be read.
+        public Task<GetEventsResultModel?> GetEventsBlockAsync(string userId, DateTime fromDate, DateTime toDate, string calendarId);
         public Task<GetEventResultModel?> GetEventAsync(string eventId);
         public Task<List<ProposedActivityModel>?> GetProposedActivitiesAsync(string unitId);
         public Task<GetOASTreeResultsModel?> GetOASTreeAsync(string stream);
@@ -251,12 +251,12 @@ namespace Topo.Services
             return getEventsResultModel;
         }
 
-        public async Task<GetEventsResultModel?> GetEventsBlockAsync(string userId, DateTime fromDate, DateTime toDate, string calendarKey)
+        public async Task<GetEventsResultModel?> GetEventsBlockAsync(string userId, DateTime fromDate, DateTime toDate, string calendarId)
         {
             await RefreshTokenAsync();
 
             string requestUri = $"{eventsAddress}members/{userId}/events?start_datetime={fromDate.ToString("s")}&end_datetime={toDate.ToString("s")}";
-            var result = await _dataCache.ReadThroughAsync($"{_storageService.CacheKeyPrefix}|events|{calendarKey}|{requestUri}",
+            var result = await _dataCache.ReadThroughAsync($"{_storageService.CacheKeyPrefix}|events|{calendarId}|{requestUri}",
                 async () =>
                 {
                     var answer = await SendRequestWithStatus(HttpMethod.Get, requestUri);
