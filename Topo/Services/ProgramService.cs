@@ -248,6 +248,8 @@ namespace Topo.Services
         // The unit's events between two days, as Terrain returns them for the calendars currently selected on the account
         public async Task<List<AwardEventChoice>> GetEventChoices(DateTime fromDate, DateTime toDate, string unitId)
         {
+            // not while another read has other calendars switched on
+            using var calendarLock = await _locks.CalendarsAsync();
             var events = await _terrainAPIService.GetEventsAsync(GetUser(), fromDate.Date.AddDays(-1), toDate.Date.AddDays(1));
             return AwardEventChoice.ForUnit(events?.results ?? new Event[0], unitId);
         }
