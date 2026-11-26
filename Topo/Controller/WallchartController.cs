@@ -8,8 +8,11 @@ using System.Reflection;
 
 namespace Topo.Controller
 {
-    public class WallchartController : ComponentBase
+    public class WallchartController : ComponentBase, IDisposable
     {
+        [Inject]
+        public ILogbookTotalsService _logbookTotals { get; set; }
+
         [Inject]
         public StorageService _storageService { get; set; }
 
@@ -34,6 +37,12 @@ namespace Topo.Controller
         // Laid out again whenever an option changes, from what was read for the unit
         public List<WallchartSheet>? Sheets;
         private List<WallchartItemModel>? _items;
+        // Reading logbook totals again behind the page; the reports wait until it is done
+        public bool Updating;
+        public DateTime? TotalsReadUtc;
+        // Counts the loads, so one that a later one has overtaken (another unit picked) does not touch the page
+        private int _load;
+        private CancellationTokenSource? _update;
 
         protected override async Task OnInitializedAsync()
         {
@@ -65,11 +74,14 @@ namespace Topo.Controller
             await Load();
         }
 
-        // Reads the unit's wallchart once; the preview then follows the options
+        // Reads the unit's wallchart once; the preview then follows the options. Logbook totals older than a day are shown straight away and then
+        // read again behind the page.
         private async Task Load()
         {
+            var load = StartLoad();
             Sheets = null;
             _items = null;
+            TotalsReadUtc = null;
             model.ErrorMessage = "";
             if (string.IsNullOrEmpty(model.UnitId))
                 return;
@@ -78,18 +90,135 @@ namespace Topo.Controller
             try
             {
                 _storageService.SuppressLastName = model.SuppressLastName;
-                _items = await _wallchartService.GetWallchartItems(model.UnitId, step => { Progress = step; InvokeAsync(StateHasChanged); });
+                var items = await _wallchartService.GetWallchartItems(model.UnitId, step => Report(load, step));
+                if (load != _load)
+                {
+                    return;
+                }
+                _items = items;
                 Recalculate();
+                await ReadAge(load);
+                Loading = false;
+                Progress = "";
+                if (await _wallchartService.HasStaleLogbookTotalsAsync(items))
+                {
+                    await UpdateTotals(load, items, everyScout: false);
+                }
             }
             catch (Exception)
             {
-                model.ErrorMessage = "Couldn't read the wallchart from Terrain.";
+                if (load == _load)
+                {
+                    model.ErrorMessage = "Couldn't read the wallchart from Terrain.";
+                }
             }
             finally
             {
-                Loading = false;
-                Progress = "";
+                if (load == _load)
+                {
+                    Loading = false;
+                    Progress = "";
+                }
             }
+        }
+
+        // Reads everything on the page again, leaving what is shown in place until the new figures are in
+        internal async Task RefreshClick()
+        {
+            if (_items == null || Loading || Updating)
+            {
+                return;
+            }
+            var load = StartLoad();
+            model.ErrorMessage = "";
+            Updating = true;
+            try
+            {
+                _storageService.CachedWallchartItems.RemoveAll(c => c.Key == model.UnitId);
+                var items = await _wallchartService.GetWallchartItems(model.UnitId, step => Report(load, step));
+                if (load != _load)
+                {
+                    return;
+                }
+                _items = items;
+                Recalculate();
+                await UpdateTotals(load, items, everyScout: true);
+            }
+            catch (Exception)
+            {
+                if (load == _load)
+                {
+                    model.ErrorMessage = "Couldn't read the wallchart from Terrain.";
+                }
+            }
+            finally
+            {
+                if (load == _load)
+                {
+                    Updating = false;
+                    Progress = "";
+                }
+            }
+        }
+
+        private async Task UpdateTotals(int load, List<WallchartItemModel> items, bool everyScout)
+        {
+            Updating = true;
+            StateHasChanged();
+            try
+            {
+                await _wallchartService.UpdateLogbookTotalsAsync(items, everyScout, step => Report(load, step), _update!.Token);
+                if (load == _load)
+                {
+                    Recalculate();
+                    await ReadAge(load);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // the page was left or another unit picked
+            }
+            finally
+            {
+                if (load == _load)
+                {
+                    Updating = false;
+                    Progress = "";
+                }
+            }
+        }
+
+        private int StartLoad()
+        {
+            _update?.Cancel();
+            _update = new CancellationTokenSource();
+            Updating = false;
+            Progress = "";
+            return ++_load;
+        }
+
+        private void Report(int load, string step)
+        {
+            if (load == _load)
+            {
+                Progress = step;
+                InvokeAsync(StateHasChanged);
+            }
+        }
+
+        private async Task ReadAge(int load)
+        {
+            var oldest = await _logbookTotals.OldestReadAsync(_items?.Select(i => i.MemberId) ?? Enumerable.Empty<string>());
+            if (load == _load)
+            {
+                TotalsReadUtc = oldest;
+            }
+        }
+
+        public void Dispose()
+        {
+            _load++;
+            _update?.Cancel();
         }
 
         internal void BreakByPatrolChanged() => Recalculate();
@@ -112,8 +241,10 @@ namespace Topo.Controller
         // The report is made from what is on the page, so it is the same as the preview
         private async Task Download(OutputType outputType, string extension, string contentType)
         {
-            if (_items == null || _items.Count == 0)
+            if (_items == null || _items.Count == 0 || Updating)
+            {
                 return;
+            }
 
             try
             {

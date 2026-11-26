@@ -36,7 +36,7 @@
             </label>
         </div>
         <div class="col-sm-3">
-            <InputCheckbox id="suppressLastName" class="form-check-input"
+            <InputCheckbox id="suppressLastName" class="form-check-input" disabled="@Updating"
                            @bind-Value="model.SuppressLastName" @bind-Value:after="SuppressLastNameChanged" />
             <label class="form-check-label" for="suppressLastName">
                 Suppress Last Name
@@ -59,10 +59,12 @@
 
     @if (Sheets != null)
     {
+        <DataAgeLine What="Logbook totals" ReadUtc="TotalsReadUtc" Updating="Updating" Progress="@Progress" OnRefresh="RefreshClick" />
+
         <div class="mt-3 mb-3 row">
             <div class="col-sm">
-                <button type="button" class="btn btn-primary" disabled="@(Sheets.Count == 0)" @onclick="WallchartReportPdfClick">Wallchart (pdf)</button>
-                <button type="button" class="btn btn-success" disabled="@(Sheets.Count == 0)" @onclick="WallchartReportXlsxClick">Wallchart (xlsx)</button>
+                <button type="button" class="btn btn-primary" disabled="@(Sheets.Count == 0 || Updating)" @onclick="WallchartReportPdfClick">Wallchart (pdf)</button>
+                <button type="button" class="btn btn-success" disabled="@(Sheets.Count == 0 || Updating)" @onclick="WallchartReportXlsxClick">Wallchart (xlsx)</button>
             </div>
         </div>
 

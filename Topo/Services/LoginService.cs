@@ -25,8 +25,12 @@ namespace Topo.Services
         private readonly ITerrainAPIService _terrainAPIService;
         private readonly ILocalStorageService _localStorageService;
 
-        public LoginService(StorageService storageService, ITerrainAPIService terrainAPIService, ILocalStorageService localStorageService)
+        private readonly Topo.Model.Cache.DataCache _dataCache;
+
+        public LoginService(StorageService storageService, ITerrainAPIService terrainAPIService, ILocalStorageService localStorageService,
+            Topo.Model.Cache.DataCache dataCache)
         {
+            _dataCache = dataCache;
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
             _localStorageService = localStorageService;
@@ -159,6 +163,8 @@ namespace Topo.Services
         public async Task ClearPersistedSessionAsync()
         {
             await _localStorageService.RemoveItemAsync(SessionStorageKey);
+            // the data cache holds young people's records, so logging out clears it
+            await _dataCache.ClearAsync();
         }
     }
 }

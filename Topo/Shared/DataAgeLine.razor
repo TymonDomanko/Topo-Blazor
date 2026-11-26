@@ -1,0 +1,42 @@
+@using Topo.Model.Cache
+
+@* When a page's kept data was read, with the button that reads it again. While it is being read again the line says so. *@
+<div class="d-flex flex-wrap align-items-center gap-3 mb-3" id="data-age">
+    <span class="text-muted small" role="status">@Text</span>
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="refresh-data" disabled="@(Updating || Disabled)" @onclick="OnRefresh">Refresh data</button>
+</div>
+
+@code {
+    // What was kept, for the start of the sentence ("Logbook totals")
+    [Parameter]
+    public string What { get; set; } = "Data";
+    // When the oldest of it was read (UTC); null when none is held
+    [Parameter]
+    public DateTime? ReadUtc { get; set; }
+    // What to say when none is held
+    [Parameter]
+    public string NoneText { get; set; } = "";
+    [Parameter]
+    public bool Updating { get; set; }
+    [Parameter]
+    public bool Disabled { get; set; }
+    // How far through the read is, while updating
+    [Parameter]
+    public string Progress { get; set; } = "";
+    [Parameter]
+    public EventCallback OnRefresh { get; set; }
+
+    private string Text
+    {
+        get
+        {
+            var held = ReadUtc == null ? NoneText : $"{What} read {DataAgeText.When(ReadUtc.Value.ToLocalTime(), DateTime.Now)}.";
+            if (!Updating)
+            {
+                return held;
+            }
+            var progress = Progress.Length > 0 ? $" ({Progress})" : "";
+            return ReadUtc == null ? $"Reading {What.ToLowerInvariant()}...{progress}" : $"{held} Updating to more recent data...{progress}";
+        }
+    }
+}

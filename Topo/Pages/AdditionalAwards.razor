@@ -28,6 +28,8 @@
 
     @if (model.Members != null && model.Members.Any())
     {
+        <DataAgeLine What="Logbook totals" ReadUtc="TotalsReadUtc" NoneText="Logbook totals will be read when a report is made." Updating="Updating" Progress="@Progress" OnRefresh="RefreshClick" />
+
         <div>
             <input type="checkbox" id="checkall" @onchange="SelectAllChange" /><span> Select All</span>
         </div>
@@ -87,8 +89,8 @@
 
         <div class="mt-3 mb-3 row">
             <div class="col-sm">
-                <button type="submit" name="button" @onclick="AwardsReportPdfClick" class="btn btn-primary">Awards Report (pdf)</button>
-                <button type="submit" name="button" @onclick="AwardsReportXlsxClick" class="btn btn-success">Awards Report (xlsx)</button>
+                <button type="submit" name="button" @onclick="AwardsReportPdfClick" class="btn btn-primary" disabled="@Updating">Awards Report (pdf)</button>
+                <button type="submit" name="button" @onclick="AwardsReportXlsxClick" class="btn btn-success" disabled="@Updating">Awards Report (xlsx)</button>
             </div>
         </div>
     }

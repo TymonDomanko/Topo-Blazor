@@ -42,6 +42,8 @@ namespace Topo.Services
         public Task RevokeAssumedProfiles();
         public Task AssumeProfile(string memberId);
         public Task<GetMemberLogbookMetricsResultModel> GetMemberLogbookMetrics(string memberId);
+        // As GetMemberLogbookMetrics, but null when Terrain did not answer with a Scout's totals (no connection, not allowed), so that is not kept
+        public Task<GetMemberLogbookMetricsResultModel?> TryGetMemberLogbookMetrics(string memberId);
         public Task<GetMemberLogbookSummaryResultModel> GetMemberLogbookSummary(string memberId);
         public Task<GetMemberLogbookDetailResultModel> GetMemberLogbookDetail(string memberId, string logbookId);
         public Task<GetAdditionalAwardsSpecificationsResultModel> GetAdditionalAwardSpecifications();
@@ -406,6 +408,20 @@ namespace Topo.Services
             var getMemberLogbookMetrics = DeserializeObject<GetMemberLogbookMetricsResultModel>(result);
 
             return getMemberLogbookMetrics ?? new GetMemberLogbookMetricsResultModel();
+        }
+        public async Task<GetMemberLogbookMetricsResultModel?> TryGetMemberLogbookMetrics(string memberId)
+        {
+            await RefreshTokenAsync();
+
+            var requestUri = $"{achievementsAddress}members/{memberId}/logbook-metrics";
+            var result = await SendRequest(HttpMethod.Get, requestUri);
+            // an error answers with a message and no results
+            if (!result.Contains("\"results\""))
+            {
+                return null;
+            }
+
+            return DeserializeObject<GetMemberLogbookMetricsResultModel>(result);
         }
         public async Task<GetMemberLogbookSummaryResultModel> GetMemberLogbookSummary(string memberId)
         {

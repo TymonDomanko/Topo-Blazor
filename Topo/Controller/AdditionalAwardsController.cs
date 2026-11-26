@@ -9,8 +9,11 @@ using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class AdditionalAwardsController : ComponentBase
+    public class AdditionalAwardsController : ComponentBase, IDisposable
     {
+        [Inject]
+        public ILogbookTotalsService _logbookTotals { get; set; }
+
         [Inject]
         public StorageService _storageService { get; set; }
 
@@ -65,7 +68,37 @@ namespace Topo.Controller
             var allMembers = await _membersService.GetMembersAsync(model.UnitId);
             model.Members = allMembers.Where(m => m.isAdultLeader == 0).OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();
             model.UnitName = _storageService.UnitName;
+            await ReadAge();
         }
+
+        // The logbook totals kept for the Scouts listed, and whether they are being read again (the reports wait until they are)
+        public DateTime? TotalsReadUtc;
+        public bool Updating;
+        public string Progress = "";
+        private CancellationTokenSource _refresh = new CancellationTokenSource();
+
+        private async Task ReadAge() => TotalsReadUtc = await _logbookTotals.OldestReadAsync(model.Members.Select(m => m.id));
+
+        internal async Task RefreshClick()
+        {
+            Updating = true;
+            try
+            {
+                await _logbookTotals.RefreshAsync(model.Members.Select(m => m.id).ToList(), step => { Progress = step; InvokeAsync(StateHasChanged); }, _refresh.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // the page was left
+            }
+            finally
+            {
+                await ReadAge();
+                Updating = false;
+                Progress = "";
+            }
+        }
+
+        public void Dispose() => _refresh.Cancel();
 
         internal async Task SelectAllChange(ChangeEventArgs e)
         {
@@ -119,6 +152,7 @@ namespace Topo.Controller
             var reportData = await _additionalAwardsService.GenerateAdditionalAwardReportData(model.UnitId, memberKVP);
             var serialisedReportData = JsonConvert.SerializeObject(reportData);
 
+            await ReadAge();
             var report = await _reportService.GetAdditionalAwardsReport(groupName, section, unitName, outputType, serialisedReportData);
             return report;
         }

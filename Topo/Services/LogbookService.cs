@@ -11,9 +11,12 @@ namespace Topo.Services
     {
         private readonly ITerrainAPIService _terrainAPIService;
 
-        public LogbookService(ITerrainAPIService terrainAPIService)
+        private readonly ILogbookTotalsService _logbookTotals;
+
+        public LogbookService(ITerrainAPIService terrainAPIService, ILogbookTotalsService logbookTotals)
         {
             _terrainAPIService = terrainAPIService;
+            _logbookTotals = logbookTotals;
         }
 
         public async Task<List<MemberLogbookReportViewModel>> GenerateLogbookData(List<KeyValuePair<string, string>> selectedMembers)
@@ -21,9 +24,16 @@ namespace Topo.Services
             var memberLogbooks = new List<MemberLogbookReportViewModel>();
             foreach (var memberKVP in selectedMembers)
             {
+                using var profile = await _logbookTotals.LockProfileAsync();
                 await _terrainAPIService.RevokeAssumedProfiles();
                 await _terrainAPIService.AssumeProfile(memberKVP.Key);
-                var getMemberLogbookMetrics = await _terrainAPIService.GetMemberLogbookMetrics(memberKVP.Key);
+                // totals read in the last day serve; older ones are read again, and are only used if Terrain does not answer
+                var totals = await _logbookTotals.HeldAsync(memberKVP.Key);
+                if (totals == null || totals.IsStale)
+                {
+                    totals = await _logbookTotals.ReadAsync(memberKVP.Key) ?? totals;
+                }
+                var getMemberLogbookMetrics = totals?.Value ?? new GetMemberLogbookMetricsResultModel();
                 var totalNightsCamped = getMemberLogbookMetrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
                 var totalKmsHiked = (getMemberLogbookMetrics.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;
                 var getMemberLogbookSummary = await _terrainAPIService.GetMemberLogbookSummary(memberKVP.Key);
@@ -66,7 +76,10 @@ namespace Topo.Services
                     }
                 }
             }
-            await _terrainAPIService.RevokeAssumedProfiles();
+            using (await _logbookTotals.LockProfileAsync())
+            {
+                await _terrainAPIService.RevokeAssumedProfiles();
+            }
 
             return memberLogbooks;
         }

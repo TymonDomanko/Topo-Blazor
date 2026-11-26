@@ -9,7 +9,12 @@ namespace Topo.Services
 {
     public interface IWallchartService
     {
+        // The unit's wallchart. A Scout's logbook totals come from the data cache when it holds any, however old (see UpdateLogbookTotalsAsync).
         Task<List<WallchartItemModel>> GetWallchartItems(string selectedUnitId, Action<string>? progress = null);
+        // Whether any of these Scouts' logbook totals are older than a day
+        Task<bool> HasStaleLogbookTotalsAsync(IEnumerable<WallchartItemModel> items);
+        // Reads logbook totals again and puts them into the items: every Scout's, or only those older than a day
+        Task UpdateLogbookTotalsAsync(IReadOnlyList<WallchartItemModel> items, bool everyScout, Action<string>? progress = null, CancellationToken cancellationToken = default);
     }
     public class WallchartService : IWallchartService
     {
@@ -19,12 +24,61 @@ namespace Topo.Services
         private readonly IMembersService _membersService;
         private List<ApprovalsListModel> approvals = new List<ApprovalsListModel>();
 
-        public WallchartService(StorageService storageService, ITerrainAPIService terrainAPIService, IApprovalsService approvalService, IMembersService membersService)
+        private readonly ILogbookTotalsService _logbookTotals;
+
+        public WallchartService(StorageService storageService, ITerrainAPIService terrainAPIService, IApprovalsService approvalService, IMembersService membersService,
+            ILogbookTotalsService logbookTotals)
         {
+            _logbookTotals = logbookTotals;
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
             _approvalService = approvalService;
             _membersService = membersService;
+        }
+
+        public async Task<bool> HasStaleLogbookTotalsAsync(IEnumerable<WallchartItemModel> items)
+        {
+            foreach (var item in items)
+            {
+                if ((await _logbookTotals.HeldAsync(item.MemberId))?.IsStale == true)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public async Task UpdateLogbookTotalsAsync(IReadOnlyList<WallchartItemModel> items, bool everyScout, Action<string>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            var wanted = new List<string>();
+            foreach (var item in items)
+            {
+                var held = await _logbookTotals.HeldAsync(item.MemberId);
+                if (everyScout || held == null || held.IsStale)
+                {
+                    wanted.Add(item.MemberId);
+                }
+            }
+            await _logbookTotals.RefreshAsync(wanted, progress, cancellationToken);
+            foreach (var item in items)
+            {
+                ApplyLogbookTotals(item, (await _logbookTotals.HeldAsync(item.MemberId))?.Value);
+            }
+        }
+
+        // Nights camped and kilometres hiked from a Scout's logbook totals; an item is left as it is when there are none
+        private static void ApplyLogbookTotals(WallchartItemModel item, Topo.Model.Logbook.GetMemberLogbookMetricsResultModel? totals)
+        {
+            if (totals == null)
+            {
+                return;
+            }
+            var nights = totals.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
+            var kilometres = (totals.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;
+            item.NightsCamped = (int)nights;
+            item.NightsCampedInSection = (int)nights;
+            item.KMsHiked = (int)kilometres;
         }
 
         public async Task<List<WallchartItemModel>> GetWallchartItems(string selectedUnitId, Action<string>? progress = null)
@@ -44,7 +98,10 @@ namespace Topo.Services
 
             var section = _storageService.Section;
             approvals = await _approvalService.ReadApprovalListFromLocalStorage(selectedUnitId);
-            await _terrainAPIService.RevokeAssumedProfiles();
+            using (await _logbookTotals.LockProfileAsync())
+            {
+                await _terrainAPIService.RevokeAssumedProfiles();
+            }
 
             var youth = members.Where(m => m.isAdultLeader == 0).OrderBy(m => m.last_name).ThenBy(m => m.first_name).ToList();
             if (youth.Count == 0)
@@ -185,15 +242,15 @@ namespace Topo.Services
                 wallchartItem.IntroToSection = IntroDate(AchievementSelection.LatestAwardedIntro(introSectionByMember[member.id], _storageService.Section));
                 wallchartItem.YearsOfService = YearsOfServiceCalculator.CalculateCompletedYears(wallchartItem.IntroToSection, DateTime.Now);
                 // Logbook
-                await _terrainAPIService.AssumeProfile(member.id);
-                var getMemberLogbookMetrics = await _terrainAPIService.GetMemberLogbookMetrics(member.id);
-                await _terrainAPIService.RevokeAssumedProfiles();
-                var totalNightsCamped = getMemberLogbookMetrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
-                var totalNightsCampedInSection = totalNightsCamped;
-                var totalKmsHiked = (getMemberLogbookMetrics.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;
-                wallchartItem.NightsCamped = (int)totalNightsCamped;
-                wallchartItem.NightsCampedInSection = (int)totalNightsCampedInSection;
-                wallchartItem.KMsHiked = (int)totalKmsHiked;
+                var totals = await _logbookTotals.HeldAsync(member.id);
+                if (totals == null)
+                {
+                    using var profile = await _logbookTotals.LockProfileAsync();
+                    await _terrainAPIService.AssumeProfile(member.id);
+                    totals = await _logbookTotals.ReadAsync(member.id);
+                    await _terrainAPIService.RevokeAssumedProfiles();
+                }
+                ApplyLogbookTotals(wallchartItem, totals?.Value);
                 // SIA
                 var awardedSIAProjects = siaByMember[member.id].Where(r => r.section == section && r.status == "awarded");
                 var awardedSIAProjectsByArea = awardedSIAProjects.GroupBy(p => p.answers.special_interest_area_selection);

@@ -1,5 +1,6 @@
 using Topo;
 using Topo.Services;
+using Topo.Model.Cache;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.AspNetCore.Components;
@@ -14,6 +15,9 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 builder.Services.AddSingleton<StorageService>();
 builder.Services.AddScoped<ITerrainAPIService, TerrainAPIService>();
+builder.Services.AddScoped<ICacheStore, IndexedDbCacheStore>();
+builder.Services.AddScoped<DataCache>();
+builder.Services.AddScoped<ILogbookTotalsService, LogbookTotalsService>();
 builder.Services.AddScoped<IMembersService, MembersService>();
 builder.Services.AddScoped<ILoginService, LoginService>();
 builder.Services.AddScoped<IReportService, ReportService>();
