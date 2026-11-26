@@ -32,6 +32,7 @@ namespace Topo.Services
             Action<string>? progress = null, CancellationToken cancellationToken = default, Action<string>? onFailed = null)
         {
             var logbooks = new List<MemberLogbook>();
+            var profileUsed = false;
             try
             {
                 for (var i = 0; i < members.Count; i++)
@@ -41,7 +42,7 @@ namespace Topo.Services
                     MemberLogbook logbook;
                     try
                     {
-                        logbook = await ReadLogbookAsync(members[i].Key, members[i].Value, cancellationToken);
+                        logbook = await ReadLogbookAsync(members[i].Key, members[i].Value, () => profileUsed = true, cancellationToken);
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
@@ -54,22 +55,34 @@ namespace Topo.Services
             }
             finally
             {
-                using (await _locks.ProfileAsync())
+                // nothing to hand back when every logbook came from the data cache
+                if (profileUsed)
                 {
-                    await _terrainAPIService.RevokeAssumedProfiles();
+                    using (await _locks.ProfileAsync())
+                    {
+                        await _terrainAPIService.RevokeAssumedProfiles();
+                    }
                 }
             }
             return logbooks;
         }
 
-        private async Task<MemberLogbook> ReadLogbookAsync(string memberId, string memberName, CancellationToken cancellationToken)
+        private async Task<MemberLogbook> ReadLogbookAsync(string memberId, string memberName, Action profileUsed, CancellationToken cancellationToken)
         {
-            // assuming this Scout replaces the one before, so there is no revoke between Scouts (ReadLogbooksAsync revokes at the end). Reading
-            // through the data cache, the profile is only assumed if something of the Scout's has to be read from Terrain.
-            using var profile = await _locks.ProfileAsync(cancellationToken);
-            using var scope = CacheScope.Begin(CacheScope.Current?.Mode ?? CacheMode.Fresh);
+            // assuming this Scout replaces the one before, so there is no revoke between Scouts (ReadLogbooksAsync revokes at the end). The
+            // profile is only locked and assumed if something of the Scout's has to be read from Terrain, so a logbook that is all held does
+            // not wait for whatever else is using a profile.
+            IDisposable? profile = null;
             Task? assuming = null;
-            scope.BeforeRead = () => assuming ??= _terrainAPIService.AssumeProfile(memberId);
+            async Task AssumeAsync()
+            {
+                profile = await _locks.ProfileAsync(cancellationToken);
+                profileUsed();
+                await _terrainAPIService.AssumeProfile(memberId);
+            }
+            using var held = new ReleaseAtEnd(() => profile?.Dispose());
+            using var scope = CacheScope.Begin(CacheScope.Current?.Mode ?? CacheMode.Fresh);
+            scope.BeforeRead = () => assuming ??= AssumeAsync();
             var totals = await _logbookTotals.ForPageAsync(memberId, cancellationToken);
             var getMemberLogbookMetrics = totals?.Value ?? new GetMemberLogbookMetricsResultModel();
             var totalNightsCamped = getMemberLogbookMetrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
@@ -118,6 +131,19 @@ namespace Topo.Services
                 }
             }
             return logbook;
+        }
+
+        // Runs the release when the method holding it ends, however it ends
+        private sealed class ReleaseAtEnd : IDisposable
+        {
+            private readonly Action _release;
+
+            public ReleaseAtEnd(Action release)
+            {
+                _release = release;
+            }
+
+            public void Dispose() => _release();
         }
     }
 }
