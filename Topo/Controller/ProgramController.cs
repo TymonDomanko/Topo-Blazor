@@ -42,21 +42,22 @@ namespace Topo.Controller
             DateParseHandling = DateParseHandling.None
         };
 
-        public bool Loading;
-        public string Progress = "";
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public bool Loading => _page.Loading;
+        public string Progress => _page.Progress;
+        public string ErrorMessage = "";
         private bool _select2Bound;
         private DotNetObjectReference<ProgramController>? _selfReference;
         // The calendar is read again a moment after the calendars or dates change, rather than from a button
         private readonly AutoRun _auto = new AutoRun();
         private const int DateDelayMilliseconds = 800;
-        // How old the kept event details behind the list are, and reading them again
-        public ReportRefresh _data = new ReportRefresh();
-        private DateTime? _eventsReadUtc;
-
+        // Reads the events again, leaving those on show until the new ones are in
         internal async Task RefreshClick()
         {
-            _data.Changed = () => InvokeAsync(StateHasChanged);
-            await _data.RefreshAsync((progress, token) => _auto.RunAsync(LoadEvents), () => Task.FromResult(_eventsReadUtc));
+            ErrorMessage = "";
+            await _page.RefreshAsync(ReadEvents(), Show);
+            ShowFailure();
         }
 
         protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -78,7 +79,7 @@ namespace Topo.Controller
         public void Dispose()
         {
             _auto.Dispose();
-            _data.Dispose();
+            _page.Dispose();
             _selfReference?.Dispose();
         }
 
@@ -90,8 +91,7 @@ namespace Topo.Controller
             {
                 _auto.Stop();
                 model.Events = null;
-                Loading = false;
-                Progress = "";
+                _page.Cancel();
                 StateHasChanged();
                 return;
             }
@@ -113,6 +113,7 @@ namespace Topo.Controller
             if (!_storageService.IsAuthenticated)
                 NavigationManager.NavigateTo("index");
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             var calendars = await _programService.GetCalendars();
@@ -154,40 +155,40 @@ namespace Topo.Controller
             return true;
         }
 
-        // Reads the events of the chosen calendars. A read that has been overtaken by a newer change stops, and leaves the page to the newer one.
+        // Shows the events of the chosen calendars: from the data cache first, then from Terrain. A read that has been overtaken by a newer
+        // change stops, and leaves the page to the newer one.
         private async Task LoadEvents(CancellationToken cancellationToken)
         {
             model.DateErrorMessage = "";
+            ErrorMessage = "";
             if (model.CalendarSearchToDate < model.CalendarSearchFromDate)
             {
                 model.DateErrorMessage = "The search to date must be after the search from date.";
+                _page.Cancel();
                 model.Events = null;
                 return;
             }
 
-            Loading = true;
-            // the list is always read from Terrain; an event's details come from the data cache while in date, and an event long past is kept
-            // until it is read again on request
-            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
-            var scope = CacheScope.Current!;
-            try
+            using var overtaken = cancellationToken.Register(_page.Cancel);
+            await _page.LoadAsync(ReadEvents(), Show);
+            ShowFailure();
+        }
+
+        private Func<Action<string>, CancellationToken, Task<List<EventListModel>>> ReadEvents()
+        {
+            var from = model.CalendarSearchFromDate;
+            var to = model.CalendarSearchToDate;
+            var calendars = model.SelectedCalendars;
+            return (progress, cancellationToken) => _programService.GetEventsForDates(from, to, calendars, cancellationToken, progress);
+        }
+
+        private void Show(List<EventListModel> events) => model.Events = events.OrderBy(e => e.StartDateTime).ToList();
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
             {
-                var events = await _programService.WithCalendarsAsync(model.SelectedCalendars,
-                    () => _programService.GetEventsForDates(model.CalendarSearchFromDate, model.CalendarSearchToDate, cancellationToken,
-                        step => { if (!cancellationToken.IsCancellationRequested) { Progress = step; InvokeAsync(StateHasChanged); } }),
-                    cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                model.Events = events.OrderBy(e => e.StartDateTime).ToList();
-                _eventsReadUtc = scope.OldestUtc;
-                await _data.ReadAgeAsync(() => Task.FromResult(_eventsReadUtc));
-            }
-            finally
-            {
-                if (!cancellationToken.IsCancellationRequested)
-                {
-                    Loading = false;
-                    Progress = "";
-                }
+                ErrorMessage = "Couldn't read the events from Terrain.";
             }
         }
 

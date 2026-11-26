@@ -5,28 +5,32 @@ read ahead. It is on by default and can be turned off on the Settings page.
 
 ## What a page does
 
-Every page that reads records from Terrain reads them through the cache.
+Every page that reads from Terrain reads through the cache.
 
 - A read made in the last day is used as it is.
 - A page that shows what it reads (Members, Wallchart, Milestone, Milestone Progress, Ready to Submit, SIA Progress, Scouting History, a Scout's
-  progress and so on) shows an older read straight away and reads it again behind the page, with a note saying it is updating to more recent data.
-  The report buttons wait until that has finished.
+  progress, Program, Sign In Sheet, Program Ideas, Attendance, the Patrol Planner's attendance and so on) shows what is held straight away.
+  Anything older than a day, and every list of events, is then read from Terrain behind the page, with a note saying it is updating to more recent
+  data. The report buttons wait until that has finished.
 - Pending Approvals and Mass awarding act on Terrain: they show what is held, always read it again, and nothing can be actioned until that is in.
   A submission's answers and who attended an event are read from Terrain each time.
-- The Patrol Planner, which is edited on the page, and the pages that make something when asked (Logbook, Additional Awards, SIA, OAS Progress,
-  Program, Program Builder, Sign In Sheet, Attendance, Unit History, Section Report, Badge Order) read old data again before using it.
+- The Patrol Planner's board, which is edited on the page, and the pages that make a report when asked (Logbook, Additional Awards, SIA, OAS
+  Progress, Program Builder, Unit History, Section Report, Badge Order) read old data again before using it. Making the history or section report
+  from what is held takes about as long as reading it, so showing the held one first would only double the wait.
 - Anything that is about to change Terrain, and the background award checks, read Terrain as it is (`CacheScope.Outside`).
 - Pages say when their kept data was read, with a Refresh data button (or their existing refresh button).
 - Not read again for 30 days, an entry is dropped. Logging out removes everything.
 
 ## What is always read from Terrain
 
-- The list of events, and which calendars are selected (see below). Program Ideas reads nothing else, so it always shows Terrain as it is.
+- Which calendars are selected, and the list of them: Topo needs what is selected now to put it back after a read.
 - Signing in and your profile.
+- The Years of Service and badge order records, which other leaders add to.
 
 ## Events
 
-- The list of events is read from Terrain every time, switching the chosen calendars on for the read and putting the selection back.
+- A list of events is kept, but only so that it can show at once: it is read from Terrain every time it is shown, switching the chosen calendars
+  on for the read and putting the selection back. If Terrain does not answer, the kept list stays.
 - An event's details are kept. When its entry in the list is new or has changed, they are read again. A change the list does not show (who came,
   for example) is picked up after a day, or with Refresh data.
 - Events that ended more than four months ago are kept until Refresh data is pressed.

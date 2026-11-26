@@ -42,6 +42,11 @@ namespace Topo.Model.Cache
         // What has been worked out from reads in this scope and may be asked for again, such as a unit's member list
         public Dictionary<string, object> Worked { get; } = new Dictionary<string, object>();
 
+        // Whether anything it used is read from Terrain every time it is shown (an event list), and so is still to be checked
+        public bool ToCheck { get; private set; }
+
+        public void Check() => ToCheck = true;
+
         // Run just before a read goes to Terrain, for work that is only needed then (assuming a Scout's profile)
         public Func<Task>? BeforeRead { get; set; }
 
@@ -78,6 +83,7 @@ namespace Topo.Model.Cache
                     _outer.Used(OldestUtc.Value, UsedStale);
                 }
                 _outer.UsedHeld |= UsedHeld;
+                _outer.ToCheck |= ToCheck;
             }
             Ambient.Value = _outer;
         }

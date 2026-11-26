@@ -99,6 +99,43 @@ namespace Topo.Model.Cache
             return new CachedRead<T>(value, now, false, keep);
         }
 
+        // A read that is made every time it is shown, such as a list of events, so that what has changed is seen. On a page showing what is held
+        // (Held) the held copy serves and the scope is marked as still to be checked; otherwise it is read, and kept for next time. When Terrain
+        // does not answer (read gives null) the held copy is handed out. Outside a scope it is just the read.
+        public async Task<T?> CheckedReadAsync<T>(string key, Func<Task<T?>> read) where T : class
+        {
+            var scope = CacheScope.Current;
+            if (scope == null)
+            {
+                return await read();
+            }
+
+            var held = await GetAsync<T>(key);
+            if (held != null && scope.Mode == CacheMode.Held)
+            {
+                scope.Check();
+                scope.Held();
+                scope.Used(held.FetchedUtc, held.IsStale);
+                return held.Value;
+            }
+
+            var started = UtcNow();
+            var value = await read();
+            if (value != null)
+            {
+                var kept = await PutAsync(key, value, readFrom: started);
+                scope.Used(kept.FetchedUtc, false);
+                return value;
+            }
+            if (held != null)
+            {
+                scope.Held();
+                scope.Used(held.FetchedUtc, held.IsStale);
+                return held.Value;
+            }
+            return null;
+        }
+
         // A Terrain read. Inside a CacheScope it is served from the cache when what is held will do, and kept when it is made; when Terrain does not
         // answer, an older copy is handed out. Outside a scope it is just the read.
         // keep: whether an answer is one to hold until it is asked for again (see CacheEntry.Keep)

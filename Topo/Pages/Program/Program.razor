@@ -58,21 +58,17 @@
         <label class="col-sm col-form-label validation-message">@model.DateErrorMessage</label>
     </div>
 
-    <PageStatus Loading="Loading" Progress="@Progress" />
+    <PageStatus Loading="Loading" Progress="@Progress" Error="@ErrorMessage" />
     @if (model.Events != null && model.Events.Any())
     {
-        <DataAgeLine What="Event details" ReadUtc="_data.ReadUtc" NoneText="Events that ended more than four months ago are kept until you refresh." Updating="_data.Updating" Disabled="Loading" Progress="@Progress" OnRefresh="RefreshClick" />
-        if (_data.Failed)
-        {
-            <div class="mb-3 text-danger">Couldn't read the events again from Terrain.</div>
-        }
+        <DataAgeLine What="Events" ReadUtc="_page.ReadUtc" NoneText="Events that ended more than four months ago are kept until you refresh." Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
     }
 
     @if (model.Events != null)
     {
-        <ReportButtons Name="Attendance Report" OnPdf="AttendanceReportPdfClick" OnXlsx="AttendanceReportXlsxClick" Disabled="@(_data.Updating || !model.Events.Any())">
-            <ReportButton Name="Term Program" Format="pdf" Disabled="@(_data.Updating || !model.Events.Any())" OnClick="TermProgramReportPdfClick" />
-            <ReportButton Name="Term Program" Format="xlsx" Disabled="@(_data.Updating || !model.Events.Any())" OnClick="TermProgramReportXlsxClick" />
+        <ReportButtons Name="Attendance Report" OnPdf="AttendanceReportPdfClick" OnXlsx="AttendanceReportXlsxClick" Disabled="@(_page.Updating || !model.Events.Any())">
+            <ReportButton Name="Term Program" Format="pdf" Disabled="@(_page.Updating || !model.Events.Any())" OnClick="TermProgramReportPdfClick" />
+            <ReportButton Name="Term Program" Format="xlsx" Disabled="@(_page.Updating || !model.Events.Any())" OnClick="TermProgramReportXlsxClick" />
         </ReportButtons>
     }
 

@@ -67,12 +67,16 @@
     </div>
 
     <PageStatus Loading="Loading" Progress="the program history" Error="@(model.FetchFailed ? FetchFailedMessage : null)" />
+    @if (_page.ReadUtc != null)
+    {
+        <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
+    }
 
     @if (model.Ideas != null)
     {
         @if (!model.FetchFailed)
         {
-            <ReportButtons Name="Program Ideas" OnPdf="ProgramIdeasReportPdfClick" OnXlsx="ProgramIdeasReportXlsxClick" Disabled="@(!model.Ideas.Any())" />
+            <ReportButtons Name="Program Ideas" OnPdf="ProgramIdeasReportPdfClick" OnXlsx="ProgramIdeasReportXlsxClick" Disabled="@(_page.Updating || !model.Ideas.Any())" />
 
             @if (!model.Ideas.Any())
             {

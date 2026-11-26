@@ -272,7 +272,12 @@ namespace Topo.Controller
             try
             {
                 using var scope = CacheScope.Begin(mode);
-                Result = await _sectionReportService.GetSectionReport(request, step => { Progress = step; InvokeAsync(StateHasChanged); });
+                var result = await _sectionReportService.GetSectionReport(request, step => { Progress = step; InvokeAsync(StateHasChanged); });
+                if (mode == CacheMode.Reread)
+                {
+                    KeepDepartures(result);
+                }
+                Result = result;
                 ReadUtc = scope.OldestUtc;
             }
             catch (Exception)
@@ -283,6 +288,24 @@ namespace Topo.Controller
             {
                 Busy = false;
                 Progress = "";
+            }
+        }
+
+        // Who left, as already chosen on the report being shown, stays chosen when it is read again
+        private void KeepDepartures(SectionReportResult result)
+        {
+            var chosen = (Result?.Report.Sections ?? new List<Topo.Model.SectionReport.SectionReportModel>())
+                .SelectMany(s => s.Departed.Where(d => d.Status != Topo.Model.SectionReport.DepartureStatus.Unset).Select(d => (key: (s.UnitId, d.Id, d.MemberNumber), d.Status)))
+                .GroupBy(d => d.key).ToDictionary(g => g.Key, g => g.First().Status);
+            foreach (var section in result.Report.Sections)
+            {
+                foreach (var departed in section.Departed)
+                {
+                    if (chosen.TryGetValue((section.UnitId, departed.Id, departed.MemberNumber), out var status))
+                    {
+                        departed.Status = status;
+                    }
+                }
             }
         }
 

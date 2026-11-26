@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Topo.Model.Common;
 using Topo.Model.Program;
 using Topo.Model.ReportGeneration;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -29,7 +30,9 @@ namespace Topo.Controller
 
         public ProgramIdeasPageViewModel model = new ProgramIdeasPageViewModel();
 
-        public bool Loading;
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public bool Loading => _page.Loading;
         public const string FetchFailedMessage = "Could not load program history from Terrain for that range. Try a narrower \"How far back to look\" option (for example Last year) rather than All time.";
         private bool _select2Bound;
         private DotNetObjectReference<ProgramIdeasController>? _selfReference;
@@ -59,6 +62,7 @@ namespace Topo.Controller
         public void Dispose()
         {
             _auto.Dispose();
+            _page.Dispose();
             _selfReference?.Dispose();
         }
 
@@ -69,8 +73,8 @@ namespace Topo.Controller
             if (!await GetSelections())
             {
                 _auto.Stop();
+                _page.Cancel();
                 model.Ideas = null;
-                Loading = false;
                 StateHasChanged();
                 return;
             }
@@ -95,6 +99,7 @@ namespace Topo.Controller
                 return;
             }
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Calendars = await _programService.GetCalendars();
             model.SelectTheOnlyCalendar();
@@ -129,27 +134,42 @@ namespace Topo.Controller
         }
 
         // Reads the ideas for the chosen calendars and ranges. A read that has been overtaken by a newer change is dropped.
+        // Shows the ideas from the kept list at once, then reads the list from Terrain. A read overtaken by a newer change is dropped.
         private async Task LoadIdeas(CancellationToken cancellationToken)
+        {
+            using var overtaken = cancellationToken.Register(_page.Cancel);
+            await _page.LoadAsync(ReadIdeas(), Show);
+            ShowFailure();
+        }
+
+        internal async Task RefreshClick()
+        {
+            await _page.RefreshAsync(ReadIdeas(), Show);
+            ShowFailure();
+        }
+
+        private Func<Action<string>, CancellationToken, Task<List<ProgramIdeaItemModel>?>> ReadIdeas()
         {
             var fromDate = ResolveFromDate(model.HistoryRange, model.HistoryFromDate);
             DateTime? highlightFromDate = model.HighlightRange == ProgramIdeasRangeOption.None
                 ? null
                 : ResolveFromDate(model.HighlightRange, model.HighlightFromDate);
+            var calendars = model.SelectedCalendars;
+            return (progress, token) => _programService.GetProgramIdeas(fromDate, highlightFromDate, calendars);
+        }
 
-            Loading = true;
-            try
+        private void Show(List<ProgramIdeaItemModel>? ideas)
+        {
+            model.FetchFailed = ideas == null;
+            model.Ideas = ApplySort(ideas ?? new List<ProgramIdeaItemModel>(), model.SortColumn, model.SortDescending);
+        }
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
             {
-                var ideas = await _programService.GetProgramIdeas(fromDate, highlightFromDate, model.SelectedCalendars);
-                cancellationToken.ThrowIfCancellationRequested();
-                model.FetchFailed = ideas == null;
-                model.Ideas = ApplySort(ideas ?? new List<ProgramIdeaItemModel>(), model.SortColumn, model.SortDescending);
-            }
-            finally
-            {
-                if (!cancellationToken.IsCancellationRequested)
-                {
-                    Loading = false;
-                }
+                model.FetchFailed = true;
+                model.Ideas ??= new List<ProgramIdeaItemModel>();
             }
         }
 
