@@ -29,6 +29,8 @@ namespace Topo.Services
             }
         }
         private void NotifyStateChanged() => OnChange?.Invoke();
+        // Starts every key in the data cache, so two people using one browser, or two groups, do not share what is kept
+        public string CacheKeyPrefix => $"{GetProfilesResult?.profiles?.FirstOrDefault()?.member?.id}|{GroupId}";
         public AuthenticationResult? AuthenticationResult { get; set; }
         public DateTime TokenExpiry { get; set; }
         public GetUserResultModel? GetUserResult { get; set; } = null;
@@ -115,9 +117,9 @@ namespace Topo.Services
         }
         public List<KeyValuePair<string, List<MemberListModel>>> CachedMembers { get; set; } = new List<KeyValuePair<string, List<MemberListModel>>>();
         public Dictionary<string, string> GetCalendarsResult { get; set; } = new Dictionary<string, string>();
+        public List<KeyValuePair<string, List<WallchartItemModel>>> CachedWallchartItems { get; set; } = new List<KeyValuePair<string, List<WallchartItemModel>>>();
         public List<OASTemplate> OASTemplates { get; set; } = new List<OASTemplate>();
         public List<OASStageListModel> OASStages { get; set; } = new List<OASStageListModel>();
-        public List<KeyValuePair<string, List<WallchartItemModel>>> CachedWallchartItems { get; set; } = new List<KeyValuePair<string, List<WallchartItemModel>>>();
         public List<AdditionalAwardSpecificationListModel> AdditionalAwardSpecifications { get; set; } = new List<AdditionalAwardSpecificationListModel>();
         public void Logout()
         {

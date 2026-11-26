@@ -6,6 +6,7 @@ using Topo.Model.Logbook;
 using Topo.Model.Members;
 using Topo.Model.ReportGeneration;
 using Topo.Model.SIA;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -39,6 +40,9 @@ namespace Topo.Controller
         private CancellationTokenSource? _cancel;
         private Task _running = Task.CompletedTask;
         private int _loadVersion;
+        // Reading again behind what is shown, and when the oldest of what is shown was read
+        public bool Updating;
+        public DateTime? ReadUtc;
 
         // The Scouts shown, in the order of the member list, as far as they have been read
         public List<MemberLogbook> Logbooks => model.Members.Where(m => _logbooks.ContainsKey(m.id)).Select(m => _logbooks[m.id]).ToList();
@@ -69,6 +73,7 @@ namespace Topo.Controller
             // Whatever was being read for the last unit stops before this one starts: only one Scout's profile can be taken on at a time
             await StopReading();
             _logbooks.Clear();
+            ReadUtc = null;
             ErrorMessage = "";
             if (string.IsNullOrEmpty(unitId))
             {
@@ -103,12 +108,12 @@ namespace Topo.Controller
         // finished first.
         public void Dispose() => _cancel?.Cancel();
 
-        // Reads the logbook of each Scout not read yet, one at a time, showing each as soon as it is in
+        // Reads the logbook of each Scout not read yet, one at a time, showing each as soon as it is in. What the data cache holds shows first,
+        // and is read again behind the page when it is more than a day old.
         private async Task Load()
         {
             var version = ++_loadVersion;
-            var unread = model.Members.Where(m => !_logbooks.ContainsKey(m.id))
-                .Select(m => new KeyValuePair<string, string>(m.id, $"{m.first_name} {m.last_name}")).ToList();
+            var unread = Members(m => !_logbooks.ContainsKey(m.id));
             if (unread.Count == 0)
             {
                 return;
@@ -116,24 +121,46 @@ namespace Topo.Controller
 
             _cancel = new CancellationTokenSource();
             Loading = true;
-            _running = ReadAsync(unread, version, _cancel.Token);
+            _running = ReadAsync(unread, version, false, _cancel.Token);
             await _running;
         }
 
-        private async Task ReadAsync(List<KeyValuePair<string, string>> unread, int version, CancellationToken cancellationToken)
+        // Reads every logbook on the page again, leaving each in place until its new one is in
+        internal async Task RefreshClick()
         {
-            var failed = new List<string>();
+            if (Loading || Updating || model.Members.Count == 0)
+            {
+                return;
+            }
+
+            await StopReading();
+            var version = ++_loadVersion;
+            ErrorMessage = "";
+            _cancel = new CancellationTokenSource();
+            Updating = true;
+            _running = ReadAsync(Members(m => true), version, true, _cancel.Token);
+            await _running;
+        }
+
+        private List<KeyValuePair<string, string>> Members(Func<MemberListModel, bool> wanted) =>
+            model.Members.Where(wanted).Select(m => new KeyValuePair<string, string>(m.id, $"{m.first_name} {m.last_name}")).ToList();
+
+        private async Task ReadAsync(List<KeyValuePair<string, string>> members, int version, bool again, CancellationToken cancellationToken)
+        {
             try
             {
-                await _LogbookService.ReadLogbooksAsync(unread,
-                    logbook => { if (version == _loadVersion) { _logbooks[logbook.MemberId] = logbook; InvokeAsync(StateHasChanged); } },
-                    step => { if (version == _loadVersion) { Progress = step; InvokeAsync(StateHasChanged); } },
-                    cancellationToken,
-                    name => failed.Add(name));
-                if (version == _loadVersion && failed.Count > 0)
+                if (!again)
                 {
-                    ErrorMessage = $"Couldn't read the logbook of {string.Join(", ", failed)}; Terrain would not give it.";
+                    var stale = await ReadPassAsync(members, version, CacheMode.Held, cancellationToken);
+                    if (!stale || version != _loadVersion || cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+                    Loading = false;
+                    Updating = true;
+                    Progress = "";
                 }
+                await ReadPassAsync(members, version, CacheMode.Reread, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -150,9 +177,36 @@ namespace Topo.Controller
                 if (version == _loadVersion)
                 {
                     Loading = false;
+                    Updating = false;
                     Progress = "";
                 }
             }
+        }
+
+        // One time through the Scouts. True when any of what was used is more than a day old.
+        private async Task<bool> ReadPassAsync(List<KeyValuePair<string, string>> members, int version, CacheMode mode, CancellationToken cancellationToken)
+        {
+            var failed = new List<string>();
+            using var scope = CacheScope.Begin(mode);
+            await _LogbookService.ReadLogbooksAsync(members,
+                logbook => { if (version == _loadVersion) { _logbooks[logbook.MemberId] = logbook; InvokeAsync(StateHasChanged); } },
+                step => { if (version == _loadVersion) { Progress = step; InvokeAsync(StateHasChanged); } },
+                cancellationToken,
+                name => failed.Add(name));
+            if (version != _loadVersion)
+            {
+                return false;
+            }
+            if (failed.Count > 0)
+            {
+                ErrorMessage = $"Couldn't read the logbook of {string.Join(", ", failed)}; Terrain would not give it.";
+            }
+            // when only some were read (leaders added to the list), the others may be older
+            if (members.Count == model.Members.Count || ReadUtc == null || scope.OldestUtc < ReadUtc)
+            {
+                ReadUtc = scope.OldestUtc;
+            }
+            return scope.UsedStale;
         }
 
         // Ticking a name puts that person in the report; it is for everyone while none are ticked
@@ -185,6 +239,7 @@ namespace Topo.Controller
 
         private async Task PopulateMembers()
         {
+            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
             var allMembers = await _membersService.GetMembersAsync(model.UnitId);
             if (model.IncludeLeaders)
                 model.Members = allMembers.OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();

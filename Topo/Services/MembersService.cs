@@ -61,9 +61,17 @@ namespace Topo.Services
 
         public async Task<List<MemberListModel>> GetMembersAsync(string unitId)
         {
+            // a page reading through the data cache gets the members from that (worked out once for each load), not the list this session already holds
+            var scope = Topo.Model.Cache.CacheScope.Current;
+            if (scope != null && scope.Worked.TryGetValue($"members:{unitId}", out var worked))
+            {
+                return (List<MemberListModel>)worked;
+            }
             var cachedMembersList = _storageService.CachedMembers.Where(cm => cm.Key == unitId).FirstOrDefault().Value;
-            if (cachedMembersList != null)
+            if (cachedMembersList != null && scope == null)
+            {
                 return cachedMembersList;
+            }
 
             var getMembersResultModel = await _terrainAPIService.GetMembersAsync(unitId ?? "");
             var memberList = new List<MemberListModel>();
@@ -109,8 +117,16 @@ namespace Topo.Services
                             gender = genders.TryGetValue(m.id, out var storedGender) ? storedGender : ""
                         })
                         .ToList();
-                    _storageService.CachedMembers.Add(new KeyValuePair<string, List<MemberListModel>>(unitId, memberList));
+                    // a list read through the data cache may be a day or more old, so it is not kept for the rest of the session
+                    if (scope == null)
+                    {
+                        _storageService.CachedMembers.Add(new KeyValuePair<string, List<MemberListModel>>(unitId, memberList));
+                    }
                 }
+            }
+            if (scope != null)
+            {
+                scope.Worked[$"members:{unitId}"] = memberList;
             }
             return memberList;
         }

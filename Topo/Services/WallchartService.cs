@@ -21,8 +21,11 @@ namespace Topo.Services
         private readonly IMembersService _membersService;
         private List<ApprovalsListModel> approvals = new List<ApprovalsListModel>();
 
-        public WallchartService(StorageService storageService, ITerrainAPIService terrainAPIService, IApprovalsService approvalService, IMembersService membersService)
+        private readonly ILogbookTotalsService _logbookTotals;
+
+        public WallchartService(StorageService storageService, ITerrainAPIService terrainAPIService, IApprovalsService approvalService, IMembersService membersService, ILogbookTotalsService logbookTotals)
         {
+            _logbookTotals = logbookTotals;
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
             _approvalService = approvalService;
@@ -33,7 +36,8 @@ namespace Topo.Services
         {
             var members = await _membersService.GetMembersAsync(selectedUnitId);
             var cachedWallchartItems = _storageService.CachedWallchartItems.Where(cm => cm.Key == selectedUnitId).FirstOrDefault().Value;
-            if (cachedWallchartItems != null)
+            // a page reading through the data cache is built from that, not from what this session worked out earlier
+            if (cachedWallchartItems != null && Topo.Model.Cache.CacheScope.Current == null)
             {
                 // Update cache member name
                 var cachedNames = await _membersService.GetDisplayNamesAsync(selectedUnitId);
@@ -49,14 +53,20 @@ namespace Topo.Services
 
             var section = _storageService.Section;
             approvals = await _approvalService.ReadApprovalListFromLocalStorage(selectedUnitId);
-            await _terrainAPIService.RevokeAssumedProfiles();
+            using (await _logbookTotals.LockProfileAsync())
+            {
+                await _terrainAPIService.RevokeAssumedProfiles();
+            }
 
             var youth = members.Where(m => m.isAdultLeader == 0).OrderBy(m => m.last_name).ThenBy(m => m.first_name).ToList();
             if (youth.Count == 0)
             {
                 // a unit with no youth (an adults-only team) has nothing to show, and nothing to read
                 var none = new List<WallchartItemModel>();
-                _storageService.CachedWallchartItems.Add(new KeyValuePair<string, List<WallchartItemModel>>(selectedUnitId, none));
+                if (Topo.Model.Cache.CacheScope.Current == null)
+                {
+                    _storageService.CachedWallchartItems.Add(new KeyValuePair<string, List<WallchartItemModel>>(selectedUnitId, none));
+                }
                 return none;
             }
 
@@ -256,7 +266,10 @@ namespace Topo.Services
 
                 wallchartItems.Add(wallchartItem);
             }
-            _storageService.CachedWallchartItems.Add(new KeyValuePair<string, List<WallchartItemModel>>(selectedUnitId, wallchartItems));
+            if (Topo.Model.Cache.CacheScope.Current == null)
+            {
+                _storageService.CachedWallchartItems.Add(new KeyValuePair<string, List<WallchartItemModel>>(selectedUnitId, wallchartItems));
+            }
             return wallchartItems;
         }
 
@@ -266,26 +279,16 @@ namespace Topo.Services
         private async Task<Dictionary<string, (float nights, float kms)>> ReadLogbookTotals(List<MemberListModel> youth, Action<string>? progress)
         {
             var totals = new Dictionary<string, (float nights, float kms)>();
-            try
+            for (var i = 0; i < youth.Count; i++)
             {
-                for (var i = 0; i < youth.Count; i++)
-                {
-                    var member = youth[i];
-                    progress?.Invoke($"{member.first_name} {member.last_name} ({i + 1} of {youth.Count})");
-                    await _terrainAPIService.AssumeProfile(member.id);
-                    var metrics = await _terrainAPIService.GetMemberLogbookMetrics(member.id);
-                    var nights = metrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
-                    var kms = (metrics.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;
-                    totals[member.id] = (nights, kms);
-                }
-                // assuming each Scout replaced the one before, so the last is revoked here instead of after every Scout
-                await _terrainAPIService.RevokeAssumedProfiles();
-            }
-            catch
-            {
-                // a failed read mustn't leave a Scout's profile taken on
-                await _terrainAPIService.RevokeAssumedProfiles();
-                throw;
+                var member = youth[i];
+                progress?.Invoke($"{member.first_name} {member.last_name} ({i + 1} of {youth.Count})");
+                // totals the data cache holds serve as the page asked (see CacheScope); the rest are read, assuming the Scout's profile
+                var held = await _logbookTotals.ForPageAsync(member.id);
+                var metrics = held?.Value ?? new Topo.Model.Logbook.GetMemberLogbookMetricsResultModel();
+                var nights = metrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
+                var kms = (metrics.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;
+                totals[member.id] = (nights, kms);
             }
             return totals;
         }

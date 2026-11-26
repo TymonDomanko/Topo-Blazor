@@ -16,10 +16,14 @@ namespace Topo.Services
         private readonly IReportService _reportService;
         //private readonly IApprovalsService _approvalsService;
 
+        private readonly ILogbookTotalsService _logbookTotals;
+
         public AdditionalAwardService(ITerrainAPIService terrainAPIService,
             StorageService storageService,
-            IReportService reportService) //, IApprovalsService approvalsService)
+            IReportService reportService,
+            ILogbookTotalsService logbookTotals) //, IApprovalsService approvalsService)
         {
+            _logbookTotals = logbookTotals;
             _terrainAPIService = terrainAPIService;
             _storageService = storageService;
             _reportService = reportService;
@@ -56,9 +60,9 @@ namespace Topo.Services
                 var memberKVP = new KeyValuePair<string, string>(member.id, $"{member.first_name} {member.last_name}");
                 var firstEntry = additionalAwardsList.Count;
                 progress?.Invoke($"{(shortNames.TryGetValue(member.id, out var shortName) ? shortName : memberKVP.Value)} ({selectedMembers.IndexOf(member) + 1} of {selectedMembers.Count})");
-                // assuming the next Scout replaces the one before, so no revoke between Scouts; the last one is revoked after the loop
-                await _terrainAPIService.AssumeProfile(memberKVP.Key);
-                var getMemberLogbookMetrics = await _terrainAPIService.GetMemberLogbookMetrics(memberKVP.Key);
+                // totals the data cache holds serve as the page asked (see CacheScope); the rest are read, assuming the Scout's profile
+                var heldTotals = await _logbookTotals.ForPageAsync(memberKVP.Key);
+                var getMemberLogbookMetrics = heldTotals?.Value ?? new Topo.Model.Logbook.GetMemberLogbookMetricsResultModel();
                 var totalNightsCamped = getMemberLogbookMetrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
                 var totalKmsHiked = (getMemberLogbookMetrics.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;
                 memberName = $"{memberKVP.Value} ({totalNightsCamped} Nights, {totalKmsHiked} KMs)";
@@ -150,7 +154,10 @@ namespace Topo.Services
                 }
             }
 
-            await _terrainAPIService.RevokeAssumedProfiles();
+            using (await _logbookTotals.LockProfileAsync())
+            {
+                await _terrainAPIService.RevokeAssumedProfiles();
+            }
 
             var sortedAdditionalAwardsList = additionalAwardsList.OrderBy(a => a.MemberName).ThenBy(a => a.AwardSortIndex).ToList();
             var distinctAwards = AwardsTable.DistinctAwards(sortedAdditionalAwardsList);

@@ -41,6 +41,10 @@
     </div>
 
     <PageStatus Loading="Loading" Progress="@Progress" Error="@model.ErrorMessage" />
+    @if (_page.ReadUtc != null)
+    {
+        <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
+    }
 
     @if (NoYouth)
     {
@@ -48,7 +52,7 @@
     }
     else if (Report != null)
     {
-        <ReportButtons Name="OAS" OnPdf="PdfClick" OnXlsx="XlsxClick" Disabled="@(Report.Sheets.All(s => s.Rows.Count == 0))" />
+        <ReportButtons Name="OAS" OnPdf="PdfClick" OnXlsx="XlsxClick" Disabled="@(_page.Updating || Report.Sheets.All(s => s.Rows.Count == 0))" />
 
         <OasSummaryPreview Report="Report" />
     }

@@ -66,10 +66,14 @@
     </div>
 
     <PageStatus Loading="Loading" Progress="@Progress" Error="@ErrorMessage" />
+    @if (_page.ReadUtc != null)
+    {
+        <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
+    }
 
     @if (!string.IsNullOrEmpty(model.UnitId) && !Loading)
     {
-        <ReportButtons Name="Approvals Report" OnPdf="ApprovalsReportPdfClick" OnXlsx="ApprovalsReportXlsxClick" Disabled="@(!model.Approvals.Any())" />
+        <ReportButtons Name="Approvals Report" OnPdf="ApprovalsReportPdfClick" OnXlsx="ApprovalsReportXlsxClick" Disabled="@(_page.Updating || !model.Approvals.Any())" />
     }
 
     <SfGrid @ref="GridInstance" DataSource="@model.Approvals" AllowGrouping="true" AllowFiltering="true">

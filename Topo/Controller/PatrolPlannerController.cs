@@ -6,6 +6,7 @@ using Topo.Model.Common;
 using Topo.Model.Members;
 using Topo.Model.PatrolPlanner;
 using Topo.Model.ReportGeneration;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -53,6 +54,9 @@ namespace Topo.Controller
 
         public void Dispose() => _auto.Dispose();
 
+        // When the members on show were read
+        public DateTime? MembersReadUtc;
+
         private string? _draggedMemberId;
         private List<string> _originalPatrolNames = new();
         private Dictionary<string, string> _patrolColorOverrides = new();
@@ -87,6 +91,7 @@ namespace Topo.Controller
                 model.PatrolNames = new List<string>();
                 _originalPatrolNames = new List<string>();
                 model.AttendanceNote = "";
+                MembersReadUtc = null;
                 _auto.Stop();
                 Loading = false;
                 return;
@@ -94,7 +99,12 @@ namespace Topo.Controller
 
             _patrolColorOverrides = await _localStorageService.GetItemAsync<Dictionary<string, string>>($"{unitId}_PatrolColors") ?? new Dictionary<string, string>();
 
-            var allMembers = await _membersService.GetMembersAsync(unitId);
+            List<MemberListModel> allMembers;
+            using (var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null)
+            {
+                allMembers = await _membersService.GetMembersAsync(unitId);
+                MembersReadUtc = CacheScope.Current!.OldestUtc;
+            }
             model.Members = allMembers
                 .Where(m => m.isAdultLeader == 0)
                 .Select(m => new PatrolPlannerMember
@@ -131,6 +141,7 @@ namespace Topo.Controller
             // the Reading line says what is happening, so the spinner is not put over the board
             _spinnerService.BeQuiet();
             Loading = true;
+            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
             try
             {
                 var recent = await _attendanceService.GetRecentNights(model.UnitId, RecentNightsCount,
@@ -173,7 +184,11 @@ namespace Topo.Controller
         internal async Task RefreshClick()
         {
             _membersService.ClearMemberCache(model.UnitId);
-            await UnitChange(model.UnitId);
+            // the attendance read that this starts reads again too
+            using (CacheScope.Begin(CacheMode.Reread))
+            {
+                await UnitChange(model.UnitId);
+            }
         }
 
         // Pushing to Terrain: first read Terrain again and show what would be written (nothing is written yet), then

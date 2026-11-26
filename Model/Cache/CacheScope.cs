@@ -1,0 +1,68 @@
+namespace Topo.Model.Cache
+{
+    public enum CacheMode
+    {
+        // Use whatever is held, however old, so the page shows at once
+        Held,
+        // Use what is held only while it is in date
+        Fresh,
+        // Read again from Terrain whatever is held
+        Reread
+    }
+
+    // A page asks for its Terrain reads to go through the data cache by reading inside a scope: "using var scope = CacheScope.Begin(...)".
+    // Reads made outside one go straight to Terrain, as they always did. The scope notes how old what it used was.
+    public sealed class CacheScope : IDisposable
+    {
+        private static readonly AsyncLocal<CacheScope?> Ambient = new AsyncLocal<CacheScope?>();
+        private readonly CacheScope? _outer;
+
+        private CacheScope(CacheMode mode, CacheScope? outer)
+        {
+            Mode = mode;
+            _outer = outer;
+        }
+
+        public static CacheScope? Current => Ambient.Value;
+
+        public static CacheScope Begin(CacheMode mode)
+        {
+            var scope = new CacheScope(mode, Ambient.Value);
+            Ambient.Value = scope;
+            return scope;
+        }
+
+        public CacheMode Mode { get; }
+        // When the oldest read the scope used was made; null when it has used none
+        public DateTime? OldestUtc { get; private set; }
+        // Whether anything it used was older than a day
+        public bool UsedStale { get; private set; }
+        // What has been worked out from reads in this scope and may be asked for again, such as a unit's member list
+        public Dictionary<string, object> Worked { get; } = new Dictionary<string, object>();
+
+        // Run just before a read goes to Terrain, for work that is only needed then (assuming a Scout's profile)
+        public Func<Task>? BeforeRead { get; set; }
+
+        // Whether a held read serves, or has to be made again
+        public bool Serves(bool isStale) => Mode == CacheMode.Held || (Mode == CacheMode.Fresh && !isStale);
+
+        public void Used(DateTime fetchedUtc, bool isStale)
+        {
+            if (OldestUtc == null || fetchedUtc < OldestUtc)
+            {
+                OldestUtc = fetchedUtc;
+            }
+            UsedStale |= isStale;
+        }
+
+        // What an inner scope used counts towards the scope around it too
+        public void Dispose()
+        {
+            if (_outer != null && OldestUtc != null)
+            {
+                _outer.Used(OldestUtc.Value, UsedStale);
+            }
+            Ambient.Value = _outer;
+        }
+    }
+}

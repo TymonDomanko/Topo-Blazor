@@ -1,5 +1,7 @@
 @page "/settings"
 @inject Topo.Services.StorageService _storageService
+@inject Topo.Model.Cache.DataCache _dataCache
+@inject IJSRuntime JS
 @inject Topo.Services.IAutoAwardService _autoAwards
 @inject Topo.Services.IYearsOfServiceService _yearsOfService
 @inject NavigationManager NavigationManager
@@ -46,6 +48,29 @@
     @if (_defaultsSaved)
     {
         <div class="form-text text-success" id="defaults-saved">Saved.</div>
+    }
+</div>
+
+<h4>Kept data</h4>
+
+<div class="mb-4" id="cache">
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="cache-on" checked="@_dataCache.Enabled" @onchange="CacheToggle" />
+        <label class="form-check-label" for="cache-on">Keep what pages read from Terrain, so they open faster</label>
+    </div>
+    <div class="form-text">
+        Topo keeps what a page reads in this browser. For a day the page, and others needing the same records, open from the kept copy; after
+        that it is shown straight away and read again. Events that ended more than four months ago are kept until you press Refresh data, and
+        anything else not read again for 30 days is dropped. Logging out removes it all. Nothing is read ahead. The kept data includes young
+        people's names and records, so turn this off on a computer you share.
+    </div>
+    <div class="d-flex flex-wrap gap-2 mt-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="cache-clear" disabled="@(!_dataCache.Enabled)" @onclick="CacheClear">Remove kept data now</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="cache-persist" disabled="@(!_dataCache.Enabled)" @onclick="CachePersist">Ask the browser to hold on to it</button>
+    </div>
+    @if (_cacheMessage.Length > 0)
+    {
+        <div class="form-text" id="cache-message" role="status">@_cacheMessage</div>
     }
 </div>
 
@@ -164,6 +189,7 @@
 @code {
     private Topo.Model.Defaults.UserDefaults _defaults = new();
     private bool _defaultsSaved;
+    private string _cacheMessage = "";
     private bool _yosEnabled;
     private bool _yosBusy;
     private bool _yosConfirmCreate;
@@ -200,6 +226,26 @@
         change(_defaults);
         await Topo.Services.UserDefaultsStore.SaveAsync(_localStorage, _storageService, _defaults);
         _defaultsSaved = true;
+    }
+
+    private async Task CacheToggle(ChangeEventArgs e)
+    {
+        var enabled = e.Value is true;
+        await Topo.Services.CacheSetting.SaveAsync(_localStorage, _dataCache, enabled);
+        _cacheMessage = enabled ? "Pages will keep what they read." : "Kept data removed. Pages now read from Terrain every time.";
+    }
+
+    private async Task CacheClear()
+    {
+        await _dataCache.ClearAsync();
+        _cacheMessage = "Kept data removed.";
+    }
+
+    // A browser short of space may throw kept data away; it can be asked not to (some browsers ask you to allow this)
+    private async Task CachePersist()
+    {
+        var held = await JS.InvokeAsync<bool>("topoCache.persist");
+        _cacheMessage = held ? "The browser will hold on to the kept data." : "The browser did not agree; it may remove kept data when short of space.";
     }
 
     private async Task YosToggle(ChangeEventArgs e)

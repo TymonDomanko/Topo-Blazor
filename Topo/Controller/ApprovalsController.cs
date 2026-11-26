@@ -9,6 +9,7 @@ using Topo.Model.AdditionalAwards;
 using Topo.Model.Approvals;
 using Topo.Model.Common;
 using Topo.Model.ReportGeneration;
+using Topo.Model.Cache;
 using Topo.Services;
 
 
@@ -43,20 +44,22 @@ namespace Topo.Controller
 
         public SfGrid<ApprovalsListModel> GridInstance { get; set; }
 
-        public bool Loading;
-        public string Progress = "";
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public bool Loading => _page.Loading;
+        public string Progress => _page.Progress;
         public string ErrorMessage = "";
         // Everything Terrain has for the unit; the dates and tick boxes then only narrow it down, without reading Terrain again
         private List<ApprovalsListModel> _all = new List<ApprovalsListModel>();
-        private readonly AutoRun _auto = new AutoRun();
 
-        public void Dispose() => _auto.Dispose();
+        public void Dispose() => _page.Dispose();
 
         protected override async Task OnInitializedAsync()
         {
             if (!_storageService.IsAuthenticated)
                 NavigationManager.NavigateTo("index");
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             model.ApprovalSearchFromDate = DateTime.Today;
@@ -65,7 +68,7 @@ namespace Topo.Controller
             {
                 model.UnitId = _storageService.UnitId;
                 model.UnitName = _storageService.UnitName;
-                await _auto.RunAsync(Load);
+                await Load();
             }
         }
 
@@ -93,41 +96,51 @@ namespace Topo.Controller
             model.UnitName = _storageService.UnitName;
             _all = new List<ApprovalsListModel>();
             model.Approvals = new List<ApprovalsListModel>();
-            await _auto.RunAsync(Load);
+            await Load();
         }
 
-        // Reads the unit's approvals from Terrain. A read that has been overtaken by a newer change is dropped.
-        private async Task Load(CancellationToken cancellationToken)
+        // Reads the unit's approvals. What the data cache holds shows at once, and is read again behind the page when it is more than a day old.
+        private async Task Load()
         {
             ErrorMessage = "";
             if (string.IsNullOrEmpty(model.UnitId))
             {
-                Loading = false;
+                _page.Cancel();
                 return;
             }
+            await _page.LoadAsync(ReadRows(model.UnitId), Show);
+            ShowFailure();
+        }
 
-            Loading = true;
-            try
+        // Reads everything on the page again, leaving what is shown in place until the new list is in
+        internal async Task RefreshClick()
+        {
+            ErrorMessage = "";
+            await _page.RefreshAsync(ReadRows(model.UnitId), Show);
+            ShowFailure();
+        }
+
+        private Func<Action<string>, CancellationToken, Task<List<ApprovalsListModel>>> ReadRows(string unitId) =>
+            async (progress, cancellationToken) =>
             {
-                var approvals = await _approvalsService.GetApprovalListItems(model.UnitId,
-                    step => { if (!cancellationToken.IsCancellationRequested) { Progress = step; InvokeAsync(StateHasChanged); } });
+                var approvals = await _approvalsService.GetApprovalListItems(unitId, progress);
                 cancellationToken.ThrowIfCancellationRequested();
-                _all = (approvals ?? new List<ApprovalsListModel>()).Concat(await AdditionalAwardRowsAsync(model.UnitId)).ToList();
-                // Worked out over everything, before the filters, so a stage is not called the highest just because a higher one is out of the date range
-                ApprovalsToAward.ApplyOas(_all);
-                ApplyFilters();
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+                return (approvals ?? new List<ApprovalsListModel>()).Concat(await AdditionalAwardRowsAsync(unitId)).ToList();
+            };
+
+        private void Show(List<ApprovalsListModel> rows)
+        {
+            _all = rows;
+            // Worked out over everything, before the filters, so a stage is not called the highest just because a higher one is out of the date range
+            ApprovalsToAward.ApplyOas(_all);
+            ApplyFilters();
+        }
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
             {
                 ErrorMessage = "Couldn't read the approvals from Terrain.";
-            }
-            finally
-            {
-                if (!cancellationToken.IsCancellationRequested)
-                {
-                    Loading = false;
-                    Progress = "";
-                }
             }
         }
 

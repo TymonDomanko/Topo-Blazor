@@ -48,6 +48,10 @@
     </div>
 
     <PageStatus Loading="Loading" Progress="@Progress" Error="@ErrorMessage" />
+    @if (_page.ReadUtc != null)
+    {
+        <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
+    }
 
     @if (Groups != null && Groups.Count == 0)
     {
@@ -56,7 +60,7 @@
     else if (Groups != null)
     {
         <ReportButtons Name="Milestone" OnPdf="MilestoneReportPdfClick" OnXlsx="MilestoneReportXlsxClick"
-                       Disabled="@Groups.All(g => g.Sections.All(s => s.Rows.Count == 0))" />
+                       Disabled="@(_page.Updating || Groups.All(g => g.Sections.All(s => s.Rows.Count == 0)))" />
 
         <MilestonePreview Groups="Groups" UnitName="@model.UnitName" />
     }

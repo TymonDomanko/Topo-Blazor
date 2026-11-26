@@ -9,6 +9,12 @@
         <h2>Progress Details for @model.Member.first_name @model.Member.last_name</h2>
     </div>
 
+    <PageStatus Loading="_page.Loading" Error="@ErrorMessage" Progress="@_page.Progress" />
+    @if (_page.ReadUtc != null)
+    {
+        <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
+    }
+
     <div class="card mt-3 mb-3">
         <div class="card-header">
             <span>Member</span>
@@ -387,8 +393,8 @@
     <div class="mt-3 mb-3">
         <a href="progress/progress" class="btn btn-outline-secondary">Back</a>
     </div>
-    <ReportButtons Name="Progress Report" OnPdf="ProgressPdfClick" OnXlsx="ProgressXlsxClick" />
-    <ReportButtons Name="Core OAS started" OnPdf="StartedCoreOasPdfClick" OnXlsx="StartedCoreOasXlsxClick" Disabled="@(model.DisableCoreOAS != null)" />
-    <ReportButtons Name="OAS started" OnPdf="StartedOasPdfClick" OnXlsx="StartedOasXlsxClick" Disabled="@(model.DisableOAS != null)" />
+    <ReportButtons Name="Progress Report" OnPdf="ProgressPdfClick" OnXlsx="ProgressXlsxClick" Disabled="@(_page.Loading || _page.Updating)" />
+    <ReportButtons Name="Core OAS started" OnPdf="StartedCoreOasPdfClick" OnXlsx="StartedCoreOasXlsxClick" Disabled="@(_page.Loading || _page.Updating || model.DisableCoreOAS != null)" />
+    <ReportButtons Name="OAS started" OnPdf="StartedOasPdfClick" OnXlsx="StartedOasXlsxClick" Disabled="@(_page.Loading || _page.Updating || model.DisableOAS != null)" />
 
 </EditForm>

@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using Topo.Model.Common;
 using Topo.Model.Program;
 using Topo.Model.ReportGeneration;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -48,6 +49,15 @@ namespace Topo.Controller
         // The calendar is read again a moment after the calendars or dates change, rather than from a button
         private readonly AutoRun _auto = new AutoRun();
         private const int DateDelayMilliseconds = 800;
+        // How old the kept event details behind the list are, and reading them again
+        public ReportRefresh _data = new ReportRefresh();
+        private DateTime? _eventsReadUtc;
+
+        internal async Task RefreshClick()
+        {
+            _data.Changed = () => InvokeAsync(StateHasChanged);
+            await _data.RefreshAsync((progress, token) => _auto.RunAsync(LoadEvents), () => Task.FromResult(_eventsReadUtc));
+        }
 
         protected override async Task OnAfterRenderAsync(bool firstRender)
         {
@@ -68,6 +78,7 @@ namespace Topo.Controller
         public void Dispose()
         {
             _auto.Dispose();
+            _data.Dispose();
             _selfReference?.Dispose();
         }
 
@@ -155,6 +166,10 @@ namespace Topo.Controller
             }
 
             Loading = true;
+            // the list is always read from Terrain; an event's details come from the data cache while in date, and an event long past is kept
+            // until it is read again on request
+            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
+            var scope = CacheScope.Current!;
             await _programService.SetCalendar(model.SelectedCalendars);
             try
             {
@@ -162,6 +177,8 @@ namespace Topo.Controller
                     step => { if (!cancellationToken.IsCancellationRequested) { Progress = step; InvokeAsync(StateHasChanged); } });
                 cancellationToken.ThrowIfCancellationRequested();
                 model.Events = events.OrderBy(e => e.StartDateTime).ToList();
+                _eventsReadUtc = scope.OldestUtc;
+                await _data.ReadAgeAsync(() => Task.FromResult(_eventsReadUtc));
             }
             finally
             {
@@ -176,6 +193,7 @@ namespace Topo.Controller
 
         internal async Task EventAttendanceClick(string eventId)
         {
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
             var groupName = _storageService.GroupName ?? "Group Name";
             var unitName = _storageService.UnitName ?? "Unit Name";
             var section = _storageService.Section;
@@ -210,6 +228,7 @@ namespace Topo.Controller
 
         private async Task<byte[]> AttendanceReport(OutputType outputType = OutputType.PDF)
         {
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
             var groupName = _storageService.GroupName ?? "Group Name";
             var unitName = _storageService.UnitName ?? "Unit Name";
             var section = _storageService.Section;
