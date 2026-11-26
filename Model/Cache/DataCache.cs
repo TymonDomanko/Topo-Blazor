@@ -87,6 +87,38 @@ namespace Topo.Model.Cache
             return new CachedRead<T>(value, now, false);
         }
 
+        // A Terrain read. Inside a CacheScope it is served from the cache when what is held will do, and kept when it is made; when Terrain does not
+        // answer, an older copy is handed out. Outside a scope it is just the read.
+        public async Task<string> ReadThroughAsync(string key, Func<Task<(bool Succeeded, string Body)>> read)
+        {
+            var scope = CacheScope.Current;
+            if (scope == null)
+            {
+                return (await read()).Body;
+            }
+
+            var held = await GetAsync<string>(key);
+            if (held != null && scope.Serves(held.IsStale))
+            {
+                scope.Used(held.FetchedUtc, held.IsStale);
+                return held.Value;
+            }
+
+            var (succeeded, body) = await read();
+            if (succeeded)
+            {
+                var kept = await PutAsync(key, body);
+                scope.Used(kept.FetchedUtc, false);
+                return body;
+            }
+            if (held != null)
+            {
+                scope.Used(held.FetchedUtc, held.IsStale);
+                return held.Value;
+            }
+            return body;
+        }
+
         // Everything goes: the cache holds young people's records, so it does not stay behind after logging out
         public async Task ClearAsync()
         {

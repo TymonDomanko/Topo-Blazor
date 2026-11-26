@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Newtonsoft.Json;
+using Topo.Model.Cache;
 using Topo.Model.Milestone;
 using Topo.Model.OAS;
 using Topo.Model.ReportGeneration;
@@ -8,7 +9,7 @@ using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class MilestoneController : ComponentBase
+    public class MilestoneController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -29,8 +30,8 @@ namespace Topo.Controller
         public IMilestoneService _milestoneService { get; set; }
 
         public MilestonePageViewModel model = new MilestonePageViewModel();
-        public bool Loading;
-        public string Progress = "";
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
         public string ErrorMessage = "";
         // Laid out again whenever an option changes, from what was read for the unit
         public List<MilestonePatrolGroup>? Groups;
@@ -44,6 +45,7 @@ namespace Topo.Controller
                 return;
             }
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.UnitId = _storageService.UnitId;
             model.UnitName = _storageService.UnitName;
             model.GroupName = _storageService.GroupNameDisplay;
@@ -62,32 +64,49 @@ namespace Topo.Controller
             await Load();
         }
 
-        // Reads the unit's milestones once; the preview then follows the options
+        // Reads the unit's milestones; the preview then follows the options. What the data cache holds shows at once, and is read again behind the
+        // page when it is more than a day old.
         private async Task Load()
         {
             Groups = null;
             _summaries = null;
             ErrorMessage = "";
             if (string.IsNullOrEmpty(model.UnitId))
-                return;
-
-            Loading = true;
-            try
             {
-                _storageService.SuppressLastName = model.SuppressLastName;
-                _summaries = await _milestoneService.GetMilestoneSummaries(model.UnitId, step => { Progress = step; InvokeAsync(StateHasChanged); });
-                Recalculate();
+                _page.Cancel();
+                return;
             }
-            catch (Exception)
+
+            _storageService.SuppressLastName = model.SuppressLastName;
+            await _page.LoadAsync(ReadSummaries(model.UnitId), Show);
+            ShowFailure();
+        }
+
+        internal async Task RefreshClick()
+        {
+            ErrorMessage = "";
+            await _page.RefreshAsync(ReadSummaries(model.UnitId), Show);
+            ShowFailure();
+        }
+
+        private Func<Action<string>, CancellationToken, Task<List<MilestoneSummaryListModel>>> ReadSummaries(string unitId) =>
+            (progress, token) => _milestoneService.GetMilestoneSummaries(unitId, progress);
+
+        private void Show(List<MilestoneSummaryListModel> summaries)
+        {
+            _summaries = summaries;
+            Recalculate();
+        }
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
             {
                 ErrorMessage = "Couldn't read the milestones from Terrain.";
             }
-            finally
-            {
-                Loading = false;
-                Progress = "";
-            }
         }
+
+        public void Dispose() => _page.Dispose();
 
         internal void BreakByPatrolChanged() => Recalculate();
 
@@ -108,8 +127,10 @@ namespace Topo.Controller
         // The report is made from what is on the page, so it is the same as the preview
         private async Task Download(OutputType outputType, string extension, string contentType)
         {
-            if (_summaries == null)
+            if (_summaries == null || _page.Updating)
+            {
                 return;
+            }
 
             try
             {

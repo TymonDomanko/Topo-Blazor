@@ -2,6 +2,7 @@
 using Microsoft.JSInterop;
 using Newtonsoft.Json;
 using Topo.Model.Login;
+using Topo.Model.Cache;
 using Topo.Model.Members;
 using Topo.Model.ReportGeneration;
 using Topo.Services;
@@ -9,7 +10,7 @@ using Topo.Services;
 namespace Topo.Controller
 {
 
-    public class MembersController : ComponentBase
+    public class MembersController : ComponentBase, IDisposable
     {
         [Inject]
         public IMembersService _membersService { get; set; }
@@ -27,12 +28,16 @@ namespace Topo.Controller
         public NavigationManager NavigationManager { get; set; }
 
         public MembersPageViewModel model = new MembersPageViewModel();
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public string ErrorMessage = "";
 
         protected override async Task OnInitializedAsync()
         {
             if (!_storageService.IsAuthenticated)
                 NavigationManager.NavigateTo("index");
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.Units = _storageService.Units;
             model.GroupName = _storageService.GroupNameDisplay;
             model.SuppressLastName = _storageService.SuppressLastName;
@@ -56,14 +61,34 @@ namespace Topo.Controller
                 _storageService.UnitId = model.UnitId;
                 model.UnitName = _storageService.UnitName;
                 model.Members = new List<MemberListModel>();
+                _page.Cancel();
                 return;
             }
             model.UnitId = unitId;
             _storageService.UnitId = model.UnitId;
-            var allMembers = await _membersService.GetMembersAsync(model.UnitId);
-            model.Members = allMembers.Where(m => m.isAdultLeader == 0).OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();
             model.UnitName = _storageService.UnitName;
+            model.Members = new List<MemberListModel>();
+            ErrorMessage = "";
+            // what the data cache holds shows at once, and is read again behind the page when it is more than a day old
+            await _page.LoadAsync(ReadMembers(unitId), Show);
+            ShowFailure();
         }
+
+        private Func<Action<string>, CancellationToken, Task<List<MemberListModel>>> ReadMembers(string unitId) =>
+            (progress, token) => _membersService.GetMembersAsync(unitId);
+
+        private void Show(List<MemberListModel> allMembers) =>
+            model.Members = allMembers.Where(m => m.isAdultLeader == 0).OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
+            {
+                ErrorMessage = "Couldn't read the members from Terrain.";
+            }
+        }
+
+        public void Dispose() => _page.Dispose();
         internal async Task PatrolListPdfClick()
         {
             byte[] report = await PatrolList(model.IncludeLeaders, OutputType.PDF);
@@ -173,10 +198,13 @@ namespace Topo.Controller
             return report;
         }
 
-        internal async Task MemberRefreshClick()
+        internal async Task RefreshClick()
         {
-            _membersService.ClearMemberCache(_storageService.UnitId);
-            await UnitChange(_storageService.UnitId);
+            // other pages hold the members for the session; they are read again too
+            _membersService.ClearMemberCache(model.UnitId);
+            ErrorMessage = "";
+            await _page.RefreshAsync(ReadMembers(model.UnitId), Show);
+            ShowFailure();
         }
     }
 }

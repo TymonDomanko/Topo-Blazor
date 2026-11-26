@@ -84,8 +84,12 @@ namespace Topo.Services
         };
         private readonly ILogger<TerrainAPIService> _logger;
 
-        public TerrainAPIService(HttpClient httpClient, StorageService storageService, ILogger<TerrainAPIService> logger)
+        private readonly Topo.Model.Cache.DataCache _dataCache;
+
+        public TerrainAPIService(HttpClient httpClient, StorageService storageService, ILogger<TerrainAPIService> logger,
+            Topo.Model.Cache.DataCache dataCache)
         {
+            _dataCache = dataCache;
             _httpClient = httpClient;
             _storageService = storageService;
             _logger = logger;
@@ -191,7 +195,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{membersAddress}units/{selectedUnitId}/members";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var getMembersResultModel = DeserializeObject<GetMembersResultModel>(result);
 
             return getMembersResultModel;
@@ -348,7 +352,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             var requestUri = $"{achievementsAddress}units/{unitId}/achievements?type={type}";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             if (type == "outdoor_adventure_skill")
                 result = RemoveFileUploaderFromContent(result);
 
@@ -372,7 +376,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             var requestUri = $"{membersAddress}units/{unitId}/metrics";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var unitMetrics = DeserializeObject<List<UnitMemberMetricsModel>>(result);
 
             return unitMetrics ?? new List<UnitMemberMetricsModel>();
@@ -640,7 +644,15 @@ namespace Topo.Services
             return getPeakAwardResultsModel ?? new GetPeakAwardsResultsModel();
         }
 
-        private async Task<string> SendRequest(HttpMethod httpMethod, string requestUri, string content = "", string xAmzTargetHeader = "")
+        // A read that a page may have asked to go through the data cache (see CacheScope)
+        private Task<string> CachedGet(string requestUri) =>
+            _dataCache.ReadThroughAsync($"{_storageService.CacheKeyPrefix}|get|{requestUri}", () => SendRequestWithStatus(HttpMethod.Get, requestUri));
+
+        private async Task<string> SendRequest(HttpMethod httpMethod, string requestUri, string content = "", string xAmzTargetHeader = "") =>
+            (await SendRequestWithStatus(httpMethod, requestUri, content, xAmzTargetHeader)).Body;
+
+        private async Task<(bool Succeeded, string Body)> SendRequestWithStatus(HttpMethod httpMethod, string requestUri, string content = "",
+            string xAmzTargetHeader = "")
         {
             HttpRequestMessage httpRequest = new HttpRequestMessage(httpMethod, requestUri);
             if (!string.IsNullOrEmpty(content))
@@ -660,14 +672,14 @@ namespace Topo.Services
                 var result = responseContent.Result;
                 _logger.LogInformation($"Version: {_storageService.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; Request: {requestUri}");
                 _logger.LogInformation($"Version: {_storageService.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; Response: {result}");
-                return result;
+                return (response.IsSuccessStatusCode, result);
             }
             catch( Exception ex )
             {
                 _logger.LogInformation($"Version: {_storageService.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; Request: {requestUri}");
                 _logger.LogInformation($"Version: {_storageService.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; StatusCode: {response.StatusCode}");
                 _logger.LogInformation($"Version: {_storageService.Version}; Date: {DateTime.Now.ToString("dd/MM/yyyy : HH:mm:ss")}; Exception: {ex}");
-                return "";
+                return (false, "");
             }
 
         }

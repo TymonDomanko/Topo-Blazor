@@ -5,10 +5,11 @@ namespace Topo.Services
 {
     public interface ILogbookTotalsService
     {
-        // The totals kept for a Scout, in date or stale; null when none are kept
-        Task<CachedRead<GetMemberLogbookMetricsResultModel>?> HeldAsync(string memberId);
-        // Reads a Scout's totals from Terrain and keeps them. Their profile must already be assumed. Null when Terrain did not answer.
-        Task<CachedRead<GetMemberLogbookMetricsResultModel>?> ReadAsync(string memberId);
+        // A Scout's totals for a page: what is held if it will do (see CacheScope; without a scope, if it is in date), otherwise read from Terrain.
+        // An older copy is handed out when Terrain does not answer; null when there is nothing at all. Assumes the Scout's profile to read.
+        Task<CachedRead<GetMemberLogbookMetricsResultModel>?> ForPageAsync(string memberId, CancellationToken cancellationToken = default);
+        // The same, for a caller who has assumed the Scout's profile and holds the profile lock
+        Task<CachedRead<GetMemberLogbookMetricsResultModel>?> ForAssumedProfileAsync(string memberId);
         // Reads each Scout's totals again, assuming their profile for it. A Scout who cannot be read keeps what was held.
         Task RefreshAsync(IReadOnlyList<string> memberIds, Action<string>? progress = null, CancellationToken cancellationToken = default);
         // When the oldest of the totals held for these Scouts was read; null when none are held
@@ -33,14 +34,53 @@ namespace Topo.Services
             _dataCache = dataCache;
         }
 
-        // Kept by who is signed in and the group, so two people using one browser do not share
-        private string Key(string memberId) =>
-            $"{_storageService.GetProfilesResult?.profiles?.FirstOrDefault()?.member?.id}|{_storageService.GroupId}|logbook-totals|{memberId}";
+        private string Key(string memberId) => $"{_storageService.CacheKeyPrefix}|logbook-totals|{memberId}";
 
-        public Task<CachedRead<GetMemberLogbookMetricsResultModel>?> HeldAsync(string memberId) =>
+        // The totals kept for a Scout, in date or stale; null when none are kept
+        private Task<CachedRead<GetMemberLogbookMetricsResultModel>?> HeldAsync(string memberId) =>
             _dataCache.GetAsync<GetMemberLogbookMetricsResultModel>(Key(memberId));
 
-        public async Task<CachedRead<GetMemberLogbookMetricsResultModel>?> ReadAsync(string memberId)
+        public async Task<CachedRead<GetMemberLogbookMetricsResultModel>?> ForPageAsync(string memberId, CancellationToken cancellationToken = default)
+        {
+            var held = await HeldAsync(memberId);
+            if (held != null && Serves(held))
+            {
+                return Used(held);
+            }
+
+            using var profile = await LockProfileAsync(cancellationToken);
+            try
+            {
+                await _terrainAPIService.RevokeAssumedProfiles();
+                await _terrainAPIService.AssumeProfile(memberId);
+                return Used(await ReadAsync(memberId) ?? held);
+            }
+            finally
+            {
+                await _terrainAPIService.RevokeAssumedProfiles();
+            }
+        }
+
+        public async Task<CachedRead<GetMemberLogbookMetricsResultModel>?> ForAssumedProfileAsync(string memberId)
+        {
+            var held = await HeldAsync(memberId);
+            return held != null && Serves(held) ? Used(held) : Used(await ReadAsync(memberId) ?? held);
+        }
+
+        private static bool Serves(CachedRead<GetMemberLogbookMetricsResultModel> held) =>
+            CacheScope.Current?.Serves(held.IsStale) ?? !held.IsStale;
+
+        private static CachedRead<GetMemberLogbookMetricsResultModel>? Used(CachedRead<GetMemberLogbookMetricsResultModel>? read)
+        {
+            if (read != null)
+            {
+                CacheScope.Current?.Used(read.FetchedUtc, read.IsStale);
+            }
+            return read;
+        }
+
+        // Reads the totals from Terrain and keeps them; null when Terrain did not answer
+        private async Task<CachedRead<GetMemberLogbookMetricsResultModel>?> ReadAsync(string memberId)
         {
             var totals = await _terrainAPIService.TryGetMemberLogbookMetrics(memberId);
             return totals == null ? null : await _dataCache.PutAsync(Key(memberId), totals);
@@ -48,21 +88,12 @@ namespace Topo.Services
 
         public async Task RefreshAsync(IReadOnlyList<string> memberIds, Action<string>? progress = null, CancellationToken cancellationToken = default)
         {
+            using var scope = CacheScope.Begin(CacheMode.Reread);
             for (var i = 0; i < memberIds.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 progress?.Invoke($"{i + 1} of {memberIds.Count} Scouts");
-                using var profile = await LockProfileAsync(cancellationToken);
-                try
-                {
-                    await _terrainAPIService.RevokeAssumedProfiles();
-                    await _terrainAPIService.AssumeProfile(memberIds[i]);
-                    await ReadAsync(memberIds[i]);
-                }
-                finally
-                {
-                    await _terrainAPIService.RevokeAssumedProfiles();
-                }
+                await ForPageAsync(memberIds[i], cancellationToken);
             }
         }
 

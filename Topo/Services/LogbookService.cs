@@ -28,11 +28,7 @@ namespace Topo.Services
                 await _terrainAPIService.RevokeAssumedProfiles();
                 await _terrainAPIService.AssumeProfile(memberKVP.Key);
                 // totals read in the last day serve; older ones are read again, and are only used if Terrain does not answer
-                var totals = await _logbookTotals.HeldAsync(memberKVP.Key);
-                if (totals == null || totals.IsStale)
-                {
-                    totals = await _logbookTotals.ReadAsync(memberKVP.Key) ?? totals;
-                }
+                var totals = await _logbookTotals.ForAssumedProfileAsync(memberKVP.Key);
                 var getMemberLogbookMetrics = totals?.Value ?? new GetMemberLogbookMetricsResultModel();
                 var totalNightsCamped = getMemberLogbookMetrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
                 var totalKmsHiked = (getMemberLogbookMetrics.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;

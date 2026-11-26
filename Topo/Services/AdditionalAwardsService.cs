@@ -55,14 +55,7 @@ namespace Topo.Services
             {
                 // totals read in the last day serve without assuming the Scout's profile; older ones are read again, and are only used if Terrain
                 // does not answer
-                var totals = await _logbookTotals.HeldAsync(memberKVP.Key);
-                if (totals == null || totals.IsStale)
-                {
-                    using var profile = await _logbookTotals.LockProfileAsync();
-                    await _terrainAPIService.RevokeAssumedProfiles();
-                    await _terrainAPIService.AssumeProfile(memberKVP.Key);
-                    totals = await _logbookTotals.ReadAsync(memberKVP.Key) ?? totals;
-                }
+                var totals = await _logbookTotals.ForPageAsync(memberKVP.Key);
                 var getMemberLogbookMetrics = totals?.Value ?? new Topo.Model.Logbook.GetMemberLogbookMetricsResultModel();
                 var totalNightsCamped = getMemberLogbookMetrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
                 var totalKmsHiked = (getMemberLogbookMetrics.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;

@@ -36,7 +36,7 @@
             </label>
         </div>
         <div class="col-sm-3">
-            <InputCheckbox id="suppressLastName" class="form-check-input"
+            <InputCheckbox id="suppressLastName" class="form-check-input" disabled="@_page.Updating"
                            @bind-Value="model.SuppressLastName" @bind-Value:after="SuppressLastNameChanged" />
             <label class="form-check-label" for="suppressLastName">
                 Suppress Last Name
@@ -46,9 +46,9 @@
         </div>
     </div>
 
-    @if (Loading)
+    @if (_page.Loading)
     {
-        <div class="mt-3 mb-3">Reading @Progress...</div>
+        <div class="mt-3 mb-3">Reading @_page.Progress...</div>
     }
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
@@ -57,10 +57,12 @@
 
     @if (Groups != null)
     {
+        <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
+
         <div class="mt-3 mb-3 row">
             <div class="col-sm">
-                <button type="button" class="btn btn-primary" @onclick="MilestoneReportPdfClick">Milestone Report (pdf)</button>
-                <button type="button" class="btn btn-success" @onclick="MilestoneReportXlsxClick">Milestone Report (xlsx)</button>
+                <button type="button" class="btn btn-primary" disabled="@(_page.Loading || _page.Updating)" @onclick="MilestoneReportPdfClick">Milestone Report (pdf)</button>
+                <button type="button" class="btn btn-success" disabled="@(_page.Loading || _page.Updating)" @onclick="MilestoneReportXlsxClick">Milestone Report (xlsx)</button>
             </div>
         </div>
 
