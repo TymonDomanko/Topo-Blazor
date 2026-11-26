@@ -145,6 +145,28 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public async Task TheSecondReadDoesNotStartOnTheFirstReadsProgress()
+        {
+            var terrain = new Terrain();
+            var page = new PageLoad();
+            var startedOn = new List<string>();
+            Func<Action<string>, CancellationToken, Task<string>> read = async (progress, token) =>
+            {
+                startedOn.Add(page.Progress);
+                var data = await terrain.Read();
+                progress("38 of 38");
+                return data;
+            };
+            await page.LoadAsync(read, data => { });
+            terrain.Now = Start.AddDays(3);
+            startedOn.Clear();
+
+            await page.LoadAsync(read, data => { });
+
+            CollectionAssert.AreEqual(new[] { "", "" }, startedOn);
+        }
+
+        [TestMethod]
         public async Task RefreshReadsAgainEvenWhenInDate()
         {
             var terrain = new Terrain();

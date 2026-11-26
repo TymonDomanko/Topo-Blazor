@@ -33,6 +33,8 @@ namespace Topo.Model.Cache
                 {
                     Loading = false;
                     Updating = true;
+                    // the first pass's progress does not stand for the second
+                    Progress = "";
                     Changed?.Invoke();
                     await PassAsync(version, CacheMode.Reread, read, show, token);
                 }
