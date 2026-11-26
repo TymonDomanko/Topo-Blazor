@@ -2,7 +2,8 @@ name: Deploy everything (live test build)
 
 # Every push to the everything-live branch builds the tests, publishes the site and puts it at https://<owner>.github.io/Topo-Blazor/ (the
 # gh-pages branch of this fork). It is the combined build of the open pull requests, for trying them against a real Terrain login.
-# It keeps every feature on, including the ones that write to Terrain, so a banner says so.
+# Changes to Terrain are held back unless they are allowed in Settings (Model/TestBuild), except years of service, which has its own switch.
+# A banner says it is a test build.
 #
 # Repository settings it reads:
 #   secrets.SYNCFUSION_KEY   the Syncfusion key the site is built with (without it the site shows Syncfusion's trial banner)
@@ -58,7 +59,7 @@ jobs:
         INDEX=release/wwwroot/index.html
         sed -i 's@<base href="/" />@<base href="/Topo-Blazor/" />@' $INDEX
         sed -i 's@<title>Topo</title>@<title>Topo EVERYTHING</title>@' $INDEX
-        BANNER="<div style=\"position:fixed;bottom:0;right:0;z-index:99999;background:#c0392b;color:#fff;padding:2px 10px;font:12px sans-serif;border-top-left-radius:6px;opacity:.9\">EVERYTHING - ${GITHUB_SHA::7} - test build, writes to Terrain</div>"
+        BANNER="<div style=\"position:fixed;bottom:0;right:0;z-index:99999;background:#c0392b;color:#fff;padding:2px 10px;font:12px sans-serif;border-top-left-radius:6px;opacity:.9\">EVERYTHING - ${GITHUB_SHA::7} - test build, Terrain changes off unless allowed in Settings (years of service has its own switch)</div>"
         sed -i "s@</body>@$BANNER</body>@" $INDEX
         grep -q 'Topo-Blazor/' $INDEX && grep -q 'EVERYTHING - ' $INDEX
         cp $INDEX release/wwwroot/404.html

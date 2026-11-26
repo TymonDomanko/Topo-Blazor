@@ -46,15 +46,21 @@ builder.Services.AddScoped<IAttendanceService, AttendanceService>();
 builder.Services.AddScoped<IProgramBuilderService, ProgramBuilderService>();
 
 builder.Services.AddScoped<SpinnerService>();
+// test build only: holds back changes to Terrain unless Settings allows them
+builder.Services.AddScoped<TestWriteGuard>();
 builder.Services.AddSingleton<Topo.Model.AdditionalAwards.ActivityMonitor>();
 builder.Services.AddScoped<IAutoAwardService, AutoAwardService>();
 builder.Services.AddScoped<DisplaySpinnerAutomaticallyHttpMessageHandler>();
 builder.Services.AddScoped(s =>
 {
     var accessTokenHandler = s.GetRequiredService<DisplaySpinnerAutomaticallyHttpMessageHandler>();
-    accessTokenHandler.InnerHandler = new CacheInvalidationHandler(s.GetRequiredService<DataCache>(), s.GetRequiredService<StorageService>())
+    var guard = s.GetRequiredService<TestWriteGuard>();
+    accessTokenHandler.InnerHandler = new Topo.Model.TestBuild.TestWriteGuardHandler(guard.SettingsAsync, guard.Report)
     {
-        InnerHandler = new HttpClientHandler()
+        InnerHandler = new CacheInvalidationHandler(s.GetRequiredService<DataCache>(), s.GetRequiredService<StorageService>())
+        {
+            InnerHandler = new HttpClientHandler()
+        }
     };
     var uriHelper = s.GetRequiredService<NavigationManager>();
     return new HttpClient(accessTokenHandler)

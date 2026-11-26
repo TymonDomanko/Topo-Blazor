@@ -1,0 +1,29 @@
+@* Test build only: says when a change to Terrain was held back, since the page that tried it may only say Terrain refused it *@
+@inject Topo.Services.TestWriteGuard _guard
+@implements IDisposable
+
+@if (_guard.HeldBack.Count > 0)
+{
+    <div class="alert alert-warning alert-dismissible shadow position-fixed end-0 me-3" style="bottom: 2.5rem; max-width: 32rem; z-index: 1060;" id="held-back" role="alert">
+        <strong>Nothing was changed in Terrain.</strong> @Topo.Model.TestBuild.TestWriteRules.BlockedMessage
+        <a href="settings">Open Settings</a>
+        <details class="mt-1">
+            <summary>@_guard.HeldBack.Count held back</summary>
+            <ul class="small mb-0">
+                @foreach (var request in _guard.HeldBack.TakeLast(20))
+                {
+                    <li>@request</li>
+                }
+            </ul>
+        </details>
+        <button type="button" class="btn-close" aria-label="Close" @onclick="_guard.Dismiss"></button>
+    </div>
+}
+
+@code {
+    protected override void OnInitialized() => _guard.Changed += OnChanged;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => _guard.Changed -= OnChanged;
+}

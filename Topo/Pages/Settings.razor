@@ -1,5 +1,6 @@
 @page "/settings"
 @inject Topo.Services.StorageService _storageService
+@inject Topo.Services.TestWriteGuard _writeGuard
 @inject Topo.Model.Cache.DataCache _dataCache
 @inject IJSRuntime JS
 @inject Topo.Services.IAutoAwardService _autoAwards
@@ -14,6 +15,32 @@
 
 <div class="mt-3 mb-3 row">
     <h2>Settings</h2>
+</div>
+
+<h4>Test build: changes to Terrain</h4>
+
+<div class="mb-4" id="test-writes">
+    @if (_writes != null)
+    {
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="writes-on" checked="@_writes.AllowWrites" @onchange="e => WritesChange(w => w.AllowWrites = e.Value is true)" />
+            <label class="form-check-label" for="writes-on">Let Topo change things in Terrain</label>
+        </div>
+        <div class="form-text">
+            Off to start with on this test build. While it is off, anything that would add, change or remove something in Terrain is stopped before
+            it is sent: approvals, program and patrol changes, awards (including those recorded automatically) and Mark order placed. Reading still
+            does what it needs to in Terrain: switching calendars on and back, and looking at a Scout's profile. This is kept in this browser.
+        </div>
+        <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="writes-yos" checked="@(_writes.AllowWrites || _writes.AllowYearsOfService)" disabled="@_writes.AllowWrites"
+                   @onchange="e => WritesChange(w => w.AllowYearsOfService = e.Value is true)" />
+            <label class="form-check-label" for="writes-yos">Still allow years of service changes while the rest are off</label>
+        </div>
+        <div class="form-text">
+            Creating the records event, starting the count and recording a Years of Service badge as awarded. These really are written to the
+            group's records event in Terrain, which everyone in the group can see.
+        </div>
+    }
 </div>
 
 <h4>Defaults</h4>
@@ -189,6 +216,7 @@
 @code {
     private Topo.Model.Defaults.UserDefaults _defaults = new();
     private bool _defaultsSaved;
+    private Topo.Model.TestBuild.TestWriteSettings? _writes;
     private string _cacheMessage = "";
     private bool _yosEnabled;
     private bool _yosBusy;
@@ -206,6 +234,7 @@
             return;
         }
         _autoAwards.Changed += OnAutoChanged;
+        _writes = await _writeGuard.SettingsAsync();
         // what has been chosen, or what the pages start with now
         _defaults = await Topo.Services.UserDefaultsStore.ReadAsync(_localStorage) ?? new Topo.Model.Defaults.UserDefaults { UseFullNames = _storageService.UseFullNames };
         _yosEnabled = await _yearsOfService.IsEnabledAsync();
@@ -226,6 +255,12 @@
         change(_defaults);
         await Topo.Services.UserDefaultsStore.SaveAsync(_localStorage, _storageService, _defaults);
         _defaultsSaved = true;
+    }
+
+    private async Task WritesChange(Action<Topo.Model.TestBuild.TestWriteSettings> change)
+    {
+        change(_writes!);
+        await _writeGuard.SaveAsync();
     }
 
     private async Task CacheToggle(ChangeEventArgs e)

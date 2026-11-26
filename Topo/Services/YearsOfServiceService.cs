@@ -5,6 +5,7 @@ using Topo.Model.BadgeStore;
 using Topo.Model.Members;
 using Topo.Model.Milestone;
 using Topo.Model.Progress;
+using Topo.Model.TestBuild;
 using Topo.Model.Wallchart;
 using Topo.Model.YearsOfService;
 
@@ -316,6 +317,8 @@ namespace Topo.Services
 
         public async Task<AwardWriteSummary> PresentAsync(IEnumerable<AwardRow> rows, DateTime presented)
         {
+            // the test build lets these through on the years of service switch
+            using var writes = YearsOfServiceWrites.Begin();
             var summary = new AwardWriteSummary();
             var cache = await LoadCacheAsync();
             // Read fresh just before writing, so a year a leader on another copy of Topo has just recorded is not recorded twice
@@ -371,6 +374,8 @@ namespace Topo.Services
 
         public async Task<BadgeStoreWriteResult> CreateStoreAsync()
         {
+            // the test build lets these through on the years of service switch
+            using var writes = YearsOfServiceWrites.Begin();
             var result = await _badgeStoreService.CreateStoreEventAsync(GetUser(), GetUserName(), GroupId);
             if (result.Succeeded)
             {
@@ -385,6 +390,8 @@ namespace Topo.Services
 
         public async Task<BadgeStoreWriteResult> StartAsync(DateTime from)
         {
+            // the test build lets these through on the years of service switch
+            using var writes = YearsOfServiceWrites.Begin();
             var cache = await LoadCacheAsync();
             BadgeStoreContents current;
             try
