@@ -7,6 +7,8 @@ namespace Topo.Model.Cache
         public string Json { get; set; } = string.Empty;
         // Milliseconds since 1970, UTC
         public long FetchedAt { get; set; }
+        // Kept until it is read again on request: it neither goes stale nor is dropped for its age
+        public bool Keep { get; set; }
         // The shape of what was kept; entries of another version are not used (see DataCache.Version)
         public int Version { get; set; }
     }

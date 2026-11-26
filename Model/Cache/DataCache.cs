@@ -5,8 +5,9 @@ namespace Topo.Model.Cache
     // A kept read and how old it is
     public class CachedRead<T>
     {
-        public CachedRead(T value, DateTime fetchedUtc, bool isStale)
+        public CachedRead(T value, DateTime fetchedUtc, bool isStale, bool isKept = false)
         {
+            IsKept = isKept;
             Value = value;
             FetchedUtc = fetchedUtc;
             IsStale = isStale;
@@ -16,6 +17,8 @@ namespace Topo.Model.Cache
         public DateTime FetchedUtc { get; }
         // Older than a day: it can still be shown, but should be read again
         public bool IsStale { get; }
+        // Kept until read again on request, so its age is not part of how old a page's data is
+        public bool IsKept { get; }
     }
 
     // Keeps what pages have read from Terrain (docs/background-cache-design.md): nothing is read ahead. A read is in date for a day; an older one
@@ -54,7 +57,7 @@ namespace Topo.Model.Cache
             }
 
             var fetched = DateTimeOffset.FromUnixTimeMilliseconds(entry.FetchedAt).UtcDateTime;
-            var age = UtcNow() - fetched;
+            var age = entry.Keep ? TimeSpan.Zero : UtcNow() - fetched;
             if (entry.Version != Version || age >= Dropped)
             {
                 return null;
@@ -69,10 +72,10 @@ namespace Topo.Model.Cache
             {
                 return null;
             }
-            return value == null ? null : new CachedRead<T>(value, fetched, age >= Fresh);
+            return value == null ? null : new CachedRead<T>(value, fetched, age >= Fresh, entry.Keep);
         }
 
-        public async Task<CachedRead<T>> PutAsync<T>(string key, T value)
+        public async Task<CachedRead<T>> PutAsync<T>(string key, T value, bool keep = false)
         {
             var now = UtcNow();
             var entry = new CacheEntry
@@ -80,16 +83,18 @@ namespace Topo.Model.Cache
                 Key = key,
                 Json = JsonSerializer.Serialize(value),
                 FetchedAt = Milliseconds(now),
+                Keep = keep,
                 Version = Version
             };
             _memory[key] = entry;
             await _store.PutAsync(entry);
-            return new CachedRead<T>(value, now, false);
+            return new CachedRead<T>(value, now, false, keep);
         }
 
         // A Terrain read. Inside a CacheScope it is served from the cache when what is held will do, and kept when it is made; when Terrain does not
         // answer, an older copy is handed out. Outside a scope it is just the read.
-        public async Task<string> ReadThroughAsync(string key, Func<Task<(bool Succeeded, string Body)>> read)
+        // keep: whether an answer is one to hold until it is asked for again (see CacheEntry.Keep)
+        public async Task<string> ReadThroughAsync(string key, Func<Task<(bool Succeeded, string Body)>> read, Func<string, bool>? keep = null)
         {
             var scope = CacheScope.Current;
             if (scope == null)
@@ -100,7 +105,7 @@ namespace Topo.Model.Cache
             var held = await GetAsync<string>(key);
             if (held != null && scope.Serves(held.IsStale))
             {
-                scope.Used(held.FetchedUtc, held.IsStale);
+                Note(scope, held);
                 return held.Value;
             }
 
@@ -111,16 +116,23 @@ namespace Topo.Model.Cache
             var (succeeded, body) = await read();
             if (succeeded)
             {
-                var kept = await PutAsync(key, body);
-                scope.Used(kept.FetchedUtc, false);
+                Note(scope, await PutAsync(key, body, keep?.Invoke(body) ?? false));
                 return body;
             }
             if (held != null)
             {
-                scope.Used(held.FetchedUtc, held.IsStale);
+                Note(scope, held);
                 return held.Value;
             }
             return body;
+        }
+
+        private static void Note(CacheScope scope, CachedRead<string> read)
+        {
+            if (!read.IsKept)
+            {
+                scope.Used(read.FetchedUtc, read.IsStale);
+            }
         }
 
         // Everything goes: the cache holds young people's records, so it does not stay behind after logging out

@@ -252,7 +252,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{eventsAddress}events/{eventId}";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri, body => Topo.Model.Cache.OldEvents.IsOld(body, DateTime.UtcNow));
             var getEventResultModel = DeserializeObject<GetEventResultModel>(result);
 
             return getEventResultModel;
@@ -469,7 +469,7 @@ namespace Topo.Services
             await RefreshTokenAsync();
 
             string requestUri = $"{achievementsAddress}units/{unitId}/submissions?status={status}";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var result = await CachedGet(requestUri);
             var getApprovalsResult = DeserializeObject<GetApprovalsResultModel>(result);
 
             return getApprovalsResult ?? new GetApprovalsResultModel();
@@ -637,8 +637,8 @@ namespace Topo.Services
         }
 
         // A read that a page may have asked to go through the data cache (see CacheScope)
-        private Task<string> CachedGet(string requestUri) =>
-            _dataCache.ReadThroughAsync(CacheKey(requestUri), () => SendRequestWithStatus(HttpMethod.Get, requestUri));
+        private Task<string> CachedGet(string requestUri, Func<string, bool>? keep = null) =>
+            _dataCache.ReadThroughAsync(CacheKey(requestUri), () => SendRequestWithStatus(HttpMethod.Get, requestUri), keep);
 
         private string CacheKey(string requestUri) => $"{_storageService.CacheKeyPrefix}|get|{requestUri}";
 

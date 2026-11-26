@@ -101,6 +101,43 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public void AnEventIsOldOnceItEndedMoreThanFourMonthsAgo()
+        {
+            var now = new DateTime(2026, 11, 20, 0, 0, 0, DateTimeKind.Utc);
+
+            Assert.IsTrue(OldEvents.IsOld("{\"end_datetime\":\"2026-07-19T10:00:00Z\"}", now));
+            Assert.IsFalse(OldEvents.IsOld("{\"end_datetime\":\"2026-07-21T10:00:00Z\"}", now));
+            Assert.IsFalse(OldEvents.IsOld("{\"end_datetime\":\"2027-01-01T10:00:00Z\"}", now));
+            Assert.IsFalse(OldEvents.IsOld("{\"title\":\"no end\"}", now));
+            Assert.IsFalse(OldEvents.IsOld("[]", now));
+            Assert.IsFalse(OldEvents.IsOld("not json", now));
+        }
+
+        [TestMethod]
+        public async Task AKeptReadNeverGoesStaleAndIsReadAgainOnlyOnRequest()
+        {
+            var terrain = new Terrain();
+            Task<string> ReadKept() => terrain.Cache.ReadThroughAsync("event", () => Task.FromResult((true, $"answer {++terrain.Calls}")), body => true);
+            using (CacheScope.Begin(CacheMode.Fresh))
+            {
+                await ReadKept();
+            }
+            terrain.Now = Start.AddDays(400);
+
+            using (var scope = CacheScope.Begin(CacheMode.Fresh))
+            {
+                Assert.AreEqual("answer 1", await ReadKept());
+                // its age is not part of how old the page's data is
+                Assert.IsNull(scope.OldestUtc);
+                Assert.IsFalse(scope.UsedStale);
+            }
+            using (CacheScope.Begin(CacheMode.Reread))
+            {
+                Assert.AreEqual("answer 2", await ReadKept());
+            }
+        }
+
+        [TestMethod]
         public async Task WorkNeededOnlyForATerrainReadIsNotDoneWhenTheHeldCopyServes()
         {
             var terrain = new Terrain();

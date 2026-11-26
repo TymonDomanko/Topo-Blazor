@@ -1,9 +1,13 @@
 @using Topo.Model.Cache
 
-@* When a page's kept data was read, with the button that reads it again. While it is being read again the line says so. *@
+@* When a page's kept data was read, with the button that reads it again (left out for a page that has its own, which gives no OnRefresh). While the
+   data is being read again the line says so. *@
 <div class="d-flex flex-wrap align-items-center gap-3 mb-3" id="data-age">
     <span class="text-muted small" role="status">@Text</span>
-    <button type="button" class="btn btn-outline-secondary btn-sm" id="refresh-data" disabled="@(Updating || Disabled)" @onclick="OnRefresh">Refresh data</button>
+    @if (OnRefresh.HasDelegate)
+    {
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="refresh-data" disabled="@(Updating || Disabled)" @onclick="OnRefresh">Refresh data</button>
+    }
 </div>
 
 @code {

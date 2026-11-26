@@ -55,7 +55,7 @@ window.topoCache = (function () {
                 cursorRequest.onsuccess = function () {
                     const cursor = cursorRequest.result;
                     if (cursor) {
-                        if (cursor.value.fetchedAt < fetchedAt) {
+                        if (cursor.value.fetchedAt < fetchedAt && !cursor.value.keep) {
                             cursor.delete();
                         }
                         cursor.continue();
