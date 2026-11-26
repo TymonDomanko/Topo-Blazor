@@ -1,0 +1,92 @@
+.scout-page {
+    margin: 0 0 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid #d6d5d5;
+    border-radius: 0.5rem;
+}
+
+.scout-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin: 0 0 0.5rem;
+}
+
+.status {
+    padding: 0.05rem 0.5rem;
+    border-radius: 0.25rem;
+    background-color: #e9ecef;
+    font-size: 0.8rem;
+}
+
+.status.ready {
+    background-color: #9cf250;
+}
+
+.counts {
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.counts th,
+.counts td {
+    padding: 0.2rem 0.75rem;
+    border: 1px solid #d6d5d5;
+    text-align: center;
+}
+
+.counts th {
+    background-color: #f7f7f7;
+    font-weight: normal;
+}
+
+.counts td.met {
+    background-color: #9cf250;
+}
+
+.events {
+    margin: 0.25rem 0 0;
+    font-size: 0.8rem;
+}
+
+.events td {
+    padding: 0.05rem 0.75rem 0.05rem 0;
+}
+
+.review .question {
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.review .answer {
+    white-space: pre-wrap;
+}
+
+/* A question not answered yet is a box to be written in, as it is on the printed page */
+.review .answer.blank {
+    min-height: 3.5rem;
+    padding: 0.2rem 0.5rem;
+    border: 1px dashed #adb5bd;
+    border-radius: 0.25rem;
+    color: #adb5bd;
+}
+
+.review .choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.25rem;
+    margin-top: 0.2rem;
+}
+
+.review .choice {
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.review .choice.chosen {
+    color: inherit;
+    font-weight: bold;
+}
