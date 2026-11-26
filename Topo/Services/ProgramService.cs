@@ -4,6 +4,7 @@ using System.Globalization;
 using Topo.Model.Program;
 using System;
 using Topo.Model.Members;
+using Topo.Model.Cache;
 
 namespace Topo.Services
 {
@@ -13,6 +14,9 @@ namespace Topo.Services
         // Runs reads that need particular calendars selected in Terrain, which only shows those calendars' events: they are switched on for the
         // reads and the selection put back afterwards. Throws when the selection can't be read or switched.
         public Task<T> WithCalendarsAsync<T>(string[] calendarIds, Func<Task<T>> read);
+        // A list of events through the data cache: a page showing what is held gets the kept list first, and it is read from Terrain every time
+        // (see DataCache.CheckedReadAsync). read lists them, giving null when Terrain would not. Null when there is no list to give.
+        public Task<List<Event>?> ListedEventsAsync(string[]? calendarIds, DateTime from, DateTime to, Func<Task<IEnumerable<Event>?>> read);
         // The events on the given calendars (switched on in Terrain for the reading, then put back as they were); without any, on those selected now
         public Task<List<EventListModel>> GetEventsForDates(DateTime fromDate, DateTime toDate, string[]? calendarIds = null);
         public Task<EventListModel> GetAttendanceForEvent(string eventId);
@@ -33,8 +37,11 @@ namespace Topo.Services
 
         private readonly ITerrainLocks _locks;
 
-        public ProgramService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, ITerrainLocks locks)
+        private readonly DataCache _dataCache;
+
+        public ProgramService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, ITerrainLocks locks, DataCache dataCache)
         {
+            _dataCache = dataCache;
             _locks = locks;
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
@@ -69,23 +76,37 @@ namespace Topo.Services
         }
 
         // The events between the dates, on the given calendars (selected in Terrain for the read, then put back as they were) or on those selected
-        // now. The list is read from Terrain every time; an event whose entry in it is new or has changed has what was kept of it dropped, so that
-        // it is read again. Null when Terrain could not be read.
+        // now. Null when there is no list to give.
         private async Task<GetEventsResultModel?> ListEventsAsync(DateTime fromDate, DateTime toDate, string[]? calendarIds)
         {
-            GetEventsResultModel? events;
-            // not while another read has the calendars switched
-            using (await _locks.CalendarsAsync())
+            var listed = await ListedEventsAsync(calendarIds, fromDate, toDate, async () =>
             {
-                events = calendarIds == null
-                    ? await _terrainAPIService.GetEventsAsync(GetUser(), fromDate, toDate)
-                    : (await SwitchedReadAsync(calendarIds, () => _terrainAPIService.GetEventsAsync(GetUser(), fromDate, toDate))).Result;
-            }
-            foreach (var listed in events?.results ?? Array.Empty<Event>())
+                // not while another read has the calendars switched
+                using (await _locks.CalendarsAsync())
+                {
+                    var events = calendarIds == null
+                        ? await _terrainAPIService.GetEventsAsync(GetUser(), fromDate, toDate)
+                        : (await SwitchedReadAsync(calendarIds, () => _terrainAPIService.GetEventsAsync(GetUser(), fromDate, toDate))).Result;
+                    return events?.results;
+                }
+            });
+            return listed == null ? null : new GetEventsResultModel { results = listed.ToArray() };
+        }
+
+        public Task<List<Event>?> ListedEventsAsync(string[]? calendarIds, DateTime from, DateTime to, Func<Task<IEnumerable<Event>?>> read)
+        {
+            var calendars = calendarIds == null ? "selected" : string.Join(",", calendarIds.OrderBy(c => c, StringComparer.Ordinal));
+            var key = $"{_storageService.CacheKeyPrefix}|list|{calendars}|{from:yyyy-MM-dd}|{to:yyyy-MM-dd}";
+            return _dataCache.CheckedReadAsync(key, async () =>
             {
-                await _terrainAPIService.CheckListedEventAsync(listed);
-            }
-            return events;
+                var events = (await read())?.ToList();
+                // an event whose entry in the list is new or has changed has what was kept of it dropped, so that it is read again
+                foreach (var listed in events ?? new List<Event>())
+                {
+                    await _terrainAPIService.CheckListedEventAsync(listed);
+                }
+                return events;
+            });
         }
 
         public async Task<T> WithCalendarsAsync<T>(string[] calendarIds, Func<Task<T>> read)

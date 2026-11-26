@@ -76,6 +76,15 @@
         </div>
     </div>
 
+    @if (_page.Loading)
+    {
+        <div class="mt-3 mb-3">Reading events...</div>
+    }
+    @if (_page.ReadUtc != null)
+    {
+        <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
+    }
+
     @if (model.Ideas != null)
     {
         @if (model.FetchFailed)
@@ -90,8 +99,8 @@
         {
             <div class="mt-3 mb-3 row">
                 <div class="col-sm">
-                    <button type="submit" name="button" @onclick="ProgramIdeasReportPdfClick" class="btn btn-primary">Program Ideas (pdf)</button> &nbsp;
-                    <button type="submit" name="button" @onclick="ProgramIdeasReportXlsxClick" class="btn btn-success">Program Ideas (xlsx)</button>
+                    <button type="submit" name="button" @onclick="ProgramIdeasReportPdfClick" disabled="@_page.Updating" class="btn btn-primary">Program Ideas (pdf)</button> &nbsp;
+                    <button type="submit" name="button" @onclick="ProgramIdeasReportXlsxClick" disabled="@_page.Updating" class="btn btn-success">Program Ideas (xlsx)</button>
                 </div>
             </div>
 

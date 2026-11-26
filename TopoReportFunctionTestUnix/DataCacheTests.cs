@@ -7,6 +7,32 @@ namespace TopoReportFunctionTest
     public class DataCacheTests
     {
         [TestMethod]
+        public async Task AReadMadeEveryTimeShowsTheHeldCopyOnlyWhileThereIsACheckToCome()
+        {
+            var cache = new DataCache(new Store());
+            var calls = 0;
+            Func<Task<string?>> read = () => Task.FromResult<string?>($"list {++calls}");
+            using (CacheScope.Begin(CacheMode.Fresh))
+            {
+                Assert.AreEqual("list 1", await cache.CheckedReadAsync("k", read));
+            }
+
+            using (var shown = CacheScope.Begin(CacheMode.Held))
+            {
+                Assert.AreEqual("list 1", await cache.CheckedReadAsync("k", read));
+                Assert.IsTrue(shown.ToCheck);
+            }
+            using (CacheScope.Begin(CacheMode.Fresh))
+            {
+                Assert.AreEqual("list 2", await cache.CheckedReadAsync("k", read));
+                // Terrain not answering leaves the held copy
+                Assert.AreEqual("list 2", await cache.CheckedReadAsync("k", () => Task.FromResult<string?>(null)));
+            }
+            // outside a scope it is only the read
+            Assert.AreEqual("list 3", await cache.CheckedReadAsync("k", read));
+        }
+
+        [TestMethod]
         public void WhatAnInnerScopeUsedCountsForTheOneAroundIt()
         {
             var old = new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc);

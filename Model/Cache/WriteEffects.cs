@@ -43,8 +43,10 @@ namespace Topo.Model.Cache
                 var isComment = path.Contains("comments");
                 // changing or removing an event can change the credits Terrain works out from who came
                 var changesCredits = eventUri != null && !isComment;
-                // (event lists are read every time, so there are none to drop)
+                // a change to an event can change any kept list; a comment changes what is kept of that event's comments
                 return key => key.Contains("/proposals")
+                    || (!isComment && key.Contains("|list|"))
+                    || (isComment && eventUri != null && key.EndsWith($"{eventUri}/comments", StringComparison.Ordinal))
                     || (eventUri != null && key.EndsWith(eventUri, StringComparison.Ordinal))
                     || (changesCredits && (IsAchievement(key) || key.EndsWith("/metrics", StringComparison.Ordinal)));
             }

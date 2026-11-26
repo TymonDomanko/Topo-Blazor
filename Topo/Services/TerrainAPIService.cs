@@ -244,7 +244,12 @@ namespace Topo.Services
             var fromDateString = fromDate.ToString("s");
             var toDateString = toDate.ToString("s");
             string requestUri = $"{eventsAddress}members/{userId}/events?start_datetime={fromDateString}&end_datetime={toDateString}";
-            var result = await SendRequest(HttpMethod.Get, requestUri);
+            var (succeeded, result) = await SendRequestWithStatus(HttpMethod.Get, requestUri);
+            // null when Terrain did not give the list, which is not the same as there being no events
+            if (!succeeded)
+            {
+                return null;
+            }
             var getEventsResultModel = DeserializeObject<GetEventsResultModel>(result);
 
             return getEventsResultModel;

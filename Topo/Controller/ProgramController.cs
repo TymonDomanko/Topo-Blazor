@@ -33,9 +33,9 @@ namespace Topo.Controller
 
 
         public ProgramPageViewModel model = new ProgramPageViewModel();
-        // How old the kept event details behind the list are, and reading them again
-        public ReportRefresh _data = new ReportRefresh();
-        private DateTime? _eventsReadUtc;
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public string ErrorMessage = "";
         private string groupCalendarId = string.Empty;
         private string projectPatrolCalendarId = string.Empty;
 
@@ -57,6 +57,7 @@ namespace Topo.Controller
             if (!_storageService.IsAuthenticated)
                 NavigationManager.NavigateTo("index");
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             var calendars = await _programService.GetCalendars();
@@ -111,20 +112,31 @@ namespace Topo.Controller
             if (!(model.SelectedCalendars == null || model.SelectedCalendars.Length == 0))
             {
                 //_storageService.UnitId = model.CalendarId;
-                await ShowEvents();
-                await _data.ReadAgeAsync(() => Task.FromResult(_eventsReadUtc));
+                // what the data cache holds shows at once; the list is then read from Terrain, with whatever else is out of date
+                ErrorMessage = "";
+                await _page.LoadAsync(ReadEvents(), Show);
+                ShowFailure();
             }
         }
 
-        // The events on the chosen calendars. The list is always read from Terrain; an event's details come from the data cache while in date, and
-        // an event long past is kept until it is read again on request.
-        private async Task ShowEvents()
+        // The events on the chosen calendars. The list is read from Terrain every time; an event's details come from the data cache while in date,
+        // and an event long past is kept until it is read again on request.
+        private Func<Action<string>, CancellationToken, Task<List<EventListModel>>> ReadEvents()
         {
-            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
-            var scope = CacheScope.Current!;
-            var events = await _programService.GetEventsForDates(model.CalendarSearchFromDate, model.CalendarSearchToDate, model.SelectedCalendars);
-            model.Events = events.OrderBy(e => e.StartDateTime).ToList();
-            _eventsReadUtc = scope.OldestUtc;
+            var from = model.CalendarSearchFromDate;
+            var to = model.CalendarSearchToDate;
+            var calendars = model.SelectedCalendars;
+            return (progress, cancellationToken) => _programService.GetEventsForDates(from, to, calendars);
+        }
+
+        private void Show(List<EventListModel> events) => model.Events = events.OrderBy(e => e.StartDateTime).ToList();
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
+            {
+                ErrorMessage = "Couldn't read the events from Terrain.";
+            }
         }
 
         // How far each way the page starts, and how much more each request adds
@@ -144,11 +156,12 @@ namespace Topo.Controller
 
         internal async Task RefreshClick()
         {
-            _data.Changed = () => InvokeAsync(StateHasChanged);
-            await _data.RefreshAsync((progress, token) => ShowEvents(), () => Task.FromResult(_eventsReadUtc));
+            ErrorMessage = "";
+            await _page.RefreshAsync(ReadEvents(), Show);
+            ShowFailure();
         }
 
-        public void Dispose() => _data.Dispose();
+        public void Dispose() => _page.Dispose();
 
         internal async Task EventAttendanceClick(string eventId)
         {
