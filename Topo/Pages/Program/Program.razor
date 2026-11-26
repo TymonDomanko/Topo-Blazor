@@ -59,12 +59,20 @@
     </div>
 
     <PageStatus Loading="Loading" Progress="@Progress" />
+    @if (model.Events != null && model.Events.Any())
+    {
+        <DataAgeLine What="Event details" ReadUtc="_data.ReadUtc" NoneText="Events that ended more than four months ago are kept until you refresh." Updating="_data.Updating" Disabled="Loading" Progress="@Progress" OnRefresh="RefreshClick" />
+        if (_data.Failed)
+        {
+            <div class="mb-3 text-danger">Couldn't read the events again from Terrain.</div>
+        }
+    }
 
     @if (model.Events != null)
     {
-        <ReportButtons Name="Attendance Report" OnPdf="AttendanceReportPdfClick" OnXlsx="AttendanceReportXlsxClick" Disabled="@(!model.Events.Any())">
-            <ReportButton Name="Term Program" Format="pdf" Disabled="@(!model.Events.Any())" OnClick="TermProgramReportPdfClick" />
-            <ReportButton Name="Term Program" Format="xlsx" Disabled="@(!model.Events.Any())" OnClick="TermProgramReportXlsxClick" />
+        <ReportButtons Name="Attendance Report" OnPdf="AttendanceReportPdfClick" OnXlsx="AttendanceReportXlsxClick" Disabled="@(_data.Updating || !model.Events.Any())">
+            <ReportButton Name="Term Program" Format="pdf" Disabled="@(_data.Updating || !model.Events.Any())" OnClick="TermProgramReportPdfClick" />
+            <ReportButton Name="Term Program" Format="xlsx" Disabled="@(_data.Updating || !model.Events.Any())" OnClick="TermProgramReportXlsxClick" />
         </ReportButtons>
     }
 

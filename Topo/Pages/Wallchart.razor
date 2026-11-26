@@ -47,6 +47,10 @@
     </div>
 
     <PageStatus Loading="Loading" Progress="@Progress" Error="@model.ErrorMessage" />
+    @if (_page.ReadUtc != null)
+    {
+        <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
+    }
 
     @if (Sheets != null && Sheets.Count == 0)
     {
@@ -54,7 +58,7 @@
     }
     else if (Sheets != null)
     {
-        <ReportButtons Name="Wallchart" OnPdf="WallchartReportPdfClick" OnXlsx="WallchartReportXlsxClick" Disabled="@(Sheets.Count == 0)" />
+        <ReportButtons Name="Wallchart" OnPdf="WallchartReportPdfClick" OnXlsx="WallchartReportXlsxClick" Disabled="@(_page.Updating || Sheets.Count == 0)" />
 
         <WallchartPreview Sheets="Sheets" />
     }

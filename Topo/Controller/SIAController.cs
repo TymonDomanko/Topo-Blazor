@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Topo.Model.SIA;
+using Topo.Model.Cache;
 using Topo.Services;
 using Topo.Model.ReportGeneration;
 using Newtonsoft.Json;
@@ -8,7 +9,7 @@ using Topo.Model.Members;
 
 namespace Topo.Controller
 {
-    public class SIAController : ComponentBase
+    public class SIAController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -29,8 +30,10 @@ namespace Topo.Controller
         public ISIAService _SIAService { get; set; }
 
         public SIAPageViewModel model = new SIAPageViewModel();
-        public bool Loading;
-        public string Progress = "";
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public bool Loading => _page.Loading;
+        public string Progress => _page.Progress;
         public string ErrorMessage = "";
         // Laid out again whenever an option changes, from what was read for the unit
         public List<SiaProjectsSheet>? Sheets;
@@ -43,6 +46,7 @@ namespace Topo.Controller
             if (!_storageService.IsAuthenticated)
                 NavigationManager.NavigateTo("index");
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             if (!string.IsNullOrEmpty(_storageService.UnitId))
@@ -62,49 +66,64 @@ namespace Topo.Controller
             Sheets = null;
             _data = null;
             ErrorMessage = "";
-            if (string.IsNullOrEmpty(unitId))
-            {
-                model.UnitId = unitId;
-                _storageService.UnitId = model.UnitId;
-                model.UnitName = _storageService.UnitName;
-                model.Members = new List<MemberListModel>();
-                return;
-            }
             model.UnitId = unitId;
             _storageService.UnitId = model.UnitId;
-            var allMembers = await _membersService.GetMembersAsync(model.UnitId);
-            model.Members = allMembers.Where(m => m.isAdultLeader == 0).OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();
             model.UnitName = _storageService.UnitName;
-            // the members are kept for the unit, so a tick left from another visit is cleared
-            foreach (var member in model.Members)
-                member.selected = false;
-            await Load();
+            // emptied first, so a tick left from another unit or visit is cleared
+            model.Members = new List<MemberListModel>();
+            if (string.IsNullOrEmpty(unitId))
+            {
+                _page.Cancel();
+                return;
+            }
+            // what the data cache holds shows at once, and is read again behind the page when it is more than a day old
+            await _page.LoadAsync(Read(unitId), Show);
+            ShowFailure();
+        }
+
+        // Reads everything on the page again, leaving what is shown in place until the new figures are in
+        internal async Task RefreshClick()
+        {
+            ErrorMessage = "";
+            await _page.RefreshAsync(Read(model.UnitId), Show);
+            ShowFailure();
         }
 
         // Reads every Scout's projects once; the options then change what is shown without reading Terrain again
-        private async Task Load()
-        {
-            if (model.Members.Count == 0)
+        private Func<Action<string>, CancellationToken, Task<(List<MemberListModel> Youth, List<SIAProjectListModel>? Data)>> Read(string unitId) =>
+            async (progress, token) =>
             {
-                return;
-            }
+                var allMembers = await _membersService.GetMembersAsync(unitId);
+                var youth = allMembers.Where(m => m.isAdultLeader == 0).OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();
+                if (youth.Count == 0)
+                {
+                    return (youth, null);
+                }
+                return (youth, await _SIAService.GenerateSIAReportData(youth, _storageService.Section, unitId, progress));
+            };
 
-            Loading = true;
-            try
+        private void Show((List<MemberListModel> Youth, List<SIAProjectListModel>? Data) read)
+        {
+            // the members are kept for the unit, so only the ticks on the page carry over
+            var ticked = Ticked;
+            foreach (var member in read.Youth)
             {
-                _data = await _SIAService.GenerateSIAReportData(model.Members, _storageService.Section, model.UnitId, step => { Progress = step; InvokeAsync(StateHasChanged); });
-                Recalculate();
+                member.selected = ticked.Contains(member.id);
             }
-            catch (Exception)
+            model.Members = read.Youth;
+            _data = read.Data;
+            Recalculate();
+        }
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
             {
                 ErrorMessage = "Couldn't read the projects from Terrain.";
             }
-            finally
-            {
-                Loading = false;
-                Progress = "";
-            }
         }
+
+        public void Dispose() => _page.Dispose();
 
         internal void OptionChanged() => Recalculate();
 
@@ -140,7 +159,7 @@ namespace Topo.Controller
         private async Task Download(OutputType outputType, string extension, string contentType)
         {
             var reportData = ReportData();
-            if (reportData == null || reportData.Count == 0)
+            if (reportData == null || reportData.Count == 0 || _page.Updating)
             {
                 return;
             }

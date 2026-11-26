@@ -14,8 +14,11 @@ namespace Topo.Services
         private readonly StorageService _storageService;
         private readonly ITerrainAPIService _terrainAPIService;
 
-        public HistoryService(StorageService storageService, ITerrainAPIService terrainAPIService)
+        private readonly ITerrainLocks _locks;
+
+        public HistoryService(StorageService storageService, ITerrainAPIService terrainAPIService, ITerrainLocks locks)
         {
+            _locks = locks;
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
         }
@@ -91,6 +94,7 @@ namespace Topo.Services
         private async Task<List<GetMemberLogbookDetailResultModel>> GetLogbook(string memberId)
         {
             var entries = new List<GetMemberLogbookDetailResultModel>();
+            using var profile = await _locks.ProfileAsync();
             await _terrainAPIService.AssumeProfile(memberId);
             try
             {

@@ -32,10 +32,14 @@
     </div>
 
     <PageStatus Loading="Loading" Progress="@Progress" Error="@ErrorMessage" />
+    @if (ReadUtc != null)
+    {
+        <DataAgeLine What="Logbooks" ReadUtc="ReadUtc" Updating="Updating" Disabled="Loading" Progress="@Progress" OnRefresh="RefreshClick" />
+    }
 
     @if (model.Members != null && model.Members.Any())
     {
-        <ReportButtons Name="Logbook" OnXlsx="LogbookReportXlsxClick" Disabled="@(Loading || Logbooks.Count == 0)" />
+        <ReportButtons Name="Logbook" OnXlsx="LogbookReportXlsxClick" Disabled="@(Loading || Updating || Logbooks.Count == 0)" />
 
         @if (Ticked.Count > 0)
         {

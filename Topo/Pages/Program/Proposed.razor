@@ -80,9 +80,11 @@ else
         </div>
         <div class="col-sm-3 col-form-label text-muted">Showing @shown.Count of @Proposals.Count</div>
     </div>
+    <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
+
     <div class="mb-3">
-        <button type="button" class="btn btn-primary" @onclick="ReportPdfClick">Proposed Activities (pdf)</button> &nbsp;
-        <button type="button" class="btn btn-success" @onclick="ReportXlsxClick">Proposed Activities (xlsx)</button>
+        <button type="button" class="btn btn-primary" @onclick="ReportPdfClick" disabled="@_page.Updating">Proposed Activities (pdf)</button> &nbsp;
+        <button type="button" class="btn btn-success" @onclick="ReportXlsxClick" disabled="@_page.Updating">Proposed Activities (xlsx)</button>
     </div>
 
     <table class="table table-sm table-striped align-middle">

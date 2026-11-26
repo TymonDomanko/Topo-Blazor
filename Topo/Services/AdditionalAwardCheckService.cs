@@ -64,8 +64,11 @@ namespace Topo.Services
         private readonly IMembersService _membersService;
         private readonly ILocalStorageService _localStorage;
 
-        public AdditionalAwardCheckService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, ILocalStorageService localStorage, IYearsOfServiceService yearsOfService)
+        private readonly ITerrainLocks _locks;
+
+        public AdditionalAwardCheckService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, ILocalStorageService localStorage, IYearsOfServiceService yearsOfService, ITerrainLocks locks)
         {
+            _locks = locks;
             _yearsOfService = yearsOfService;
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
@@ -189,6 +192,8 @@ namespace Topo.Services
                         {
                             await pacing.WaitForGapAsync();
                         }
+                        // only one Scout's profile can be assumed at a time, across pages and tabs
+                        using var profileLock = await _locks.ProfileAsync();
                         try
                         {
                             await _terrainAPIService.AssumeProfile(member.id);
@@ -431,12 +436,14 @@ namespace Topo.Services
             {
                 var member = youth.First(m => m.id == scout.Key);
                 progress?.Invoke($"{Name(member)}'s logbook, for the day each lower level was earned");
+                if (pacing != null)
+                {
+                    await pacing.WaitForGapAsync();
+                }
+                // only one Scout's profile can be assumed at a time, across pages and tabs
+                using var profileLock = await _locks.ProfileAsync();
                 try
                 {
-                    if (pacing != null)
-                    {
-                        await pacing.WaitForGapAsync();
-                    }
                     await _terrainAPIService.AssumeProfile(member.id);
                     pacing?.ProfileTakenOn();
                     pacing?.ThrowIfPageNeedsTerrain();

@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using Topo.Model;
+using Topo.Model.Cache;
 using Topo.Model.Logbook;
 
 namespace Topo.Services
@@ -16,8 +17,14 @@ namespace Topo.Services
     {
         private readonly ITerrainAPIService _terrainAPIService;
 
-        public LogbookService(ITerrainAPIService terrainAPIService)
+        private readonly ILogbookTotalsService _logbookTotals;
+
+        private readonly ITerrainLocks _locks;
+
+        public LogbookService(ITerrainAPIService terrainAPIService, ILogbookTotalsService logbookTotals, ITerrainLocks locks)
         {
+            _locks = locks;
+            _logbookTotals = logbookTotals;
             _terrainAPIService = terrainAPIService;
         }
 
@@ -34,7 +41,7 @@ namespace Topo.Services
                     MemberLogbook logbook;
                     try
                     {
-                        logbook = await ReadLogbookAsync(members[i].Key, members[i].Value);
+                        logbook = await ReadLogbookAsync(members[i].Key, members[i].Value, cancellationToken);
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
@@ -47,16 +54,24 @@ namespace Topo.Services
             }
             finally
             {
-                await _terrainAPIService.RevokeAssumedProfiles();
+                using (await _locks.ProfileAsync())
+                {
+                    await _terrainAPIService.RevokeAssumedProfiles();
+                }
             }
             return logbooks;
         }
 
-        private async Task<MemberLogbook> ReadLogbookAsync(string memberId, string memberName)
+        private async Task<MemberLogbook> ReadLogbookAsync(string memberId, string memberName, CancellationToken cancellationToken)
         {
-            // assuming this Scout replaces the one before, so there is no revoke between Scouts (ReadLogbooksAsync revokes at the end)
-            await _terrainAPIService.AssumeProfile(memberId);
-            var getMemberLogbookMetrics = await _terrainAPIService.GetMemberLogbookMetrics(memberId);
+            // assuming this Scout replaces the one before, so there is no revoke between Scouts (ReadLogbooksAsync revokes at the end). Reading
+            // through the data cache, the profile is only assumed if something of the Scout's has to be read from Terrain.
+            using var profile = await _locks.ProfileAsync(cancellationToken);
+            using var scope = CacheScope.Begin(CacheScope.Current?.Mode ?? CacheMode.Fresh);
+            Task? assuming = null;
+            scope.BeforeRead = () => assuming ??= _terrainAPIService.AssumeProfile(memberId);
+            var totals = await _logbookTotals.ForPageAsync(memberId, cancellationToken);
+            var getMemberLogbookMetrics = totals?.Value ?? new GetMemberLogbookMetricsResultModel();
             var totalNightsCamped = getMemberLogbookMetrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
             var totalKmsHiked = (getMemberLogbookMetrics.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;
             var logbook = new MemberLogbook { MemberId = memberId, MemberName = memberName, TotalKilometres = totalKmsHiked, TotalNights = totalNightsCamped };

@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Topo.Model.Members;
 using Topo.Model.OAS;
 using Topo.Model.ReportGeneration;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -30,18 +31,19 @@ namespace Topo.Controller
         public IOASService _oasService { get; set; }
 
         public OasSummaryPageViewModel model = new OasSummaryPageViewModel();
-        public bool Loading;
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public bool Loading => _page.Loading || _readingBranches;
+        private bool _readingBranches;
         // The unit has no youth, so there is nothing to read
         public bool NoYouth;
-        public string Progress = "";
+        public string Progress => _readingBranches ? "the branches of each skill" : _page.Progress;
         // Laid out again whenever an option changes, from what was read for the unit
         public OasSummaryReport? Report;
         private List<OasSummaryMember>? _members;
         private List<Result>? _records;
         // The branches of each skill, as Terrain lists them; read the first time they are wanted
         private List<OasBranch>? _branches;
-        // The unit can be changed while one is still being read, so a read that has been overtaken is dropped
-        private int _loadId;
 
         protected override async Task OnInitializedAsync()
         {
@@ -51,6 +53,7 @@ namespace Topo.Controller
                 return;
             }
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             if (!string.IsNullOrEmpty(_storageService.UnitId))
@@ -69,55 +72,57 @@ namespace Topo.Controller
             _members = null;
             _records = null;
             NoYouth = false;
-            var loadId = ++_loadId;
             if (string.IsNullOrEmpty(unitId))
             {
-                Loading = false;
-                Progress = "";
+                _page.Cancel();
                 return;
             }
 
             _storageService.UnitId = unitId;
             model.UnitName = _storageService.UnitName;
-            Loading = true;
-            Progress = "the unit's Scouts";
-            try
+            // what the data cache holds shows at once, and is read again behind the page when it is more than a day old
+            await _page.LoadAsync(Read(unitId), Show);
+            ShowFailure();
+            await SplitChanged();
+        }
+
+        // Reads everything on the page again, leaving what is shown in place until the new table is in
+        internal async Task RefreshClick()
+        {
+            model.ErrorMessage = "";
+            await _page.RefreshAsync(Read(model.UnitId), Show);
+            ShowFailure();
+        }
+
+        private Func<Action<string>, CancellationToken, Task<(List<MemberListModel> Youth, List<Result> Records)>> Read(string unitId) =>
+            async (progress, cancellationToken) =>
             {
+                progress("the unit's Scouts");
                 // Youth only: the Unit Leader, Patrol Leaders and Assistant Patrol Leaders are youth, and stay in the order the unit is listed
                 var members = (await _membersService.GetMembersAsync(unitId)).Where(m => m.isAdultLeader == 0).ToList();
-                if (loadId != _loadId)
-                {
-                    return;
-                }
+                cancellationToken.ThrowIfCancellationRequested();
                 if (members.Count == 0)
                 {
-                    NoYouth = true;
-                    return;
+                    return (members, new List<Result>());
                 }
-                Progress = "their Outdoor Adventure Skills";
+                progress("their Outdoor Adventure Skills");
                 var records = await _oasService.GetUnitOasRecords(unitId);
-                if (loadId != _loadId)
-                {
-                    return;
-                }
-                _members = members.Select(m => new OasSummaryMember { MemberId = m.id, FirstName = m.first_name, LastName = m.last_name, Patrol = m.patrol_name }).ToList();
-                _records = records.results.ToList();
-                await SplitChanged();
-            }
-            catch (Exception)
+                return (members, records.results.ToList());
+            };
+
+        private void Show((List<MemberListModel> Youth, List<Result> Records) read)
+        {
+            NoYouth = read.Youth.Count == 0;
+            _members = read.Youth.Select(m => new OasSummaryMember { MemberId = m.id, FirstName = m.first_name, LastName = m.last_name, Patrol = m.patrol_name }).ToList();
+            _records = read.Records;
+            Recalculate();
+        }
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
             {
-                if (loadId == _loadId)
-                {
-                    model.ErrorMessage = "Couldn't read the Outdoor Adventure Skills from Terrain.";
-                }
-            }
-            finally
-            {
-                if (loadId == _loadId)
-                {
-                    Loading = false;
-                    Progress = "";
-                }
+                model.ErrorMessage = "Couldn't read the Outdoor Adventure Skills from Terrain.";
             }
         }
 
@@ -129,8 +134,7 @@ namespace Topo.Controller
         {
             if (model.SplitBranches && _branches == null)
             {
-                Loading = true;
-                Progress = "the branches of each skill";
+                _readingBranches = true;
                 StateHasChanged();
                 try
                 {
@@ -148,8 +152,7 @@ namespace Topo.Controller
                 }
                 finally
                 {
-                    Loading = false;
-                    Progress = "";
+                    _readingBranches = false;
                 }
             }
             Recalculate();
@@ -157,7 +160,8 @@ namespace Topo.Controller
 
         private void Recalculate()
         {
-            if (_members == null || _records == null)
+            // a table split into branches waits for the branches to be listed
+            if (_members == null || _records == null || (model.SplitBranches && _branches == null))
             {
                 return;
             }
@@ -175,7 +179,7 @@ namespace Topo.Controller
         // The report is made from what is on the page, so it is the same as the preview
         private async Task Download(OutputType outputType)
         {
-            if (Report == null)
+            if (Report == null || _page.Updating)
             {
                 return;
             }
@@ -193,6 +197,6 @@ namespace Topo.Controller
             }
         }
 
-        public void Dispose() => _loadId++;
+        public void Dispose() => _page.Dispose();
     }
 }

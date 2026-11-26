@@ -29,6 +29,10 @@
 </div>
 
 <PageStatus Loading="Loading" Progress="@Progress" />
+@if (MembersReadUtc != null && model.Members.Any())
+{
+    <DataAgeLine What="Members" ReadUtc="MembersReadUtc" />
+}
 
 @if (model.Members.Any())
 {

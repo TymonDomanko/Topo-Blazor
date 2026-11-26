@@ -41,23 +41,14 @@ namespace Topo.Services
         // True from when the calendars are switched until they are put back. What is kept to put back is only taken when they are not switched, so a
         // second read that starts before the first has put them back does not keep the switched ones as what to put back.
         private bool _switched;
-        private readonly SemaphoreSlim _calendarLock = new SemaphoreSlim(1, 1);
 
-        private sealed class CalendarLockRelease : IDisposable
-        {
-            private SemaphoreSlim? _lock;
-            public CalendarLockRelease(SemaphoreSlim calendarLock) => _lock = calendarLock;
-            public void Dispose() => Interlocked.Exchange(ref _lock, null)?.Release();
-        }
+        public Task<IDisposable> LockCalendarsAsync(CancellationToken cancellationToken = default) => _locks.CalendarsAsync(cancellationToken);
 
-        public async Task<IDisposable> LockCalendarsAsync(CancellationToken cancellationToken = default)
-        {
-            await _calendarLock.WaitAsync(cancellationToken);
-            return new CalendarLockRelease(_calendarLock);
-        }
+        private readonly ITerrainLocks _locks;
 
-        public ProgramService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService)
+        public ProgramService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, ITerrainLocks locks)
         {
+            _locks = locks;
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
             _memberService = membersService;
@@ -166,6 +157,11 @@ namespace Topo.Services
             var getEventsResultModel = await _terrainAPIService.GetEventsAsync(GetUser(), fromDate.AddDays(-1), toDate);
             if (getEventsResultModel != null && getEventsResultModel.results != null)
             {
+                // an event whose list entry has changed since it was last listed has what the data cache kept of it dropped
+                foreach (var listed in getEventsResultModel.results)
+                {
+                    await _terrainAPIService.CheckListedEventAsync(listed);
+                }
                 var eventList = new List<EventListModel>();
                 // The list has no organisers, leads or assists, so each event is read for those. They are read a few at a time
                 // instead of one after another, and come back in the order the events are listed.

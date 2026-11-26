@@ -2,6 +2,7 @@
 using Microsoft.JSInterop;
 using Newtonsoft.Json;
 using System;
+using Topo.Model.Cache;
 using Topo.Model.Members;
 using Topo.Model.OAS;
 using Topo.Model.Progress;
@@ -10,7 +11,7 @@ using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class ProgressDetailsController : ComponentBase
+    public class ProgressDetailsController : ComponentBase, IDisposable
     {
         [Inject]
         public IProgressService _progressService { get; set; }
@@ -34,19 +35,50 @@ namespace Topo.Controller
         public string MemberId { get; set; }
 
         public ProgressDetailsPageViewModel model = new ProgressDetailsPageViewModel();
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public string ErrorMessage = "";
 
         protected override async Task OnInitializedAsync()
         {
             if (!_storageService.IsAuthenticated)
                 NavigationManager.NavigateTo("index");
 
-            model = await _progressService.GetProgressDetailsPageViewModel(MemberId);
+            _page.Changed = () => InvokeAsync(StateHasChanged);
+            // what the data cache holds shows at once, and is read again behind the page when it is more than a day old
+            await _page.LoadAsync(Read, Show);
+            ShowFailure();
+        }
+
+        internal async Task RefreshClick()
+        {
+            ErrorMessage = "";
+            await _page.RefreshAsync(Read, Show);
+            ShowFailure();
+        }
+
+        private Task<ProgressDetailsPageViewModel> Read(Action<string> progress, CancellationToken cancellationToken) =>
+            _progressService.GetProgressDetailsPageViewModel(MemberId);
+
+        private void Show(ProgressDetailsPageViewModel read)
+        {
+            model = read;
             model.GroupName = _storageService.GroupNameDisplay;
             model.DisableOAS = model.OASSummaries.Where(o => o.Awarded == DateTime.MinValue).Count() == 0 ? "disable" : null;
             model.DisableCoreOAS = model.OASSummaries
                 .Where(o => o.Stream == "bushcraft" || o.Stream == "bushwalking" || o.Stream == "camping")
                 .Where(o => o.Awarded == DateTime.MinValue).Count() == 0 ? "disable" : null;
         }
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
+            {
+                ErrorMessage = "Couldn't read the progress from Terrain.";
+            }
+        }
+
+        public void Dispose() => _page.Dispose();
 
         internal async Task ProgressPdfClick()
         {
