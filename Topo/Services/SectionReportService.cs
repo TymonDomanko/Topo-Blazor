@@ -37,9 +37,11 @@ namespace Topo.Services
         private readonly ITerrainAPIService _terrainAPIService;
         private readonly IMembersService _membersService;
         private readonly IUnitReportService _unitReportService;
+        private readonly IYearsOfServiceService _yearsOfService;
 
-        public SectionReportService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, IUnitReportService unitReportService)
+        public SectionReportService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService membersService, IUnitReportService unitReportService, IYearsOfServiceService yearsOfService)
         {
+            _yearsOfService = yearsOfService;
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
             _membersService = membersService;
@@ -67,6 +69,9 @@ namespace Topo.Services
                 ? new List<GroupUnit>()
                 : await _terrainAPIService.GetGroupUnitsAsync(_storageService.GroupId);
             var awardNames = await AdditionalAwardNames.Get(_terrainAPIService);
+            // Years of service are not in Terrain's additional awards: they are the records in the group's store (calendar comments)
+            progress?.Invoke("Years of service records");
+            var yearsOfService = await _yearsOfService.RecordsForReportAsync();
 
             // What Terrain holds for a member is read once, even when they matter to two units' reports. Each kind of record is
             // read once for a whole unit (every record carries its member_id) instead of once per member, then handed out by member.
@@ -94,6 +99,7 @@ namespace Topo.Services
                     AsOf = now,
                     CurrentMembers = members,
                     AwardNames = awardNames,
+                    YearsOfService = yearsOfService,
                     GroupUnitIds = groupUnits.Select(u => u.id).ToHashSet(),
                     Previous = request.PreviousRosters.GetValueOrDefault(unitId)
                 };

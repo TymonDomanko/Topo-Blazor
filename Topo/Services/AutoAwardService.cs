@@ -29,15 +29,17 @@ namespace Topo.Services
         private readonly StorageService _storageService;
         private readonly ILocalStorageService _localStorage;
         private readonly IAdditionalAwardCheckService _checkService;
+        private readonly IYearsOfServiceService _yearsOfService;
         private readonly ActivityMonitor _activityMonitor;
         private bool _started;
         private string _loadedGroup = "";
 
-        public AutoAwardService(StorageService storageService, ILocalStorageService localStorage, IAdditionalAwardCheckService checkService, ActivityMonitor activityMonitor)
+        public AutoAwardService(StorageService storageService, ILocalStorageService localStorage, IAdditionalAwardCheckService checkService, IYearsOfServiceService yearsOfService, ActivityMonitor activityMonitor)
         {
             _storageService = storageService;
             _localStorage = localStorage;
             _checkService = checkService;
+            _yearsOfService = yearsOfService;
             _activityMonitor = activityMonitor;
         }
 
@@ -94,11 +96,18 @@ namespace Topo.Services
                 return;
             }
             await LoadAsync();
-            if (IsRunning || !AutoAwardSchedule.IsDue(Settings, DateTime.UtcNow) || !_activityMonitor.IsIdleFor(AutoAwardSchedule.QuietFor))
+            if (IsRunning || !_activityMonitor.IsIdleFor(AutoAwardSchedule.QuietFor))
             {
                 return;
             }
-            await RunAsync();
+            // The Camper and Walkabout check and the years of service check each keep their own timetable, and run together when both are due
+            var logbooksDue = AutoAwardSchedule.IsDue(Settings, DateTime.UtcNow);
+            var yearsDue = await _yearsOfService.IsScanDueAsync();
+            if (!logbooksDue && !yearsDue)
+            {
+                return;
+            }
+            await RunAsync(logbooksDue, yearsDue);
         }
 
         private async Task LoadAsync()
@@ -115,12 +124,15 @@ namespace Topo.Services
 
         private async Task SaveAsync() => await _localStorage.SetItemAsync(Key, Settings);
 
-        private async Task RunAsync()
+        private async Task RunAsync(bool logbooksDue, bool yearsDue)
         {
             IsRunning = true;
-            Settings.LastAttemptUtc = DateTime.UtcNow;
-            Settings.LastError = "";
-            await SaveAsync();
+            if (logbooksDue)
+            {
+                Settings.LastAttemptUtc = DateTime.UtcNow;
+                Settings.LastError = "";
+                await SaveAsync();
+            }
             Changed?.Invoke();
             using var cancel = new CancellationTokenSource();
             try
@@ -129,24 +141,32 @@ namespace Topo.Services
                 using (_activityMonitor.EnterBackground())
                 {
                     var pacing = new MonitorPacing(_activityMonitor, cancel.Token);
-                    var result = await _checkService.ScanAsync(_storageService.Units.Keys.ToList(), null, pacing);
-                    if (result.Stopped)
+                    if (logbooksDue)
                     {
-                        Settings.LastSummary = "Paused because Topo was in use; it will try again shortly.";
-                        return;
-                    }
+                        var result = await _checkService.ScanAsync(_storageService.Units.Keys.ToList(), null, pacing);
+                        if (result.Stopped)
+                        {
+                            Settings.LastSummary = "Paused because Topo was in use; it will try again shortly.";
+                            return;
+                        }
 
-                    Settings.LastSummary = $"Checked {result.MembersChecked} Scouts: {result.ToBePresented} awards to hand over" +
-                        (result.NotHighest > 0 ? $" and {result.NotHighest} more covered by a higher level" : "") +
-                        (result.LowerLevelsRecorded > 0 ? $"; recorded {result.LowerLevelsRecorded} lower levels in Terrain" : "") +
-                        (result.MembersNotRead.Count > 0 ? $"; could not read {result.MembersNotRead.Count} Scouts" : "") + ".";
-                    if (result.Failures.Count > 0)
-                    {
-                        Settings.LastError = $"{result.Failures.Count} could not be recorded: {result.Failures[0]}";
+                        Settings.LastSummary = $"Checked {result.MembersChecked} Scouts: {result.ToBePresented} awards to hand over" +
+                            (result.NotHighest > 0 ? $" and {result.NotHighest} more covered by a higher level" : "") +
+                            (result.LowerLevelsRecorded > 0 ? $"; recorded {result.LowerLevelsRecorded} lower levels in Terrain" : "") +
+                            (result.MembersNotRead.Count > 0 ? $"; could not read {result.MembersNotRead.Count} Scouts" : "") + ".";
+                        if (result.Failures.Count > 0)
+                        {
+                            Settings.LastError = $"{result.Failures.Count} could not be recorded: {result.Failures[0]}";
+                        }
+                        else
+                        {
+                            Settings.LastRunUtc = DateTime.UtcNow;
+                        }
                     }
-                    else
+                    if (yearsDue)
                     {
-                        Settings.LastRunUtc = DateTime.UtcNow;
+                        // It keeps its own result (shown under Settings, Years of service); a failure there does not spoil the logbook check
+                        await _yearsOfService.ScanAsync(pacing);
                     }
                 }
             }

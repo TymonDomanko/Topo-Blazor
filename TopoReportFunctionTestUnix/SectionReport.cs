@@ -447,6 +447,45 @@ namespace TopoReportFunctionTest
             Assert.AreEqual(5, badges.OasProgressions);
         }
 
+        private static Topo.Model.BadgeStore.BadgeStoreRecord YearsRecord(string member, string award, string awarded, string? presented = null) =>
+            new Topo.Model.BadgeStore.BadgeStoreRecord { MemberId = member, AwardId = award, Awarded = DateTime.Parse(awarded), Presented = presented == null ? null : DateTime.Parse(presented) };
+
+        [TestMethod]
+        public void YearsOfServiceFromTheStoreCountWithTheAdditionalAwardsForThisSectionAndPeriod()
+        {
+            var input = CubUnit();
+            input.YearsOfService = new List<Topo.Model.BadgeStore.BadgeStoreRecord>
+            {
+                // two Cubs given 2 years, one in the period by the day it was presented (awarded before the period), one by the day awarded
+                YearsRecord("y1", "yos_cub_2", "2025-12-20", "2026-02-01"),
+                YearsRecord("y2", "yos_cub_2", "2026-03-10"),
+                // not counted: after the period, another section, an adult, a member of another unit, the start record, another award
+                YearsRecord("y3", "yos_cub_3", "2026-08-01"),
+                YearsRecord("y3", "yos_joey_1", "2026-03-01"),
+                YearsRecord("l1", "yos_cub_1", "2026-03-01"),
+                YearsRecord("someone-else", "yos_cub_1", "2026-03-01"),
+                YearsRecord("group-1", "yos_start", "2026-01-01"),
+                YearsRecord("y1", "camper_award_10", "2026-03-01")
+            };
+
+            var badges = SectionReportBuilder.Build(input).Badges;
+
+            Assert.AreEqual(2, badges.AdditionalAwardsTotal);
+            Assert.AreEqual("Cub 2 Years of Service", badges.AdditionalAwards.Single().Name);
+            Assert.AreEqual(2, badges.AdditionalAwards.Single().Count);
+        }
+
+        [TestMethod]
+        public void YearsOfServiceAreListedInOrderOfYearsWithTheOtherAdditionalAwards()
+        {
+            var sorted = Topo.Model.UnitReport.AdditionalAwardCounts.Sorted(
+                new Dictionary<string, int> { ["Cub 10 Years of Service"] = 1, ["Cub 2 Years of Service"] = 1, ["First Aid"] = 1, ["Camper Award - 25 Nights"] = 1, ["Camper Award - 10 Nights"] = 1 },
+                new Dictionary<string, string> { ["Cub 10 Years of Service"] = "yos_cub_10", ["Cub 2 Years of Service"] = "yos_cub_2", ["First Aid"] = "first_aid", ["Camper Award - 25 Nights"] = "camper_award_25", ["Camper Award - 10 Nights"] = "camper_award_10" });
+            CollectionAssert.AreEqual(
+                new[] { "Camper Award - 10 Nights", "Camper Award - 25 Nights", "First Aid", "Cub 2 Years of Service", "Cub 10 Years of Service" },
+                sorted.Select(a => a.Name).ToArray());
+        }
+
         // Badges awarded in the period to Yara and Yuri, one approved but not handed over, and some from other sections
         private static void AddSampleBadges(SectionReportInput input)
         {
