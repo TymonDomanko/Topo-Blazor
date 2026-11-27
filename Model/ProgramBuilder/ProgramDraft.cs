@@ -88,6 +88,8 @@ namespace Topo.Model.ProgramBuilder
         public DateTime Start { get; set; }
         public DateTime End { get; set; }
         public DayOfWeek MeetingDay { get; set; } = DayOfWeek.Wednesday;
+        // Whether the section night and usual times have been found from the unit's calendar, so they are looked for on opening the unit until they are
+        public bool UsualFound { get; set; }
         public List<ProgramBreak> Breaks { get; set; } = new List<ProgramBreak>();
         // The patrols that take turns on duty, in order
         public List<string> DutyPatrols { get; set; } = new List<string>();

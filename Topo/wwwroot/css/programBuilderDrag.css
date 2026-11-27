@@ -1,0 +1,74 @@
+/* Picking up and putting down in the Program Builder (see js/programBuilderDrag.js). These are not in the page's own style sheet because the
+   carried label is made by the script, and the page's styles only reach what the page itself has drawn. */
+
+/* what can be picked up: the whole idea card, and the whole of a night with something on it (its boxes and buttons still work as they do) */
+.idea-card[data-drag-kind],
+.night-card[data-drag-kind] {
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* a finger on the handle carries, anywhere else it scrolls */
+.drag-handle {
+    touch-action: none;
+    padding: 0.35rem 0.4rem;
+    margin: -0.35rem -0.2rem -0.35rem -0.4rem;
+}
+
+body.pb-dragging,
+body.pb-dragging * {
+    cursor: grabbing !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+/* what is being carried is dimmed where it was */
+.pb-dragged {
+    opacity: 0.4;
+}
+
+/* a copy of what is carried, held where it was picked up; it takes no part in the pointer, so what is under it can be dropped on */
+.pb-ghost {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 3000;
+    margin: 0 !important;
+    opacity: 0.92;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35) !important;
+    pointer-events: none !important;
+    cursor: grabbing;
+}
+
+/* where it can be put down while it is carried, and the one it is over */
+.pb-drop-ready {
+    outline: 2px dashed #7aa7ff;
+    outline-offset: 2px;
+}
+
+.pb-drop-over {
+    position: relative;
+    outline: 3px solid #0d6efd;
+    outline-offset: 2px;
+    background-color: #eaf1ff !important;
+}
+
+.pb-drop-over::after {
+    content: attr(data-hint);
+    position: absolute;
+    left: 0.4rem;
+    right: 0.4rem;
+    bottom: 0.35rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    background-color: #0d6efd;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+}
