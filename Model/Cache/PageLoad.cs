@@ -66,7 +66,8 @@ namespace Topo.Model.Cache
         private async Task<bool> PassAsync<T>(int version, CacheMode mode, Func<Action<string>, CancellationToken, Task<T>> read, Action<T> show,
             CancellationToken token)
         {
-            using var scope = CacheScope.Begin(mode);
+            // while updating, what was held is on show
+            using var scope = CacheScope.Begin(mode, behindShownData: Updating);
             var data = await read(step => Report(version, step), token);
             if (version != _version)
             {

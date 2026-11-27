@@ -174,6 +174,68 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public void WorkBehindShownDataStaysSoInEverythingInsideItAndNotAfter()
+        {
+            Assert.IsFalse(CacheScope.IsBehindShownData);
+            using (CacheScope.Begin(CacheMode.Reread, behindShownData: true))
+            {
+                using (CacheScope.Begin(CacheMode.Fresh))
+                {
+                    Assert.IsTrue(CacheScope.IsBehindShownData);
+                }
+                Assert.IsTrue(CacheScope.IsBehindShownData);
+            }
+            Assert.IsFalse(CacheScope.IsBehindShownData);
+        }
+
+        [TestMethod]
+        public async Task OnlyTheReadsMadeWhileHeldDataIsOnShowAreBehindIt()
+        {
+            var terrain = new Terrain();
+            var page = new PageLoad();
+            var behind = new List<bool>();
+            Func<Action<string>, CancellationToken, Task<string>> read = (progress, token) =>
+            {
+                behind.Add(CacheScope.IsBehindShownData);
+                return terrain.Read();
+            };
+
+            // nothing held: nothing is on show yet
+            await page.LoadAsync(read, data => { });
+            CollectionAssert.AreEqual(new[] { false }, behind);
+
+            // stale: shown first, then read again behind it
+            behind.Clear();
+            terrain.Now = Start.AddDays(3);
+            await page.LoadAsync(read, data => { });
+            CollectionAssert.AreEqual(new[] { false, true }, behind);
+
+            behind.Clear();
+            await page.RefreshAsync(read, data => { });
+            CollectionAssert.AreEqual(new[] { true }, behind);
+            Assert.IsFalse(CacheScope.IsBehindShownData);
+        }
+
+        [TestMethod]
+        public async Task RefreshingAReportsDataIsBehindOnlyWhatWasHeld()
+        {
+            var terrain = new Terrain();
+            var refresh = new ReportRefresh();
+            Func<Task<DateTime?>> oldest = async () => (await terrain.Cache.GetAsync<string>("members"))?.FetchedUtc;
+            var behind = new List<bool>();
+            Func<Action<string>, CancellationToken, Task> read = async (progress, token) =>
+            {
+                behind.Add(CacheScope.IsBehindShownData);
+                await terrain.Read();
+            };
+
+            await refresh.RefreshAsync(read, oldest);
+            await refresh.RefreshAsync(read, oldest);
+
+            CollectionAssert.AreEqual(new[] { false, true }, behind);
+        }
+
+        [TestMethod]
         public async Task APageShowsWhatIsHeldThenTheNewDataWhenWhatItHadWasStale()
         {
             var terrain = new Terrain();

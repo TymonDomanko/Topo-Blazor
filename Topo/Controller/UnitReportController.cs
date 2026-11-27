@@ -112,7 +112,8 @@ namespace Topo.Controller
             }
             try
             {
-                using var scope = CacheScope.Begin(mode);
+                // a report still on show is the one being read again
+                using var scope = CacheScope.Begin(mode, behindShownData: model.Report != null);
                 var from = model.AllTime ? EarliestDate : model.FromDate;
                 var to = model.AllTime ? DateTime.Today : model.ToDate;
                 var report = await _unitReportService.GetUnitReport(model.UnitId, from, to, model.SelectedCalendars.ToArray(),
