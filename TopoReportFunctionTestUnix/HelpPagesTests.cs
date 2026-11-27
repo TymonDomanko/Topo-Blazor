@@ -25,7 +25,7 @@ namespace TopoReportFunctionTest
         [TestMethod]
         public void SubPagesEachHaveTheirOwnWikiPage()
         {
-            var subPages = new[] { "approvals/approvals", "approvals/pending", "approvals/massaward", "approvals/backup", "scoutinghistory/member", "scoutinghistory/unit", "programideas", "programideas/proposed", "progress/progress" };
+            var subPages = new[] { "approvals/approvals", "approvals/pending", "approvals/massaward", "scoutinghistory/member", "scoutinghistory/unit", "programideas", "programideas/proposed", "progress/progress" };
             var wikiPages = subPages.Select(p => HelpPages.PageFor(p)).ToList();
             Assert.IsFalse(wikiPages.Any(p => p == null), "every sub page has one");
             Assert.AreEqual(subPages.Length, wikiPages.Distinct().Count(), "and no two share one");
@@ -49,8 +49,30 @@ namespace TopoReportFunctionTest
         }
 
         [TestMethod]
+        public void AYouthMemberGetsTheYouthHelpForThePagesInTheirMenu()
+        {
+            var youthMenu = new[] { "", "index", "logbook", "awards", "progress/progress", "progress/details/abc", "siaprogress", "scoutinghistory/member" };
+            foreach (var address in youthMenu)
+            {
+                StringAssert.StartsWith(HelpPages.PageFor(address, youthMember: true), "Youth-", $"'{address}'");
+                Assert.IsFalse(HelpPages.PageFor(address)!.StartsWith("Youth-"), $"'{address}' for a leader");
+            }
+            Assert.AreEqual(HelpPages.WikiUrl + "/Youth-Logbook", HelpPages.UrlFor("Logbook/?x=1", youthMember: true));
+            Assert.AreEqual("Youth-Personal-Progress-Details", HelpPages.PageFor("progress/details/abc", youthMember: true));
+        }
+
+        [TestMethod]
+        public void AYouthMemberOnAnyOtherPageGetsItsUsualHelp()
+        {
+            Assert.AreEqual("Members", HelpPages.PageFor("members", youthMember: true));
+            Assert.IsNull(HelpPages.PageFor("logout", youthMember: true));
+        }
+
+        [TestMethod]
         public void PagesWithNoHelpHaveNoLink()
         {
+            Assert.IsNull(HelpPages.UrlFor("login"));
+            Assert.IsNull(HelpPages.UrlFor("approvals/backup"));
             Assert.IsNull(HelpPages.UrlFor("logout"));
             Assert.IsNull(HelpPages.UrlFor("counter"));
             Assert.IsNull(HelpPages.UrlFor("no-such-page"));
@@ -68,7 +90,7 @@ namespace TopoReportFunctionTest
         public void TheExistingWikiPagesKeepTheirNames()
         {
             // These are the pages the wiki already has, so their links must not change
-            foreach (var page in new[] { "Home-Page", "Login", "Members", "Program", "OAS", "SIA", "Milestone", "Logbook", "Wallchart", "Additional-Awards", "Approvals", "Backup-Restore", "Personal-Progress", "Debug-Logs" })
+            foreach (var page in new[] { "Home-Page", "Members", "Program", "OAS", "SIA", "Milestone", "Logbook", "Wallchart", "Additional-Awards", "Approvals", "Personal-Progress", "Debug-Logs" })
                 CollectionAssert.Contains(HelpPages.AllWikiPages.ToList(), page);
         }
     }
