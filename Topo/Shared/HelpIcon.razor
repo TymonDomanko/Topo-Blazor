@@ -1,31 +1,33 @@
 @using Topo.Model.Help
 @inject NavigationManager _navigation
+@inject Topo.Services.StorageService _storageService
 @implements IDisposable
 
-@* The help icon at the top right of a page: opens the wiki page that documents the page being shown. Pages with no wiki page show nothing. *@
-@if (_helpUrl != null)
+@* The help icon at the top right of a page: opens the wiki page that documents the page being shown, from the youth help for a youth member.
+   Pages with no wiki page show nothing. *@
+@if (HelpUrl is { } helpUrl)
 {
-    <a class="help-icon" href="@_helpUrl" target="_blank" rel="noopener noreferrer" title="Help for this page" aria-label="Help for this page (opens the Topo wiki)">
+    <a class="help-icon" href="@helpUrl" target="_blank" rel="noopener noreferrer" title="Help for this page" aria-label="Help for this page (opens the Topo wiki)">
         <span class="help-mark" aria-hidden="true">?</span>
     </a>
 }
 
 @code {
-    private string? _helpUrl;
+    // signing out leaves IsYouthMember as it was, so it only counts while signed in
+    private string? HelpUrl => HelpPages.UrlFor(_navigation.ToBaseRelativePath(_navigation.Uri),
+        _storageService.IsAuthenticated && _storageService.IsYouthMember);
 
     protected override void OnInitialized()
     {
         _navigation.LocationChanged += OnLocationChanged;
-        Update();
+        _storageService.OnChange += StateHasChanged;
     }
 
-    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => StateHasChanged();
+
+    public void Dispose()
     {
-        Update();
-        StateHasChanged();
+        _navigation.LocationChanged -= OnLocationChanged;
+        _storageService.OnChange -= StateHasChanged;
     }
-
-    private void Update() => _helpUrl = HelpPages.UrlFor(_navigation.ToBaseRelativePath(_navigation.Uri));
-
-    public void Dispose() => _navigation.LocationChanged -= OnLocationChanged;
 }
