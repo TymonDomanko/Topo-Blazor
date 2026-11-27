@@ -75,39 +75,55 @@ namespace Topo.Services
             return UnitReportBuilder.Build(input);
         }
 
-        // Terrain only shows the calendars the user has switched on, so they are switched to the chosen ones and back
+        // Terrain only shows the calendars the user has switched on, so they are switched to the chosen ones and back while the events are listed.
+        // An event's details do not depend on which calendars are on.
         public async Task<List<UnitEventInput>> GetEventsForCalendars(DateTime from, DateTime to, string[] calendarIds)
         {
-            await _programService.SetCalendar(calendarIds);
-            try
+            var listed = await _programService.ListedEventsAsync(calendarIds, from, to, async () =>
             {
-                return await GetEventDetails(from, to);
-            }
-            finally
+                try
+                {
+                    return await _programService.WithCalendarsAsync(calendarIds, () => ListEvents(from, to));
+                }
+                catch (InvalidOperationException)
+                {
+                    // the calendars could not be switched: a kept list serves, if there is one
+                    return null;
+                }
+            });
+            if (listed == null)
             {
-                await _programService.ResetCalendar();
+                throw new InvalidOperationException("Couldn't read the events from Terrain.");
             }
+
+            var events = new List<UnitEventInput>();
+            foreach (var summary in listed)
+            {
+                var detail = await _terrainAPIService.GetEventAsync(summary.id);
+                if (detail != null)
+                {
+                    events.Add(new UnitEventInput { Scope = summary.invitee_type, Event = detail });
+                }
+            }
+            return events;
         }
 
-        // Every event in the range, in full (attendance, logbook data) with its scope. Asked for in 90 day windows
-        // so that "all time" is many small requests rather than one very large one.
-        private async Task<List<UnitEventInput>> GetEventDetails(DateTime from, DateTime to)
+        // Every event in the range, as the list has it; null when Terrain would not give part of it. Asked for in 90 day windows so that "all
+        // time" is many small requests rather than one very large one.
+        private async Task<IEnumerable<Topo.Model.Program.Event>?> ListEvents(DateTime from, DateTime to)
         {
             var userId = _storageService.GetProfilesResult?.profiles?.FirstOrDefault()?.member?.id ?? "";
-            var events = new List<UnitEventInput>();
+            var events = new List<Topo.Model.Program.Event>();
             var seen = new HashSet<string>();
             for (var windowStart = from.Date; windowStart <= to.Date; windowStart = windowStart.AddDays(90))
             {
                 var windowEnd = windowStart.AddDays(89) < to.Date ? windowStart.AddDays(89) : to.Date;
                 var result = await _terrainAPIService.GetEventsAsync(userId, windowStart.AddDays(-1), windowEnd.AddDays(1));
-                foreach (var summary in result?.results ?? new Topo.Model.Program.Event[0])
+                if (result?.results == null)
                 {
-                    if (!seen.Add(summary.id))
-                        continue;
-                    var detail = await _terrainAPIService.GetEventAsync(summary.id);
-                    if (detail != null)
-                        events.Add(new UnitEventInput { Scope = summary.invitee_type, Event = detail });
+                    return null;
                 }
+                events.AddRange(result.results.Where(summary => seen.Add(summary.id)));
             }
             return events;
         }

@@ -2,13 +2,14 @@
 using Microsoft.JSInterop;
 using Microsoft.VisualBasic;
 using Newtonsoft.Json;
+using Topo.Model.Cache;
 using Topo.Model.Program;
 using Topo.Model.ReportGeneration;
 using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class ProgramController : ComponentBase
+    public class ProgramController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -32,6 +33,9 @@ namespace Topo.Controller
 
 
         public ProgramPageViewModel model = new ProgramPageViewModel();
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public string ErrorMessage = "";
         private string groupCalendarId = string.Empty;
         private string projectPatrolCalendarId = string.Empty;
 
@@ -53,14 +57,14 @@ namespace Topo.Controller
             if (!_storageService.IsAuthenticated)
                 NavigationManager.NavigateTo("index");
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             var calendars = await _programService.GetCalendars();
             model.Calendars = calendars;
-            var quarter = (DateTime.Now.Month + 2) / 3;
-            var quarterStartMonth = (quarter - 1) * 3 + 1;
-            model.CalendarSearchFromDate = new DateTime(DateTime.Now.Year, quarterStartMonth, 1);
-            model.CalendarSearchToDate = model.CalendarSearchFromDate.AddMonths(4).AddDays(-1);
+            // six months each way to start with; more on request
+            model.CalendarSearchFromDate = DateTime.Today.AddMonths(-MoreMonths);
+            model.CalendarSearchToDate = DateTime.Today.AddMonths(MoreMonths);
             model.DateErrorMessage = "";
             if (!string.IsNullOrEmpty(_storageService.UnitId))
             {
@@ -108,15 +112,60 @@ namespace Topo.Controller
             if (!(model.SelectedCalendars == null || model.SelectedCalendars.Length == 0))
             {
                 //_storageService.UnitId = model.CalendarId;
-                await _programService.SetCalendar(model.SelectedCalendars);
-                var events = await _programService.GetEventsForDates(model.CalendarSearchFromDate, model.CalendarSearchToDate);
-                await _programService.ResetCalendar();
-                model.Events = events.OrderBy(e => e.StartDateTime).ToList();
+                // what the data cache holds shows at once; the list is then read from Terrain, with whatever else is out of date
+                ErrorMessage = "";
+                await _page.LoadAsync(ReadEvents(), Show);
+                ShowFailure();
             }
         }
 
+        // The events on the chosen calendars. The list is read from Terrain every time; an event's details come from the data cache while in date,
+        // and an event long past is kept until it is read again on request.
+        private Func<Action<string>, CancellationToken, Task<List<EventListModel>>> ReadEvents()
+        {
+            var from = model.CalendarSearchFromDate;
+            var to = model.CalendarSearchToDate;
+            var calendars = model.SelectedCalendars;
+            return (progress, cancellationToken) => _programService.GetEventsForDates(from, to, calendars);
+        }
+
+        private void Show(List<EventListModel> events) => model.Events = events.OrderBy(e => e.StartDateTime).ToList();
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
+            {
+                ErrorMessage = "Couldn't read the events from Terrain.";
+            }
+        }
+
+        // How far each way the page starts, and how much more each request adds
+        private const int MoreMonths = 6;
+
+        internal async Task LoadEarlierClick()
+        {
+            model.CalendarSearchFromDate = model.CalendarSearchFromDate.AddMonths(-MoreMonths);
+            await ShowUnitCalendarClick();
+        }
+
+        internal async Task LoadLaterClick()
+        {
+            model.CalendarSearchToDate = model.CalendarSearchToDate.AddMonths(MoreMonths);
+            await ShowUnitCalendarClick();
+        }
+
+        internal async Task RefreshClick()
+        {
+            ErrorMessage = "";
+            await _page.RefreshAsync(ReadEvents(), Show);
+            ShowFailure();
+        }
+
+        public void Dispose() => _page.Dispose();
+
         internal async Task EventAttendanceClick(string eventId)
         {
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
             var groupName = _storageService.GroupName ?? "Group Name";
             var unitName = _storageService.UnitName ?? "Unit Name";
             var section = _storageService.Section;
@@ -151,6 +200,7 @@ namespace Topo.Controller
 
         private async Task<byte[]> AttendanceReport(OutputType outputType = OutputType.PDF)
         {
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
             var groupName = _storageService.GroupName ?? "Group Name";
             var unitName = _storageService.UnitName ?? "Unit Name";
             var section = _storageService.Section;

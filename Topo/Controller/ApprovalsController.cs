@@ -7,13 +7,14 @@ using System.Net.NetworkInformation;
 using System.Reflection;
 using Topo.Model.AdditionalAwards;
 using Topo.Model.Approvals;
+using Topo.Model.Cache;
 using Topo.Model.ReportGeneration;
 using Topo.Services;
 
 
 namespace Topo.Controller
 {
-    public class ApprovalsController : ComponentBase
+    public class ApprovalsController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -31,6 +32,9 @@ namespace Topo.Controller
         public NavigationManager NavigationManager { get; set; }
 
         public ApprovalsPageViewModel model = new ApprovalsPageViewModel();
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public string ErrorMessage = "";
 
         public IEditorSettings DateEditParams = new DateEditCellParams
         {
@@ -43,6 +47,7 @@ namespace Topo.Controller
             if (!_storageService.IsAuthenticated)
                 NavigationManager.NavigateTo("index");
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             model.ApprovalSearchFromDate = DateTime.Now.AddMonths(-2);
@@ -60,23 +65,58 @@ namespace Topo.Controller
             model.UnitId = unitId;
             _storageService.UnitId = model.UnitId;
             model.UnitName = _storageService.UnitName;
-            await RefreshApprovalsClick();
+            model.Approvals = new List<ApprovalsListModel>();
+            ErrorMessage = "";
+            if (string.IsNullOrEmpty(model.UnitName))
+            {
+                _page.Cancel();
+                return;
+            }
+            // what the data cache holds shows at once, and is read again behind the page when it is more than a day old
+            await _page.LoadAsync(ReadApprovals(_storageService.UnitId), Show);
+            ShowFailure();
         }
 
+        // "Refresh list" reads the approvals from Terrain again and applies the search settings
         internal async Task RefreshApprovalsClick()
         {
             if (!string.IsNullOrEmpty(model.UnitName))
             {
-                model.Approvals = await _approvalsService.GetApprovalListItems(_storageService.UnitId);
-                model.Approvals = model.Approvals?.Where(a => a.submission_date >= model.ApprovalSearchFromDate && a.submission_date <= model.ApprovalSearchToDate.AddDays(1)).ToList() ?? new List<ApprovalsListModel>();
-                if (model.ToBePresented)
-                    model.Approvals = model.Approvals.Where(a => a.submission_type == "Award" && !a.presented_date.HasValue).ToList();
-                if (model.IsPresented)
-                    model.Approvals = model.Approvals.Where(a => a.presented_date.HasValue && a.presented_date != a.awarded_date).ToList();
-                if (!model.ShowRejected)
-                    model.Approvals = model.Approvals.Where(a => a.submission_outcome.ToLower() != "rejected").ToList();
+                ErrorMessage = "";
+                await _page.RefreshAsync(ReadApprovals(_storageService.UnitId), Show);
+                ShowFailure();
             }
         }
+
+        private Func<Action<string>, CancellationToken, Task<List<ApprovalsListModel>>> ReadApprovals(string unitId) =>
+            (progress, token) => _approvalsService.GetApprovalListItems(unitId);
+
+        private void Show(List<ApprovalsListModel> approvals)
+        {
+            model.Approvals = approvals?.Where(a => a.submission_date >= model.ApprovalSearchFromDate && a.submission_date <= model.ApprovalSearchToDate.AddDays(1)).ToList() ?? new List<ApprovalsListModel>();
+            if (model.ToBePresented)
+            {
+                model.Approvals = model.Approvals.Where(a => a.submission_type == "Award" && !a.presented_date.HasValue).ToList();
+            }
+            if (model.IsPresented)
+            {
+                model.Approvals = model.Approvals.Where(a => a.presented_date.HasValue && a.presented_date != a.awarded_date).ToList();
+            }
+            if (!model.ShowRejected)
+            {
+                model.Approvals = model.Approvals.Where(a => a.submission_outcome.ToLower() != "rejected").ToList();
+            }
+        }
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
+            {
+                ErrorMessage = "Couldn't read the approvals from Terrain.";
+            }
+        }
+
+        public void Dispose() => _page.Dispose();
 
         public async void ActionBeginHandler(ActionEventArgs<ApprovalsListModel> Args)
         {

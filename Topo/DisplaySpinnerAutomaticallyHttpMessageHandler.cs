@@ -1,4 +1,5 @@
-﻿using Topo.Services;
+﻿using Topo.Model.Cache;
+using Topo.Services;
 
 namespace Topo
 {
@@ -11,6 +12,12 @@ namespace Topo
         }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            // a page showing what was held while it is read again says so itself, so the spinner is not put over it
+            if (CacheScope.IsBehindShownData)
+            {
+                return await base.SendAsync(request, cancellationToken);
+            }
+
             try
             {
                 _spinnerService.Show();

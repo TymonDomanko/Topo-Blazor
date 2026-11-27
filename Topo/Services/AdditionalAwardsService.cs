@@ -15,10 +15,14 @@ namespace Topo.Services
         private readonly IReportService _reportService;
         //private readonly IApprovalsService _approvalsService;
 
+        private readonly ILogbookTotalsService _logbookTotals;
+
         public AdditionalAwardService(ITerrainAPIService terrainAPIService,
             StorageService storageService,
-            IReportService reportService) //, IApprovalsService approvalsService)
+            IReportService reportService,
+            ILogbookTotalsService logbookTotals) //, IApprovalsService approvalsService)
         {
+            _logbookTotals = logbookTotals;
             _terrainAPIService = terrainAPIService;
             _storageService = storageService;
             _reportService = reportService;
@@ -49,9 +53,10 @@ namespace Topo.Services
             var memberName = "";
             foreach (var memberKVP in selectedMembers)
             {
-                await _terrainAPIService.RevokeAssumedProfiles();
-                await _terrainAPIService.AssumeProfile(memberKVP.Key);
-                var getMemberLogbookMetrics = await _terrainAPIService.GetMemberLogbookMetrics(memberKVP.Key);
+                // totals read in the last day serve without assuming the Scout's profile; older ones are read again, and are only used if Terrain
+                // does not answer
+                var totals = await _logbookTotals.ForPageAsync(memberKVP.Key);
+                var getMemberLogbookMetrics = totals?.Value ?? new Topo.Model.Logbook.GetMemberLogbookMetricsResultModel();
                 var totalNightsCamped = getMemberLogbookMetrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
                 var totalKmsHiked = (getMemberLogbookMetrics.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;
                 memberName = $"{memberKVP.Value} ({totalNightsCamped} Nights, {totalKmsHiked} KMs)";
@@ -137,7 +142,10 @@ namespace Topo.Services
 
             }
 
-            await _terrainAPIService.RevokeAssumedProfiles();
+            using (await _logbookTotals.LockProfileAsync())
+            {
+                await _terrainAPIService.RevokeAssumedProfiles();
+            }
 
             var sortedAdditionalAwardsList = additionalAwardsList.OrderBy(a => a.MemberName).ThenBy(a => a.AwardSortIndex).ToList();
             var distinctAwards = sortedAdditionalAwardsList.OrderBy(x => x.AwardSortIndex).Select(x => x.AwardId).Distinct().ToList();

@@ -21,8 +21,12 @@ namespace Topo.Services
         private readonly IMembersService _memberService;
         private int _oasProgressionCount = 0;
 
-        public ProgressService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService memberService)
+        private readonly ILogbookTotalsService _logbookTotals;
+
+        public ProgressService(StorageService storageService, ITerrainAPIService terrainAPIService, IMembersService memberService,
+            ILogbookTotalsService logbookTotals)
         {
+            _logbookTotals = logbookTotals;
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
             _memberService = memberService;
@@ -39,10 +43,8 @@ namespace Topo.Services
             progressDetailsPageViewModel.IntroToSectionDate = introToSectionDate?.ToString("dd/MM/yyyy") ?? "";
             progressDetailsPageViewModel.Milestones = await GetMilestoneSummaries(memberId);
             progressDetailsPageViewModel.OASSummaries = await GetOASSummaries(memberId);
-            await _terrainAPIService.RevokeAssumedProfiles();
-            await _terrainAPIService.AssumeProfile(memberId);
-            progressDetailsPageViewModel.Stats = await GetStats(memberId, introToSectionDate ?? new DateTime());
-            await _terrainAPIService.RevokeAssumedProfiles();
+            var totals = await _logbookTotals.ForPageAsync(memberId);
+            progressDetailsPageViewModel.Stats = GetStats(totals?.Value ?? new Topo.Model.Logbook.GetMemberLogbookMetricsResultModel(), introToSectionDate ?? new DateTime());
             progressDetailsPageViewModel.SIASummaries = await GetSIASummaries(memberId);
             progressDetailsPageViewModel.PeakAward = await GetPeakAwardSummary(memberId);
 
@@ -288,11 +290,10 @@ namespace Topo.Services
             return oasSummaries;
         }
 
-        private async Task<Stats> GetStats(string memberId, DateTime introToSection)
+        private Stats GetStats(Topo.Model.Logbook.GetMemberLogbookMetricsResultModel getMemberLogbookMetrics, DateTime introToSection)
         {
             var stats = new Stats();
 
-            var getMemberLogbookMetrics = await _terrainAPIService.GetMemberLogbookMetrics(memberId);
             var totalNightsCamped = getMemberLogbookMetrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
             var totalNightsCampedInSection = getMemberLogbookMetrics.results.Where(r => r.name == "total_nights_camped" && r.last_updated >= introToSection).FirstOrDefault()?.value ?? 0;
             var totalKmsHiked = (getMemberLogbookMetrics.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;

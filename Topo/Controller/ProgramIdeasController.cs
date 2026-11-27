@@ -3,11 +3,12 @@ using Microsoft.JSInterop;
 using Newtonsoft.Json;
 using Topo.Model.Program;
 using Topo.Model.ReportGeneration;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class ProgramIdeasController : ComponentBase
+    public class ProgramIdeasController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -29,6 +30,8 @@ namespace Topo.Controller
         public ProgramIdeasPageViewModel model = new ProgramIdeasPageViewModel();
 
         private bool _select2Bound;
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
 
         protected override async Task OnAfterRenderAsync(bool firstRender)
         {
@@ -49,6 +52,7 @@ namespace Topo.Controller
                 return;
             }
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Calendars = await _programService.GetCalendars();
             model.SelectTheOnlyCalendar();
@@ -92,10 +96,41 @@ namespace Topo.Controller
                 ? null
                 : ResolveFromDate(model.HighlightRange, model.HighlightFromDate);
 
-            var ideas = await _programService.GetProgramIdeas(fromDate, highlightFromDate, model.SelectedCalendars);
+            // the ideas from the kept list show at once; the list is then read from Terrain
+            var calendars = model.SelectedCalendars;
+            _read = (progress, cancellationToken) => _programService.GetProgramIdeas(fromDate, highlightFromDate, calendars);
+            await _page.LoadAsync(_read, Show);
+            ShowFailure();
+        }
+
+        // What the ideas on show were read with
+        private Func<Action<string>, CancellationToken, Task<List<ProgramIdeaItemModel>?>>? _read;
+
+        internal async Task RefreshClick()
+        {
+            if (_read != null)
+            {
+                await _page.RefreshAsync(_read, Show);
+                ShowFailure();
+            }
+        }
+
+        private void Show(List<ProgramIdeaItemModel>? ideas)
+        {
             model.FetchFailed = ideas == null;
             model.Ideas = ApplySort(ideas ?? new List<ProgramIdeaItemModel>(), model.SortColumn, model.SortDescending);
         }
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
+            {
+                model.FetchFailed = true;
+                model.Ideas ??= new List<ProgramIdeaItemModel>();
+            }
+        }
+
+        public void Dispose() => _page.Dispose();
 
         // One shared sort state applies across every Challenge Area group/sheet, not per-group.
         internal void SortByColumn(ProgramIdeaSortColumn column)

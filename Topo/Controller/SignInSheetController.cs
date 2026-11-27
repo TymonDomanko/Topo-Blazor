@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Topo.Model.Members;
 using Topo.Model.Program;
 using Topo.Model.ReportGeneration;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -37,7 +38,6 @@ namespace Topo.Controller
         public string EventId = "";
         public List<MemberListModel>? PreviewMembers;
         public bool PreviewFailed;
-        private int _previewRequest;
 
         private const string OptionsKey = "SignInSheetOptions";
 
@@ -47,8 +47,26 @@ namespace Topo.Controller
         private DotNetObjectReference<SignInSheetController>? _selfReference;
         // set when the calendar selection was changed in code, so the select2 box can be refreshed to show it
         private bool _syncCalendarSelection;
-        private bool _loadingEvents;
-        private bool _reloadEvents;
+        // Loading and reading again through the data cache: the event list and the sheet's people each load on their own
+        public PageLoad _eventsPage = new PageLoad();
+        public PageLoad _previewPage = new PageLoad();
+        public bool Reading => _eventsPage.Loading || _previewPage.Loading;
+        public bool Updating => _eventsPage.Updating || _previewPage.Updating;
+        // When the oldest of what the event list and the sheet were made from was read
+        public DateTime? ReadUtc => _eventsPage.ReadUtc == null || _previewPage.ReadUtc < _eventsPage.ReadUtc ? _previewPage.ReadUtc : _eventsPage.ReadUtc;
+
+        // Reads the events and the sheet's people again, leaving what is shown in place until they are in
+        internal async Task RefreshClick()
+        {
+            if (model.SelectedCalendars.Length > 0 && model.CalendarSearchToDate >= model.CalendarSearchFromDate)
+            {
+                await _eventsPage.RefreshAsync(ReadEvents(), ShowEvents);
+            }
+            if (!string.IsNullOrEmpty(model.UnitId))
+            {
+                await _previewPage.RefreshAsync(ReadPreview(), ShowPreview);
+            }
+        }
 
         protected override async Task OnAfterRenderAsync(bool firstRender)
         {
@@ -69,6 +87,8 @@ namespace Topo.Controller
         public void Dispose()
         {
             _selfReference?.Dispose();
+            _eventsPage.Dispose();
+            _previewPage.Dispose();
         }
 
         protected override async Task OnInitializedAsync()
@@ -79,6 +99,8 @@ namespace Topo.Controller
                 return;
             }
 
+            _eventsPage.Changed = () => InvokeAsync(StateHasChanged);
+            _previewPage.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units ?? new Dictionary<string, string>();
             model.Calendars = await _programService.GetCalendars();
@@ -160,61 +182,46 @@ namespace Topo.Controller
             StateHasChanged();
         }
 
-        // Loads the events for the chosen calendars and dates. Reloads happen on every change, but only one
-        // load runs at a time (each one has to switch the calendars over in Terrain and back); a change made
-        // while one is running triggers one more load afterwards.
+        // Loads the events for the chosen calendars and dates, from the data cache first and then from Terrain. A later change overtakes an
+        // earlier one that is still being read.
         internal async Task LoadEventsAsync()
-        {
-            if (_loadingEvents)
-            {
-                _reloadEvents = true;
-                return;
-            }
-
-            _loadingEvents = true;
-            try
-            {
-                do
-                {
-                    _reloadEvents = false;
-                    await LoadEventsOnce();
-                } while (_reloadEvents);
-            }
-            finally
-            {
-                _loadingEvents = false;
-            }
-        }
-
-        private async Task LoadEventsOnce()
         {
             model.CalendarErrorMessage = "";
             model.DateErrorMessage = "";
             if (model.SelectedCalendars.Length == 0)
             {
                 model.CalendarErrorMessage = "Please select at least one calendar";
+                _eventsPage.Cancel();
                 model.Events = null;
             }
             else if (model.CalendarSearchToDate < model.CalendarSearchFromDate)
             {
                 model.DateErrorMessage = "The search to date must be after the search from date.";
+                _eventsPage.Cancel();
                 model.Events = null;
             }
             else
             {
-                await _programService.SetCalendar(model.SelectedCalendars);
-                var events = await _programService.GetEventsForDates(model.CalendarSearchFromDate, model.CalendarSearchToDate);
-                await _programService.ResetCalendar();
-                model.Events = events.OrderBy(e => e.StartDateTime).ToList();
+                await _eventsPage.LoadAsync(ReadEvents(), ShowEvents);
             }
 
             // the previously chosen event may no longer be in the list
-            if (EventId != "" && (model.Events == null || !model.Events.Any(e => e.Id == EventId)))
+            if (EventId != "" && !_eventsPage.Loading && !_eventsPage.Updating && (model.Events == null || !model.Events.Any(e => e.Id == EventId)))
             {
                 EventId = "";
                 await RefreshPreview();
             }
         }
+
+        private Func<Action<string>, CancellationToken, Task<List<EventListModel>>> ReadEvents()
+        {
+            var from = model.CalendarSearchFromDate;
+            var to = model.CalendarSearchToDate;
+            var calendars = model.SelectedCalendars;
+            return (progress, cancellationToken) => _programService.GetEventsForDates(from, to, calendars);
+        }
+
+        private void ShowEvents(List<EventListModel> events) => model.Events = events.OrderBy(e => e.StartDateTime).ToList();
 
         internal async Task EventChange(ChangeEventArgs e)
         {
@@ -224,30 +231,33 @@ namespace Topo.Controller
 
         private async Task RefreshPreview()
         {
-            var request = ++_previewRequest;
             PreviewFailed = false;
             // the sheet is for a unit; with no event it has a blank title
             if (string.IsNullOrEmpty(model.UnitId))
             {
+                _previewPage.Cancel();
                 PreviewMembers = null;
                 return;
             }
 
-            List<MemberListModel>? members = null;
-            try
+            await _previewPage.LoadAsync(ReadPreview(), ShowPreview);
+            if (_previewPage.Failed)
             {
-                members = string.IsNullOrEmpty(EventId)
-                    ? await _programService.GetMembersForScope(model.Options)
-                    : await _programService.GetInviteesForEvent(EventId, model.Options);
+                PreviewMembers = null;
+                PreviewFailed = true;
             }
-            catch (Exception)
-            {
-                // reported below as a message
-            }
+        }
 
-            // ignore the answer if the user has picked something else in the meantime
-            if (request != _previewRequest)
-                return;
+        private Func<Action<string>, CancellationToken, Task<List<MemberListModel>?>> ReadPreview()
+        {
+            var eventId = EventId;
+            return async (progress, cancellationToken) => string.IsNullOrEmpty(eventId)
+                ? await _programService.GetMembersForScope(model.Options)
+                : await _programService.GetInviteesForEvent(eventId, model.Options);
+        }
+
+        private void ShowPreview(List<MemberListModel>? members)
+        {
             PreviewMembers = members;
             PreviewFailed = members == null;
         }
@@ -303,8 +313,10 @@ namespace Topo.Controller
 
         internal async Task DownloadClick(OutputType outputType)
         {
-            if (PreviewMembers == null)
+            if (PreviewMembers == null || Updating)
+            {
                 return;
+            }
 
             // no event chosen: the sheet has no event name
             var eventName = string.IsNullOrEmpty(EventId)

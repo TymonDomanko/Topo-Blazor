@@ -3,6 +3,7 @@ using Microsoft.JSInterop;
 using Newtonsoft.Json;
 using Topo.Model.ReportGeneration;
 using Topo.Model.SectionReport;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
@@ -106,7 +107,15 @@ namespace Topo.Controller
 
         internal void ThisYear() => SetPeriod(new DateTime(DateTime.Today.Year, 1, 1), new DateTime(DateTime.Today.Year, 12, 31));
 
-        internal async Task GenerateClick()
+        // When the oldest of what the report on show was made from was read
+        public DateTime? ReadUtc;
+
+        // The report uses what the data cache holds while it is in date; "Refresh data" reads everything for it again
+        internal Task GenerateClick() => Generate(CacheMode.Fresh);
+
+        internal Task RefreshClick() => Generate(CacheMode.Reread);
+
+        private async Task Generate(CacheMode mode)
         {
             model.ErrorMessage = "";
             model.Message = "";
@@ -138,10 +147,22 @@ namespace Topo.Controller
             }
 
             Busy = true;
-            Result = null;
+            // a report being read again stays on show until the new one is in
+            if (mode != CacheMode.Reread)
+            {
+                Result = null;
+            }
             try
             {
-                Result = await _sectionReportService.GetSectionReport(request, step => { Progress = step; InvokeAsync(StateHasChanged); });
+                // a report still on show is the one being read again
+                using var scope = CacheScope.Begin(mode, behindShownData: Result != null);
+                var result = await _sectionReportService.GetSectionReport(request, step => { Progress = step; InvokeAsync(StateHasChanged); });
+                if (mode == CacheMode.Reread)
+                {
+                    KeepDepartures(result);
+                }
+                Result = result;
+                ReadUtc = scope.OldestUtc;
             }
             catch (Exception)
             {
@@ -151,6 +172,24 @@ namespace Topo.Controller
             {
                 Busy = false;
                 Progress = "";
+            }
+        }
+
+        // Who left, as already chosen on the report being shown, stays chosen when it is read again
+        private void KeepDepartures(SectionReportResult result)
+        {
+            var chosen = (Result?.Report.Sections ?? new List<Topo.Model.SectionReport.SectionReportModel>())
+                .SelectMany(s => s.Departed.Where(d => d.Status != Topo.Model.SectionReport.DepartureStatus.Unset).Select(d => (key: (s.UnitId, d.Id, d.MemberNumber), d.Status)))
+                .GroupBy(d => d.key).ToDictionary(g => g.Key, g => g.First().Status);
+            foreach (var section in result.Report.Sections)
+            {
+                foreach (var departed in section.Departed)
+                {
+                    if (chosen.TryGetValue((section.UnitId, departed.Id, departed.MemberNumber), out var status))
+                    {
+                        departed.Status = status;
+                    }
+                }
             }
         }
 
@@ -169,8 +208,10 @@ namespace Topo.Controller
 
         internal async Task DownloadClick(OutputType outputType)
         {
-            if (Result == null)
+            if (Result == null || Busy)
+            {
                 return;
+            }
 
             var report = Result.Report;
             var first = report.Sections.FirstOrDefault();

@@ -2,6 +2,7 @@
 using Microsoft.JSInterop;
 using Newtonsoft.Json;
 using System.Runtime.InteropServices;
+using Topo.Model.Cache;
 using Topo.Model.Logbook;
 using Topo.Model.Members;
 using Topo.Model.ReportGeneration;
@@ -10,8 +11,11 @@ using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class LogbookController : ComponentBase
+    public class LogbookController : ComponentBase, IDisposable
     {
+        [Inject]
+        public ILogbookTotalsService _logbookTotals { get; set; }
+
         [Inject]
         public StorageService _storageService { get; set; }
 
@@ -67,6 +71,22 @@ namespace Topo.Controller
             await PopulateMembers();
         }
 
+        // How old what is kept for the Scouts listed is, and reading it again; the reports wait while it is
+        public ReportRefresh _data = new ReportRefresh();
+
+        private List<string> MemberIds => model.Members.Select(m => m.id).ToList();
+
+        private Task ReadAge() => _data.ReadAgeAsync(() => _LogbookService.OldestReadAsync(MemberIds));
+
+        internal async Task RefreshClick()
+        {
+            _data.Changed = () => InvokeAsync(StateHasChanged);
+            await _data.RefreshAsync((progress, token) => _LogbookService.GenerateLogbookData(model.Members.Select(m => new KeyValuePair<string, string>(m.id, $"{m.first_name} {m.last_name}")).ToList(), progress, token),
+                () => _LogbookService.OldestReadAsync(MemberIds));
+        }
+
+        public void Dispose() => _data.Dispose();
+
         internal async Task SelectAllChange(ChangeEventArgs e)
         {
             var selectAll = (bool)e.Value;
@@ -86,11 +106,13 @@ namespace Topo.Controller
 
         private async Task PopulateMembers()
         {
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
             var allMembers = await _membersService.GetMembersAsync(model.UnitId);
             if (model.IncludeLeaders)
                 model.Members = allMembers.OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();
             else
                 model.Members = allMembers.Where(m => m.isAdultLeader == 0).OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();
+            await ReadAge();
         }
 
         internal async Task LogbookReportPdfClick()
@@ -136,6 +158,7 @@ namespace Topo.Controller
             var reportData = await _LogbookService.GenerateLogbookData(memberKVP);
             var serialisedReportData = JsonConvert.SerializeObject(reportData);
 
+            await ReadAge();
             var report = await _reportService.GetLogbookReport(groupName, section, unitName, outputType, serialisedReportData);
             return report;
         }

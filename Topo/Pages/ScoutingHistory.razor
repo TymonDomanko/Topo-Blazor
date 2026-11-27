@@ -43,6 +43,15 @@
     <div class="text-danger mb-3">@model.ErrorMessage</div>
 }
 
+@if (_page.Loading)
+{
+    <div class="mb-3">Reading the history...</div>
+}
+@if (_page.ReadUtc != null)
+{
+    <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
+}
+
 @if (model.History != null)
 {
     var history = model.History;
@@ -50,8 +59,8 @@
     <div class="mb-3">
         <h3>@history.MemberName</h3>
         <div class="mt-2">
-            <button type="button" class="btn btn-primary" @onclick="@(() => DownloadClick(OutputType.PDF))">Scouting History (pdf)</button>
-            <button type="button" class="btn btn-success" @onclick="@(() => DownloadClick(OutputType.Excel))">Scouting History (xlsx)</button>
+            <button type="button" class="btn btn-primary" disabled="@_page.Updating" @onclick="@(() => DownloadClick(OutputType.PDF))">Scouting History (pdf)</button>
+            <button type="button" class="btn btn-success" disabled="@_page.Updating" @onclick="@(() => DownloadClick(OutputType.Excel))">Scouting History (xlsx)</button>
         </div>
     </div>
 

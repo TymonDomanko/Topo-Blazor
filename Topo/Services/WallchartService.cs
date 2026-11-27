@@ -9,7 +9,8 @@ namespace Topo.Services
 {
     public interface IWallchartService
     {
-        Task<List<WallchartItemModel>> GetWallchartItems(string selectedUnitId, Action<string>? progress = null);
+        // The unit's wallchart. Inside a CacheScope it is built from the data cache, as the scope asks.
+        Task<List<WallchartItemModel>> GetWallchartItems(string selectedUnitId, Action<string>? progress = null, CancellationToken cancellationToken = default);
     }
     public class WallchartService : IWallchartService
     {
@@ -19,40 +20,48 @@ namespace Topo.Services
         private readonly IMembersService _membersService;
         private List<ApprovalsListModel> approvals = new List<ApprovalsListModel>();
 
-        public WallchartService(StorageService storageService, ITerrainAPIService terrainAPIService, IApprovalsService approvalService, IMembersService membersService)
+        private readonly ILogbookTotalsService _logbookTotals;
+
+        public WallchartService(StorageService storageService, ITerrainAPIService terrainAPIService, IApprovalsService approvalService, IMembersService membersService,
+            ILogbookTotalsService logbookTotals)
         {
+            _logbookTotals = logbookTotals;
             _storageService = storageService;
             _terrainAPIService = terrainAPIService;
             _approvalService = approvalService;
             _membersService = membersService;
         }
 
-        public async Task<List<WallchartItemModel>> GetWallchartItems(string selectedUnitId, Action<string>? progress = null)
+        // Nights camped and kilometres hiked from a Scout's logbook totals; an item is left as it is when there are none
+        private static void ApplyLogbookTotals(WallchartItemModel item, Topo.Model.Logbook.GetMemberLogbookMetricsResultModel? totals)
+        {
+            if (totals == null)
+            {
+                return;
+            }
+            var nights = totals.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
+            var kilometres = (totals.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;
+            item.NightsCamped = (int)nights;
+            item.NightsCampedInSection = (int)nights;
+            item.KMsHiked = (int)kilometres;
+        }
+
+        public async Task<List<WallchartItemModel>> GetWallchartItems(string selectedUnitId, Action<string>? progress = null,
+            CancellationToken cancellationToken = default)
         {
             var members = await _membersService.GetMembersAsync(selectedUnitId);
-            var cachedWallchartItems = _storageService.CachedWallchartItems.Where(cm => cm.Key == selectedUnitId).FirstOrDefault().Value;
-            if (cachedWallchartItems != null)
-            {
-                // Update cache member name
-                foreach (var item in cachedWallchartItems)
-                {
-                    var member = members.Where(m => m.id == item.MemberId).FirstOrDefault();
-                    item.MemberName = $"{member?.first_name} {_membersService.GetMemberLastName(selectedUnitId, item.MemberId).Result}";
-                }
-                return cachedWallchartItems;
-            }
-
             var section = _storageService.Section;
             approvals = await _approvalService.ReadApprovalListFromLocalStorage(selectedUnitId);
-            await _terrainAPIService.RevokeAssumedProfiles();
+            using (await _logbookTotals.LockProfileAsync())
+            {
+                await _terrainAPIService.RevokeAssumedProfiles();
+            }
 
             var youth = members.Where(m => m.isAdultLeader == 0).OrderBy(m => m.last_name).ThenBy(m => m.first_name).ToList();
             if (youth.Count == 0)
             {
                 // a unit with no youth (an adults-only team) has nothing to show, and nothing to read
-                var none = new List<WallchartItemModel>();
-                _storageService.CachedWallchartItems.Add(new KeyValuePair<string, List<WallchartItemModel>>(selectedUnitId, none));
-                return none;
+                return new List<WallchartItemModel>();
             }
 
             // Terrain works out each member's Peak Award Progress itself; read it rather than estimating it here
@@ -75,6 +84,7 @@ namespace Topo.Services
             var wallchartItems = new List<WallchartItemModel>();
             foreach (var member in youth)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 progress?.Invoke($"{member.first_name} {member.last_name} ({youth.IndexOf(member) + 1} of {youth.Count})");
                 var wallchartItem = new WallchartItemModel();
 
@@ -179,21 +189,14 @@ namespace Topo.Services
                 wallchartItem.OASStageProgressions = AchievementSelection.OasProgressions(oasResults, _storageService.Section, includeApproved: false);
                 // Member
                 wallchartItem.MemberId = member.id;
-                wallchartItem.MemberName = $"{member.first_name} {_membersService.GetMemberLastName(selectedUnitId, member.id).Result}";
+                wallchartItem.MemberName = $"{member.first_name} {await _membersService.GetMemberLastName(selectedUnitId, member.id)}";
                 wallchartItem.MemberPatrol = member.patrol_name;
                 wallchartItem.IntroToScouting = IntroDate(AchievementSelection.LatestAwardedIntro(introScoutingByMember[member.id]));
                 wallchartItem.IntroToSection = IntroDate(AchievementSelection.LatestAwardedIntro(introSectionByMember[member.id], _storageService.Section));
                 wallchartItem.YearsOfService = YearsOfServiceCalculator.CalculateCompletedYears(wallchartItem.IntroToSection, DateTime.Now);
                 // Logbook
-                await _terrainAPIService.AssumeProfile(member.id);
-                var getMemberLogbookMetrics = await _terrainAPIService.GetMemberLogbookMetrics(member.id);
-                await _terrainAPIService.RevokeAssumedProfiles();
-                var totalNightsCamped = getMemberLogbookMetrics.results.Where(r => r.name == "total_nights_camped").FirstOrDefault()?.value ?? 0;
-                var totalNightsCampedInSection = totalNightsCamped;
-                var totalKmsHiked = (getMemberLogbookMetrics.results.Where(r => r.name == "total_distance_hiked").FirstOrDefault()?.value ?? 0) / 1000.0f;
-                wallchartItem.NightsCamped = (int)totalNightsCamped;
-                wallchartItem.NightsCampedInSection = (int)totalNightsCampedInSection;
-                wallchartItem.KMsHiked = (int)totalKmsHiked;
+                var totals = await _logbookTotals.ForPageAsync(member.id, cancellationToken);
+                ApplyLogbookTotals(wallchartItem, totals?.Value);
                 // SIA
                 var awardedSIAProjects = siaByMember[member.id].Where(r => r.section == section && r.status == "awarded");
                 var awardedSIAProjectsByArea = awardedSIAProjects.GroupBy(p => p.answers.special_interest_area_selection);
@@ -235,7 +238,6 @@ namespace Topo.Services
 
                 wallchartItems.Add(wallchartItem);
             }
-            _storageService.CachedWallchartItems.Add(new KeyValuePair<string, List<WallchartItemModel>>(selectedUnitId, wallchartItems));
             return wallchartItems;
         }
 

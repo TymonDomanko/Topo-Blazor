@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Newtonsoft.Json;
 using System.Text;
+using Topo.Model.Cache;
 using Topo.Model.Members;
 using Topo.Model.PatrolPlanner;
 using Topo.Model.ReportGeneration;
@@ -73,7 +74,12 @@ namespace Topo.Controller
 
             _patrolColorOverrides = await _localStorageService.GetItemAsync<Dictionary<string, string>>($"{unitId}_PatrolColors") ?? new Dictionary<string, string>();
 
-            var allMembers = await _membersService.GetMembersAsync(unitId);
+            List<MemberListModel> allMembers;
+            using (var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null)
+            {
+                allMembers = await _membersService.GetMembersAsync(unitId);
+                MembersReadUtc = CacheScope.Current!.OldestUtc;
+            }
             model.Members = allMembers
                 .Where(m => m.isAdultLeader == 0)
                 .Select(m => new PatrolPlannerMember
@@ -101,10 +107,16 @@ namespace Topo.Controller
             _originalPatrolNames = new List<string>(model.PatrolNames);
         }
 
+        // When the members on show were read
+        public DateTime? MembersReadUtc;
+
         internal async Task RefreshClick()
         {
             _membersService.ClearMemberCache(model.UnitId);
-            await UnitChange(model.UnitId);
+            using (CacheScope.Begin(CacheMode.Reread))
+            {
+                await UnitChange(model.UnitId);
+            }
         }
 
         // Undoes member moves/role/council changes AND any patrols added or removed this session,

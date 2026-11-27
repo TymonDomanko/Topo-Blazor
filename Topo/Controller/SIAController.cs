@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
+using Topo.Model.Cache;
 using Topo.Model.SIA;
 using Topo.Services;
 using Topo.Model.ReportGeneration;
@@ -8,7 +9,7 @@ using Topo.Model.Members;
 
 namespace Topo.Controller
 {
-    public class SIAController : ComponentBase
+    public class SIAController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -51,6 +52,7 @@ namespace Topo.Controller
 
         internal async Task UnitChange(string unitId)
         {
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
             if (string.IsNullOrEmpty(unitId))
             {
                 model.UnitId = unitId;
@@ -64,7 +66,24 @@ namespace Topo.Controller
             var allMembers = await _membersService.GetMembersAsync(model.UnitId);
             model.Members = allMembers.Where(m => m.isAdultLeader == 0).OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();
             model.UnitName = _storageService.UnitName;
+            await ReadAge();
         }
+
+        // How old what is kept for the Scouts listed is, and reading it again; the reports wait while it is
+        public ReportRefresh _data = new ReportRefresh();
+
+        private List<string> MemberIds => model.Members.Select(m => m.id).ToList();
+
+        private Task ReadAge() => _data.ReadAgeAsync(() => _SIAService.OldestReadAsync(MemberIds));
+
+        internal async Task RefreshClick()
+        {
+            _data.Changed = () => InvokeAsync(StateHasChanged);
+            await _data.RefreshAsync((progress, token) => _SIAService.GenerateSIAReportData(model.Members.Select(m => new KeyValuePair<string, string>(m.id, $"{m.first_name} {m.last_name}")).ToList(), _storageService.Section, model.UnitId, progress, token),
+                () => _SIAService.OldestReadAsync(MemberIds));
+        }
+
+        public void Dispose() => _data.Dispose();
 
         internal async Task SelectAllChange(ChangeEventArgs e)
         {
@@ -117,6 +136,7 @@ namespace Topo.Controller
 
             var reportData = await _SIAService.GenerateSIAReportData(memberKVP, section, model.UnitId);
             var serialisedReportData = JsonConvert.SerializeObject(reportData);
+            await ReadAge();
 
             var report = await _reportService.GetSIAReport(groupName, section, unitName, outputType, serialisedReportData);
             return report;

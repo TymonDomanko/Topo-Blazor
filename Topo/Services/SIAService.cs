@@ -1,13 +1,18 @@
 ﻿using Topo.Model;
 using System.Globalization;
 using Topo.Model.Approvals;
+using Topo.Model.Cache;
 using Topo.Model.SIA;
 
 namespace Topo.Services
 {
     public interface ISIAService
     {
-        public Task<List<SIAProjectListModel>> GenerateSIAReportData(List<KeyValuePair<string, string>> selectedMembers, string section, string selectedUnitId);
+        // The Scouts' Special Interest Area projects for the report. Reads come from the data cache while in date, unless a CacheScope asks otherwise.
+        public Task<List<SIAProjectListModel>> GenerateSIAReportData(List<KeyValuePair<string, string>> selectedMembers, string section, string selectedUnitId,
+            Action<string>? progress = null, CancellationToken cancellationToken = default);
+        // When the oldest of what is kept of these Scouts' projects was read; null when nothing is
+        public Task<DateTime?> OldestReadAsync(IReadOnlyList<string> memberIds);
     }
 
     public class SIAService : ISIAService
@@ -19,13 +24,20 @@ namespace Topo.Services
             _terrainAPIService = terrainAPIService;
         }
 
-        public async Task<List<SIAProjectListModel>> GenerateSIAReportData(List<KeyValuePair<string, string>> selectedMembers, string section, string selectedUnitId)
+        public Task<DateTime?> OldestReadAsync(IReadOnlyList<string> memberIds) => _terrainAPIService.HeldSiaSinceAsync(memberIds);
+
+        public async Task<List<SIAProjectListModel>> GenerateSIAReportData(List<KeyValuePair<string, string>> selectedMembers, string section, string selectedUnitId,
+            Action<string>? progress = null, CancellationToken cancellationToken = default)
         {
+            using var ownScope = CacheScope.Current == null ? CacheScope.Begin(CacheMode.Fresh) : null;
             var approvals = new List<ApprovalsListModel>(); // await _approvalsService.GetApprovalListItems(selectedUnitId);
             TextInfo myTI = new CultureInfo("en-UA", false).TextInfo;
             var unitSiaProjects = new List<SIAProjectListModel>();
+            var read = 0;
             foreach (var member in selectedMembers)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                progress?.Invoke($"{++read} of {selectedMembers.Count} Scouts");
                 try
                 {
                     var siaResultModel = await _terrainAPIService.GetSIAResultsForMember(member.Key);

@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Newtonsoft.Json;
+using Topo.Model.Cache;
 using Topo.Model.AdditionalAwards;
 using Topo.Model.Members;
 using Topo.Model.ReportGeneration;
@@ -9,8 +10,11 @@ using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class AdditionalAwardsController : ComponentBase
+    public class AdditionalAwardsController : ComponentBase, IDisposable
     {
+        [Inject]
+        public ILogbookTotalsService _logbookTotals { get; set; }
+
         [Inject]
         public StorageService _storageService { get; set; }
 
@@ -52,6 +56,7 @@ namespace Topo.Controller
 
         internal async Task UnitChange(string unitId)
         {
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
             if (string.IsNullOrEmpty(unitId))
             {
                 model.UnitId = unitId;
@@ -65,7 +70,24 @@ namespace Topo.Controller
             var allMembers = await _membersService.GetMembersAsync(model.UnitId);
             model.Members = allMembers.Where(m => m.isAdultLeader == 0).OrderBy(m => m.first_name).ThenBy(m => m.last_name).ToList();
             model.UnitName = _storageService.UnitName;
+            await ReadAge();
         }
+
+        // How old what is kept for the Scouts listed is, and reading it again; the reports wait while it is
+        public ReportRefresh _data = new ReportRefresh();
+
+        private List<string> MemberIds => model.Members.Select(m => m.id).ToList();
+
+        private Task ReadAge() => _data.ReadAgeAsync(() => _logbookTotals.OldestReadAsync(MemberIds));
+
+        internal async Task RefreshClick()
+        {
+            _data.Changed = () => InvokeAsync(StateHasChanged);
+            await _data.RefreshAsync((progress, token) => _logbookTotals.RefreshAsync(MemberIds, progress, token),
+                () => _logbookTotals.OldestReadAsync(MemberIds));
+        }
+
+        public void Dispose() => _data.Dispose();
 
         internal async Task SelectAllChange(ChangeEventArgs e)
         {
@@ -96,6 +118,7 @@ namespace Topo.Controller
 
         internal async Task<byte[]> AwardsReport(OutputType outputType = OutputType.PDF)
         {
+            using var scope = CacheScope.Begin(CacheMode.Fresh);
             if (!model.Members.Any(m => m.selected))
             {
                 foreach (var member in model.Members)
@@ -119,6 +142,7 @@ namespace Topo.Controller
             var reportData = await _additionalAwardsService.GenerateAdditionalAwardReportData(model.UnitId, memberKVP);
             var serialisedReportData = JsonConvert.SerializeObject(reportData);
 
+            await ReadAge();
             var report = await _reportService.GetAdditionalAwardsReport(groupName, section, unitName, outputType, serialisedReportData);
             return report;
         }

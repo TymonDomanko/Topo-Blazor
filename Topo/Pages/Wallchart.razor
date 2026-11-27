@@ -36,7 +36,7 @@
             </label>
         </div>
         <div class="col-sm-3">
-            <InputCheckbox id="suppressLastName" class="form-check-input"
+            <InputCheckbox id="suppressLastName" class="form-check-input" disabled="@_page.Updating"
                            @bind-Value="model.SuppressLastName" @bind-Value:after="SuppressLastNameChanged" />
             <label class="form-check-label" for="suppressLastName">
                 Suppress Last Name
@@ -46,9 +46,9 @@
         </div>
     </div>
 
-    @if (Loading)
+    @if (_page.Loading)
     {
-        <div class="mt-3 mb-3">Reading @Progress...</div>
+        <div class="mt-3 mb-3">Reading @_page.Progress...</div>
     }
     @if (!string.IsNullOrEmpty(model.ErrorMessage))
     {
@@ -59,10 +59,12 @@
 
     @if (Sheets != null)
     {
+        <DataAgeLine ReadUtc="_page.ReadUtc" Updating="_page.Updating" Disabled="_page.Loading" Progress="@_page.Progress" OnRefresh="RefreshClick" />
+
         <div class="mt-3 mb-3 row">
             <div class="col-sm">
-                <button type="button" class="btn btn-primary" disabled="@(Sheets.Count == 0)" @onclick="WallchartReportPdfClick">Wallchart (pdf)</button>
-                <button type="button" class="btn btn-success" disabled="@(Sheets.Count == 0)" @onclick="WallchartReportXlsxClick">Wallchart (xlsx)</button>
+                <button type="button" class="btn btn-primary" disabled="@(Sheets.Count == 0 || _page.Loading || _page.Updating)" @onclick="WallchartReportPdfClick">Wallchart (pdf)</button>
+                <button type="button" class="btn btn-success" disabled="@(Sheets.Count == 0 || _page.Loading || _page.Updating)" @onclick="WallchartReportXlsxClick">Wallchart (xlsx)</button>
             </div>
         </div>
 

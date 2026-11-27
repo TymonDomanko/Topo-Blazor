@@ -28,6 +28,12 @@
 
     @if (model.Members != null && model.Members.Any())
     {
+        <DataAgeLine What="Logbook totals" ReadUtc="_data.ReadUtc" NoneText="Logbook totals will be read when a report is made." Updating="_data.Updating" Progress="@_data.Progress" OnRefresh="RefreshClick" />
+        @if (_data.Failed)
+        {
+            <div class="mb-3 text-danger">Couldn't read everything again from Terrain.</div>
+        }
+
         <div>
             <input type="checkbox" id="checkall" @onchange="SelectAllChange" /><span> Select All</span>
         </div>
@@ -87,8 +93,8 @@
 
         <div class="mt-3 mb-3 row">
             <div class="col-sm">
-                <button type="submit" name="button" @onclick="AwardsReportPdfClick" class="btn btn-primary">Awards Report (pdf)</button>
-                <button type="submit" name="button" @onclick="AwardsReportXlsxClick" class="btn btn-success">Awards Report (xlsx)</button>
+                <button type="submit" name="button" @onclick="AwardsReportPdfClick" class="btn btn-primary" disabled="@_data.Updating">Awards Report (pdf)</button>
+                <button type="submit" name="button" @onclick="AwardsReportXlsxClick" class="btn btn-success" disabled="@_data.Updating">Awards Report (xlsx)</button>
             </div>
         </div>
     }

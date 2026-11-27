@@ -3,11 +3,12 @@ using Microsoft.JSInterop;
 using Newtonsoft.Json;
 using Topo.Model.ReadyToSubmit;
 using Topo.Model.ReportGeneration;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo.Controller
 {
-    public class ReadyToSubmitController : ComponentBase
+    public class ReadyToSubmitController : ComponentBase, IDisposable
     {
         [Inject]
         public StorageService _storageService { get; set; }
@@ -28,8 +29,10 @@ namespace Topo.Controller
         public IReadyToSubmitService _readyToSubmitService { get; set; }
 
         public ReadyToSubmitPageViewModel model = new ReadyToSubmitPageViewModel();
-        public bool Loading;
-        public string Progress = "";
+        // Loading and reading again through the data cache
+        public PageLoad _page = new PageLoad();
+        public bool Loading => _page.Loading;
+        public string Progress => _page.Progress;
         // Worked out again whenever an option changes, from what was read for the unit
         public ReadyToSubmitReport? Report;
         private ReadyToSubmitData? _data;
@@ -42,6 +45,7 @@ namespace Topo.Controller
                 return;
             }
 
+            _page.Changed = () => InvokeAsync(StateHasChanged);
             model.GroupName = _storageService.GroupNameDisplay;
             model.Units = _storageService.Units;
             if (!string.IsNullOrEmpty(_storageService.UnitId))
@@ -57,27 +61,49 @@ namespace Topo.Controller
             Report = null;
             _data = null;
             if (string.IsNullOrEmpty(unitId))
+            {
+                _page.Cancel();
                 return;
+            }
 
             _storageService.UnitId = unitId;
-            Loading = true;
-            try
+            // what the data cache holds shows at once, and is read again behind the page when it is more than a day old
+            await _page.LoadAsync(Read(unitId), Show);
+            ShowFailure();
+        }
+
+        // Reads everything on the page again, leaving what is shown in place until the new list is in
+        internal async Task RefreshClick()
+        {
+            model.ErrorMessage = "";
+            await _page.RefreshAsync(Read(model.UnitId), Show);
+            ShowFailure();
+        }
+
+        private Func<Action<string>, CancellationToken, Task<ReadyToSubmitData>> Read(string unitId) =>
+            async (progress, cancellationToken) =>
             {
                 var members = await _membersService.GetMembersAsync(unitId);
                 var youth = members.Where(m => m.isAdultLeader == 0).ToList();
-                _data = await _readyToSubmitService.LoadAsync(unitId, youth, _storageService.Section, step => { Progress = step; InvokeAsync(StateHasChanged); });
-                Recalculate();
-            }
-            catch (Exception)
+                cancellationToken.ThrowIfCancellationRequested();
+                return await _readyToSubmitService.LoadAsync(unitId, youth, _storageService.Section, progress);
+            };
+
+        private void Show(ReadyToSubmitData data)
+        {
+            _data = data;
+            Recalculate();
+        }
+
+        private void ShowFailure()
+        {
+            if (_page.Failed)
             {
                 model.ErrorMessage = "Couldn't read the badges from Terrain.";
             }
-            finally
-            {
-                Loading = false;
-                Progress = "";
-            }
         }
+
+        public void Dispose() => _page.Dispose();
 
         // The preview follows the options as they are ticked, without reading Terrain again
         internal void OptionChanged() => Recalculate();
@@ -105,8 +131,10 @@ namespace Topo.Controller
 
         private async Task Download(OutputType outputType)
         {
-            if (Report == null)
+            if (Report == null || _page.Updating)
+            {
                 return;
+            }
             var groupName = _storageService.GroupName ?? "Group Name";
             var unitName = Report.UnitName;
             var bytes = await _reportService.GetReadyToSubmitReport(groupName, Report.Section, unitName, outputType, JsonConvert.SerializeObject(Report));
