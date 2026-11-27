@@ -39,6 +39,7 @@ namespace Topo.Services
         public IWorkbook GenerateMilestoneWorkbook(List<MilestoneSummaryListModel> milestoneSummaries, string groupName, string section, string unitName, bool forPdfOutput, bool breakByPatrol = false);
         public IWorkbook GenerateLogbookWorkbook(List<MemberLogbookReportViewModel> logbookEntries, string groupName, string section, string unitName, bool forPdfOutput);
         public IWorkbook GenerateWallchartWorkbook(List<WallchartItemModel> wallchartEntries, string groupName, string section, string unitName, bool forPdfOutput, bool breakByPatrol = false);
+        public IWorkbook GenerateOasSummaryWorkbook(OasSummaryReport report, string groupName, string section, string unitName);
         public IWorkbook GenerateApprovalsWorkbook(List<ApprovalsListModel> selectedApprovals, string groupName, string section, string unitName, DateTime approvalSearchFromDate, DateTime approvalSearchToDate, bool groupByMember, bool forPdfOutput);
         public IWorkbook GenerateProgressWorkbook(ProgressDetailsPageViewModel progressEntries, string groupName, string section, string unitName);
         public IWorkbook GenerateScoutingHistoryWorkbook(ScoutingHistoryModel history, string groupName, string section, string unitName);
@@ -2348,6 +2349,155 @@ namespace Topo.Services
 
             return workbook;
 
+        }
+
+        // The OAS summary: a row for each Scout and, for each column (a skill, or a branch of one), two columns of the sheet: the highest
+        // stage awarded and the stage being worked on (shaded by where it is up to, and marked R or A so the difference shows on a black
+        // and white print)
+        public IWorkbook GenerateOasSummaryWorkbook(OasSummaryReport report, string groupName, string section, string unitName)
+        {
+            var columns = report.Columns.Count > 0 ? report.Columns : OasSummaryLayout.SkillColumns();
+            var lastColumn = 1 + columns.Count * 2;
+            var branches = OasSummaryLayout.HasBranchHeadings(columns);
+            var sheets = report.Sheets.Count == 0 ? new List<OasSummarySheet> { new OasSummarySheet() } : report.Sheets;
+            var workbook = CreateWorkbookWithSheets(sheets.Count);
+            var worksheetIndex = 0;
+
+            foreach (var oasSheet in sheets)
+            {
+                IWorksheet sheet = AddLogoToSheet(workbook, worksheetIndex, groupName, section, lastColumn);
+                sheet.Name = string.IsNullOrEmpty(oasSheet.Patrol) ? "Unit" : oasSheet.Patrol;
+                int rowNumber = 1;
+                IStyle headingStyle = workbook.Styles["headingStyle"];
+
+                // Unit name and title
+                rowNumber++;
+                sheet.Range[rowNumber, 2].Text = unitName;
+                sheet.Range[rowNumber, 2].CellStyle = headingStyle;
+                sheet.Range[rowNumber, 2, rowNumber, lastColumn].Merge();
+                sheet.SetRowHeight(rowNumber, 25);
+                rowNumber++;
+                sheet.Range[rowNumber, 2].Text = $"{(string.IsNullOrEmpty(oasSheet.Patrol) ? "" : oasSheet.Patrol + " ")}Outdoor Adventure Skills as at {report.GeneratedAt.ToShortDateString()}";
+                sheet.Range[rowNumber, 2].CellStyle = headingStyle;
+                sheet.Range[rowNumber, 2, rowNumber, lastColumn].Merge();
+                sheet.SetRowHeight(rowNumber, 25);
+
+                // The groups, then the skills, then (when split) the branches, then Awarded and Working on under each
+                rowNumber++;
+                var column = 2;
+                foreach (var group in OasSummaryLayout.GroupSpans(columns))
+                {
+                    sheet.Range[rowNumber, column].Text = group.Heading;
+                    sheet.Range[rowNumber, column, rowNumber, column + group.Span * 2 - 1].Merge();
+                    column += group.Span * 2;
+                }
+                sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.Font.Bold = true;
+                sheet.Range[rowNumber, 2, rowNumber, lastColumn].BorderAround();
+
+                rowNumber++;
+                column = 2;
+                foreach (var stream in OasSummaryLayout.StreamSpans(columns))
+                {
+                    var width = stream.Span * 2;
+                    sheet.Range[rowNumber, column].Text = stream.Heading;
+                    sheet.Range[rowNumber, column, rowNumber, column + width - 1].Merge();
+                    sheet.Range[rowNumber, column, rowNumber, column + width - 1].CellStyle.Color = Colour(stream.Colour);
+                    sheet.Range[rowNumber, column, rowNumber, column + width - 1].BorderAround();
+                    column += width;
+                }
+                sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.Font.Bold = true;
+
+                if (branches)
+                {
+                    rowNumber++;
+                    column = 2;
+                    foreach (var branch in columns)
+                    {
+                        sheet.Range[rowNumber, column].Text = branch.Heading;
+                        sheet.Range[rowNumber, column, rowNumber, column + 1].Merge();
+                        sheet.Range[rowNumber, column, rowNumber, column + 1].CellStyle.Color = Colour(branch.Colour);
+                        sheet.Range[rowNumber, column, rowNumber, column + 1].BorderAround();
+                        column += 2;
+                    }
+                    sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                    sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.WrapText = true;
+                    sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.Font.Bold = true;
+                    sheet.SetRowHeight(rowNumber, 32);
+                }
+
+                rowNumber++;
+                sheet.Range[rowNumber, 1].Text = "Name";
+                column = 2;
+                foreach (var _ in columns)
+                {
+                    sheet.Range[rowNumber, column].Text = "Awarded";
+                    sheet.Range[rowNumber, column + 1].Text = "Working on";
+                    column += 2;
+                }
+                sheet.Range[rowNumber, 1, rowNumber, lastColumn].CellStyle.Font.Bold = true;
+                sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.WrapText = true;
+                sheet.SetRowHeight(rowNumber, 30);
+                sheet.Range[rowNumber, 1, rowNumber, lastColumn].BorderAround();
+                sheet.Range[rowNumber, 1, rowNumber, lastColumn].BorderInside();
+                // the names and every heading row stay in view as the sheet is scrolled
+                sheet.Range[rowNumber + 1, 2].FreezePanes();
+
+                foreach (var row in oasSheet.Rows)
+                {
+                    rowNumber++;
+                    sheet.Range[rowNumber, 1].Text = row.Name;
+                    column = 2;
+                    for (var i = 0; i < columns.Count; i++)
+                    {
+                        var cell = i < row.Cells.Count ? row.Cells[i] : new OasSummaryCell();
+                        if (cell.Awarded > 0)
+                        {
+                            sheet.Range[rowNumber, column].Number = cell.Awarded;
+                        }
+                        sheet.Range[rowNumber, column].CellStyle.Color = Colour(columns[i].Colour);
+                        if (cell.State != OasWorking.None)
+                        {
+                            sheet.Range[rowNumber, column + 1].Text = OasSummaryLayout.WorkingText(cell);
+                            sheet.Range[rowNumber, column + 1].CellStyle.Color = Colour(OasSummaryLayout.ColourOf(cell.State));
+                        }
+                        column += 2;
+                    }
+                    sheet.Range[rowNumber, 1, rowNumber, lastColumn].BorderAround();
+                    sheet.Range[rowNumber, 1, rowNumber, lastColumn].BorderInside();
+                    sheet.Range[rowNumber, 2, rowNumber, lastColumn].CellStyle.HorizontalAlignment = ExcelHAlign.HAlignCenter;
+                }
+
+                // What the shading and the letters mean
+                rowNumber += 2;
+                sheet.Range[rowNumber, 1].Text = OasSummaryLayout.Legend;
+                sheet.Range[rowNumber, 1, rowNumber, lastColumn].Merge();
+                sheet.Range[rowNumber, 1].CellStyle.WrapText = true;
+                sheet.Range[rowNumber, 1].CellStyle.VerticalAlignment = ExcelVAlign.VAlignTop;
+                sheet.SetRowHeight(rowNumber, 32);
+
+                sheet.Range[1, 1, rowNumber - 2, lastColumn].AutofitColumns();
+                // narrow columns for the numbers, once the name column has taken what it needs
+                for (var c = 2; c <= lastColumn; c++)
+                    sheet.SetColumnWidth(c, 7.5);
+
+                sheet.PageSetup.PaperSize = ExcelPaperSize.PaperA4;
+                sheet.PageSetup.Orientation = ExcelPageOrientation.Landscape;
+                sheet.PageSetup.BottomMargin = 0.25;
+                sheet.PageSetup.TopMargin = 0.25;
+                sheet.PageSetup.LeftMargin = 0.25;
+                sheet.PageSetup.RightMargin = 0.25;
+                sheet.PageSetup.HeaderMargin = 0;
+                sheet.PageSetup.FooterMargin = 0;
+                sheet.PageSetup.IsFitToPage = true;
+                sheet.PageSetup.FitToPagesWide = 1;
+                sheet.PageSetup.FitToPagesTall = 0;
+
+                worksheetIndex++;
+            }
+            return workbook;
         }
 
         public IWorkbook GenerateWallchartWorkbook(List<WallchartItemModel> wallchartEntries, string groupName, string section, string unitName, bool forPdfOutput, bool breakByPatrol = false)

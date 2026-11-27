@@ -1,0 +1,101 @@
+@using System.Globalization
+@using Topo.Model.OAS
+
+@* What the downloaded worksheet will show, kept up to date as the choices are made: for each stage the requirements and the Scouts, with what each
+   Scout has done in green (awarded) or orange (ticked off, with the date). Like Terrain's own page the requirements go down the side and the
+   Scouts across; with Format like Terrain unticked it is the other way round, as the original worksheet was. *@
+@foreach (var sheet in Sheets)
+{
+    <h4 class="mt-3">@sheet.Title as at @DateTime.Now.ToString("d MMM yyyy", CultureInfo.InvariantCulture)</h4>
+    <div class="scroller">
+        @if (!Transposed)
+        {
+            <table class="worksheet">
+                <thead>
+                    <tr>
+                        <th class="group"></th>
+                        <th class="requirement">Requirement</th>
+                        @foreach (var scout in sheet.Scouts)
+                        {
+                            <th class="scout"><span>@scout</span></th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @{ var row = 0; }
+                    @foreach (var group in sheet.Groups)
+                    {
+                        for (var i = 0; i < group.Span; i++, row++)
+                        {
+                            <tr>
+                                @if (i == 0)
+                                {
+                                    <td class="group" rowspan="@group.Span" style="@Shade(group.Colour)">@group.Heading</td>
+                                }
+                                <td class="requirement">@sheet.Requirements[row]</td>
+                                @foreach (var cell in sheet.Cells[row])
+                                {
+                                    <td class="cell @CellClass(cell)">@cell.Text</td>
+                                }
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <table class="worksheet">
+                <thead>
+                    <tr>
+                        <th class="name"></th>
+                        @foreach (var group in sheet.Groups)
+                        {
+                            <th colspan="@group.Span" class="heading" style="@Shade(group.Colour)">@group.Heading</th>
+                        }
+                    </tr>
+                    <tr>
+                        <th class="name">Scout</th>
+                        @foreach (var requirement in sheet.Requirements)
+                        {
+                            <th class="scout"><span>@requirement</span></th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var s = 0; s < sheet.Scouts.Count; s++)
+                    {
+                        var scout = s;
+                        <tr>
+                            <td class="name">@sheet.Scouts[scout]</td>
+                            @for (var r = 0; r < sheet.Requirements.Count; r++)
+                            {
+                                var cell = sheet.Cells[r][scout];
+                                <td class="cell @CellClass(cell)">@cell.Text</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public List<OasWorksheetSheet> Sheets { get; set; } = new List<OasWorksheetSheet>();
+
+    // Requirements across and Scouts down, as the original worksheet was
+    [Parameter]
+    public bool Transposed { get; set; }
+
+    private static string Shade(string colour) => colour == "" ? "" : "background-color: " + colour;
+
+    // "progress" would be taken for Bootstrap's progress bar, which stops a table cell being one
+    private static string CellClass(OasWorksheetCell cell) => cell.Kind switch
+    {
+        OasWorksheetCellKind.Awarded => "awarded",
+        OasWorksheetCellKind.InProgress => "in-progress",
+        _ => ""
+    };
+}

@@ -1,0 +1,131 @@
+@page "/oasprogress"
+@inherits Controller.OasProgressController
+@using Topo.Model.OAS
+
+<PageTitle>Topo / OAS Progress</PageTitle>
+
+<EditForm Model="@model">
+    <DataAnnotationsValidator />
+    <div class="mt-3 mb-3 row">
+        <h2>OAS Progress @model.GroupName</h2>
+    </div>
+    <p class="text-muted">Worksheets to work through, with what each Scout has done so far: pick a skill and a level.</p>
+
+    <div class="form-group mb-3 row">
+        <label for="unit" class="col-sm-2 col-form-label">Select Unit</label>
+        <div class="col-sm-3">
+            <select id="unit" class="form-select" value="@model.UnitId" @onchange="UnitChange">
+                <option value="">Select unit</option>
+                @foreach (var unit in model.Units)
+                {
+                    <option value="@unit.Key">@unit.Value</option>
+                }
+            </select>
+            <ValidationMessage For="@(() => model.UnitId)" />
+        </div>
+    </div>
+
+    <div class="form-group mb-3 row">
+        <label for="skill" class="col-sm-2 col-form-label">Select OAS</label>
+        <div class="col-sm-6">
+            <select id="skill" class="form-select" value="@model.Skill" @onchange="SkillChanged">
+                <option value="">Select OAS</option>
+                <option value="@OasWorksheetSelection.Core">Core (Bushcraft, Bushwalking, Camping)</option>
+                @foreach (var skill in Skills)
+                {
+                    <option value="@skill">@skill</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    <div class="form-group mb-3 row">
+        <label for="level" class="col-sm-2 col-form-label">OAS Level</label>
+        <div class="col-sm-6">
+            <select id="level" class="form-select" value="@model.Level" @onchange="LevelChanged">
+                <option value="@OasWorksheetSelection.OneAboveHighest">One above the highest in the unit</option>
+                @foreach (var level in Levels)
+                {
+                    <option value="@level">Level @level</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    <div class="form-group mb-3 row">
+        <div class="col-sm-2"></div>
+        <div class="col-sm-10">
+            <InputCheckbox id="includeBelow" class="form-check-input" @bind-Value="model.IncludeBelow" @bind-Value:after="IncludeBelowChanged" />
+            <label class="form-check-label" for="includeBelow">
+                Include all the levels below it (levels every Scout in the unit has already been awarded are left out)
+            </label>
+        </div>
+    </div>
+
+    @if (BranchChoices.Count > 0)
+    {
+        @foreach (var group in BranchChoices.GroupBy(c => c.Stream))
+        {
+            <div class="form-group mb-3 row">
+                <label class="col-sm-2 col-form-label">@(model.Skill == OasWorksheetSelection.Core ? group.Key + " branches" : "Branches")</label>
+                <div class="col-sm-10 col-form-label">
+                    <div class="d-flex flex-wrap gap-4">
+                        @foreach (var choice in group)
+                        {
+                            <label>
+                                <input type="checkbox" checked="@model.ChosenBranches.Contains(choice.Key)" @onchange="e => BranchChanged(choice, (bool)(e.Value ?? false))" />
+                                @choice.Title
+                            </label>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
+
+    <PageStatus Loading="Loading" Progress="@Progress" Error="@model.ErrorMessage" />
+
+    @if (!string.IsNullOrEmpty(model.Skill) && !Loading)
+    {
+        <div class="mb-3">
+            @if (Selection.Included.Count == 0)
+            {
+                <div class="text-muted">@(BranchChoices.Count > 0 ? "Tick at least one branch." : "Nothing to make worksheets for.")</div>
+            }
+            else
+            {
+                <div><strong>Worksheets for:</strong> @string.Join(", ", Selection.Included.Select(s => s.SelectListItemText))</div>
+            }
+            @if (Selection.LeftOut.Count > 0)
+            {
+                <div class="text-muted"><strong>Left out</strong> (every Scout in the unit has been awarded them): @string.Join(", ", Selection.LeftOut.Select(s => s.SelectListItemText))</div>
+            }
+        </div>
+    }
+
+    <div class="mt-3 mb-3 row">
+        <div class="col-sm-3">
+            <InputCheckbox id="hideCompletedMembers" class="form-check-input" @bind-Value="model.HideCompletedMembers" @bind-Value:after="ReadOptionChanged" />
+            <label class="form-check-label" for="hideCompletedMembers">Hide Completed Members</label>
+        </div>
+        <div class="col-sm-3">
+            <InputCheckbox id="breakByPatrol" class="form-check-input" @bind-Value="model.BreakByPatrol" @bind-Value:after="BreakByPatrolChanged" />
+            <label class="form-check-label" for="breakByPatrol">Break by Patrol</label>
+        </div>
+        <div class="col-sm-3">
+            <InputCheckbox id="formatLikeTerrain" class="form-check-input" @bind-Value="model.FormatLikeTerrain" />
+            <label class="form-check-label" for="formatLikeTerrain">Format like Terrain</label>
+        </div>
+        <div class="col-sm-3">
+            <InputCheckbox id="suppressLastName" class="form-check-input" @bind-Value="model.SuppressLastName" @bind-Value:after="ReadOptionChanged" />
+            <label class="form-check-label" for="suppressLastName">Suppress Last Name</label>
+        </div>
+    </div>
+
+    <ReportButtons Name="OAS Worksheet" OnPdf="OASWorksheetPdfClick" OnXlsx="OASWorksheetXlsxClick" Disabled="@(!CanMake)" />
+
+    @if (Sheets.Count > 0)
+    {
+        <OasWorksheetPreview Sheets="Sheets" Transposed="@(!model.FormatLikeTerrain)" />
+    }
+</EditForm>

@@ -1,0 +1,83 @@
+@using System.Globalization
+@using Topo.Model.OAS
+
+@* What the downloaded OAS report will show: a row for each Scout and, for each of the nine skills, the highest stage awarded and the stage
+   they are working on. The names stay in view while the columns scroll. *@
+@if (Report.Sheets.Count == 0 || Report.Sheets.All(s => s.Rows.Count == 0))
+{
+    <div class="text-muted">No Scouts to show.</div>
+}
+
+@foreach (var sheet in Report.Sheets.Where(s => s.Rows.Count > 0))
+{
+    <h4 class="mt-3">@(sheet.Patrol == "" ? "" : sheet.Patrol + " ")Outdoor Adventure Skills as at @Report.GeneratedAt.ToString("d MMM yyyy", CultureInfo.InvariantCulture)</h4>
+    <div class="scroller">
+        <table class="oas">
+            <thead>
+                <tr class="groups">
+                    <th class="name" style="top: 0"></th>
+                    @foreach (var group in OasSummaryLayout.GroupSpans(Report.Columns))
+                    {
+                        <th colspan="@(group.Span * 2)" class="text-center" style="top: 0">@group.Heading</th>
+                    }
+                </tr>
+                <tr class="streams">
+                    <th class="name" style="top: @(RowHeight)rem"></th>
+                    @foreach (var stream in OasSummaryLayout.StreamSpans(Report.Columns))
+                    {
+                        <th colspan="@(stream.Span * 2)" class="text-center" style="top: @(RowHeight)rem; background-color: @stream.Colour">@stream.Heading</th>
+                    }
+                </tr>
+                @if (Branches)
+                {
+                    <tr class="branches">
+                        <th class="name" style="top: @(RowHeight * 2)rem"></th>
+                        @foreach (var column in Report.Columns)
+                        {
+                            <th colspan="2" class="text-center" style="top: @(RowHeight * 2)rem; background-color: @column.Colour">@column.Heading</th>
+                        }
+                    </tr>
+                }
+                <tr class="kinds">
+                    <th class="name" style="top: @(RowHeight * (Branches ? 3 : 2))rem">Name</th>
+                    @foreach (var column in Report.Columns)
+                    {
+                        <th class="text-center" style="top: @(RowHeight * (Branches ? 3 : 2))rem">Awarded</th>
+                        <th class="text-center" style="top: @(RowHeight * (Branches ? 3 : 2))rem">Working on</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in sheet.Rows)
+                {
+                    <tr>
+                        <td class="name">@row.Name</td>
+                        @for (var i = 0; i < Report.Columns.Count; i++)
+                        {
+                            var cell = i < row.Cells.Count ? row.Cells[i] : new OasSummaryCell();
+                            <td class="text-center" style="background-color: @Report.Columns[i].Colour">@(cell.Awarded > 0 ? cell.Awarded.ToString() : "")</td>
+                            <td class="text-center" style="@(cell.State == OasWorking.None ? null : "background-color: " + OasSummaryLayout.ColourOf(cell.State))">@OasSummaryLayout.WorkingText(cell)</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<div class="legend mt-3 mb-3">
+    <span class="swatch" style="background-color: @OasSummaryLayout.InProgressColour"></span> in progress
+    <span class="swatch" style="background-color: @OasSummaryLayout.InReviewColour"></span> in review (R)
+    <span class="swatch" style="background-color: @OasSummaryLayout.ApprovedColour"></span> approved, waiting to be presented (A)
+    <div class="text-muted small">@OasSummaryLayout.Legend</div>
+</div>
+
+@code {
+    [Parameter]
+    public OasSummaryReport Report { get; set; } = new OasSummaryReport();
+
+    // The height of a heading row, which the rows below are stuck under as the table scrolls
+    private const double RowHeight = 1.7;
+
+    private bool Branches => OasSummaryLayout.HasBranchHeadings(Report.Columns);
+}

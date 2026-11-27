@@ -1,0 +1,54 @@
+@page "/oas"
+@inherits Controller.OasSummaryController
+
+<PageTitle>Topo / OAS</PageTitle>
+
+<EditForm Model="@model">
+    <div class="mt-3 mb-3 row">
+        <h2>Outdoor Adventure Skills @model.GroupName</h2>
+    </div>
+    <p class="text-muted">Where each Scout is up to in every Outdoor Adventure Skill: the highest stage awarded, and the stage they are working on.</p>
+
+    <div class="form-group mb-3 row">
+        <label for="unit" class="col-sm-2 col-form-label">Select Unit</label>
+        <div class="col-sm-3">
+            <select id="unit" class="form-select" value="@model.UnitId" @onchange="UnitChange">
+                <option value="">Select unit</option>
+                @foreach (var unit in model.Units)
+                {
+                    <option value="@unit.Key">@unit.Value</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    <div class="mt-3 mb-3 row">
+        <div class="col-sm-3">
+            <InputCheckbox id="breakByPatrol" class="form-check-input" @bind-Value="model.BreakByPatrol" @bind-Value:after="OptionChanged" />
+            <label class="form-check-label" for="breakByPatrol">Break by Patrol</label>
+        </div>
+        <div class="col-sm-9">
+            <InputCheckbox id="useFullNames" class="form-check-input" @bind-Value="model.UseFullNames" @bind-Value:after="OptionChanged" />
+            <label class="form-check-label" for="useFullNames">Use full names (otherwise first name plus enough of the surname to tell Scouts apart)</label>
+        </div>
+    </div>
+    <div class="mt-3 mb-3 row">
+        <div class="col-sm-12">
+            <InputCheckbox id="splitBranches" class="form-check-input" @bind-Value="model.SplitBranches" @bind-Value:after="SplitChanged" />
+            <label class="form-check-label" for="splitBranches">Split into branches (Canoeing, Sailing and so on). A branch nobody has started is left out; "Main" is the stages every Scout does before a skill branches.</label>
+        </div>
+    </div>
+
+    <PageStatus Loading="Loading" Progress="@Progress" Error="@model.ErrorMessage" />
+
+    @if (NoYouth)
+    {
+        <div class="mt-3 mb-3 text-muted">No youth members in this unit.</div>
+    }
+    else if (Report != null)
+    {
+        <ReportButtons Name="OAS" OnPdf="PdfClick" OnXlsx="XlsxClick" Disabled="@(Report.Sheets.All(s => s.Rows.Count == 0))" />
+
+        <OasSummaryPreview Report="Report" />
+    }
+</EditForm>
