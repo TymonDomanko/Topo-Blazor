@@ -94,6 +94,6 @@
     background-color: #8fbc8b;
 }
 
-.worksheet .cell.progress {
+.worksheet .cell.in-progress {
     background-color: #ffa500;
 }
