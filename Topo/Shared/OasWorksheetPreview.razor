@@ -91,10 +91,11 @@
 
     private static string Shade(string colour) => colour == "" ? "" : "background-color: " + colour;
 
+    // "progress" would be taken for Bootstrap's progress bar, which stops a table cell being one
     private static string CellClass(OasWorksheetCell cell) => cell.Kind switch
     {
         OasWorksheetCellKind.Awarded => "awarded",
-        OasWorksheetCellKind.InProgress => "progress",
+        OasWorksheetCellKind.InProgress => "in-progress",
         _ => ""
     };
 }
