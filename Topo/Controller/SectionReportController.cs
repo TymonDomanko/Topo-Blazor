@@ -271,7 +271,8 @@ namespace Topo.Controller
             }
             try
             {
-                using var scope = CacheScope.Begin(mode);
+                // a report still on show is the one being read again
+                using var scope = CacheScope.Begin(mode, behindShownData: Result != null);
                 var result = await _sectionReportService.GetSectionReport(request, step => { Progress = step; InvokeAsync(StateHasChanged); });
                 if (mode == CacheMode.Reread)
                 {

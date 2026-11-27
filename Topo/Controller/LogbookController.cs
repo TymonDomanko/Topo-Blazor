@@ -187,7 +187,7 @@ namespace Topo.Controller
         private async Task<bool> ReadPassAsync(List<KeyValuePair<string, string>> members, int version, CacheMode mode, CancellationToken cancellationToken)
         {
             var failed = new List<string>();
-            using var scope = CacheScope.Begin(mode);
+            using var scope = CacheScope.Begin(mode, behindShownData: Updating);
             await _LogbookService.ReadLogbooksAsync(members,
                 logbook => { if (version == _loadVersion) { _logbooks[logbook.MemberId] = logbook; InvokeAsync(StateHasChanged); } },
                 step => { if (version == _loadVersion) { Progress = step; InvokeAsync(StateHasChanged); } },

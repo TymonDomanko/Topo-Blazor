@@ -44,7 +44,7 @@ namespace Topo.Controller
         // Reads everything for the report again, leaving it on show until the new one is in
         internal async Task RefreshClick()
         {
-            using (CacheScope.Begin(CacheMode.Reread))
+            using (CacheScope.Begin(CacheMode.Reread, behindShownData: model.Report != null))
             {
                 await _auto.RunAsync(Generate);
             }

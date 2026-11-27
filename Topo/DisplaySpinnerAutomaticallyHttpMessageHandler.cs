@@ -1,4 +1,5 @@
 using Topo.Model.AdditionalAwards;
+using Topo.Model.Cache;
 using Topo.Services;
 
 namespace Topo
@@ -26,7 +27,12 @@ namespace Topo
                 return await base.SendAsync(request, cancellationToken);
             }
 
-            _spinnerService.Show();
+            // a page showing what was held while it is read again says so itself, so the spinner is not put over it
+            var showSpinner = !CacheScope.IsBehindShownData;
+            if (showSpinner)
+            {
+                _spinnerService.Show();
+            }
             try
             {
                 // A page's request goes first: if background work has a Scout's profile taken on, this waits only for it to be handed back
@@ -36,7 +42,10 @@ namespace Topo
             finally
             {
                 _activityMonitor.RequestEnded();
-                _spinnerService.Hide();
+                if (showSpinner)
+                {
+                    _spinnerService.Hide();
+                }
             }
         }
     }

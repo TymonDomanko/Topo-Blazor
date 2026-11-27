@@ -15,20 +15,32 @@ namespace Topo.Model.Cache
     public sealed class CacheScope : IDisposable
     {
         private static readonly AsyncLocal<CacheScope?> Ambient = new AsyncLocal<CacheScope?>();
+        private static readonly AsyncLocal<bool> Behind = new AsyncLocal<bool>();
         private readonly CacheScope? _outer;
+        private readonly bool _outerWasBehind;
 
-        private CacheScope(CacheMode mode, CacheScope? outer)
+        private CacheScope(CacheMode mode, CacheScope? outer, bool outerWasBehind)
         {
             Mode = mode;
             _outer = outer;
+            _outerWasBehind = outerWasBehind;
         }
 
         public static CacheScope? Current => Ambient.Value;
 
-        public static CacheScope Begin(CacheMode mode)
+        // Whether the work under way is reading behind a page that already shows what was held, so nothing needs to cover the page for it. It
+        // stays so for everything done from within that work, reads outside the cache included.
+        public static bool IsBehindShownData => Behind.Value;
+
+        // behindShownData: the page already shows what was held, and says itself that it is being read again
+        public static CacheScope Begin(CacheMode mode, bool behindShownData = false)
         {
-            var scope = new CacheScope(mode, Ambient.Value);
+            var scope = new CacheScope(mode, Ambient.Value, Behind.Value);
             Ambient.Value = scope;
+            if (behindShownData)
+            {
+                Behind.Value = true;
+            }
             return scope;
         }
 
@@ -86,6 +98,7 @@ namespace Topo.Model.Cache
                 _outer.ToCheck |= ToCheck;
             }
             Ambient.Value = _outer;
+            Behind.Value = _outerWasBehind;
         }
 
         private sealed class Restore : IDisposable
