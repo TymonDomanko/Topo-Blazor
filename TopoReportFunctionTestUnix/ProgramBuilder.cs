@@ -569,6 +569,49 @@ namespace TopoReportFunctionTest
             Assert.AreEqual("", draft.NightEdits["2026-02-11"].TerrainEventId);
         }
 
+        [TestMethod]
+        public void ActivitiesAddedAsExtrasWhenTheNightWasAnotherDayMoveOntoTheirNightsOnceTheNightIsRight()
+        {
+            // read while the section night was a Wednesday: every Monday activity became an extra
+            var draft = new ProgramDraft
+            {
+                Start = new DateTime(2026, 11, 15), End = new DateTime(2026, 12, 20), MeetingDay = DayOfWeek.Wednesday, NightStart = "17:30", NightEnd = "18:30", OtherStart = "09:00", OtherEnd = "17:00"
+            };
+            var events = new List<GetEventResultModel>
+            {
+                InTerrain("t1", "Aquatic Night", new DateTime(2026, 11, 16, 17, 30, 0)), InTerrain("t2", "Bush Shelters", new DateTime(2026, 11, 23, 17, 30, 0))
+            };
+            events[0].end_datetime = new DateTime(2026, 11, 16, 19, 0, 0);
+            events[1].end_datetime = new DateTime(2026, 11, 23, 18, 30, 0);
+            ProgramFill.Apply(draft, events);
+            Assert.AreEqual(2, draft.Extras.Count);
+
+            // the night is found to be a Monday: the next read puts them on their nights, with their times
+            draft.MeetingDay = DayOfWeek.Monday;
+            var (filled, added) = ProgramFill.Apply(draft, events);
+
+            Assert.AreEqual(2, filled);
+            Assert.AreEqual(0, added);
+            Assert.AreEqual(0, draft.Extras.Count);
+            Assert.AreEqual("Aquatic Night", draft.NightEdits["2026-11-16"].Activity);
+            Assert.AreEqual("t1", draft.NightEdits["2026-11-16"].TerrainEventId);
+            Assert.AreEqual(ProgramRowKind.SectionNight, draft.NightEdits["2026-11-16"].Kind);
+            Assert.AreEqual("", draft.NightEdits["2026-11-16"].StartTime);
+            Assert.AreEqual("19:00", draft.NightEdits["2026-11-16"].EndTime);
+            Assert.AreEqual("", draft.NightEdits["2026-11-23"].EndTime);
+            Assert.AreEqual(ProgramRowKind.SectionNight, ProgramPlanner.Nights(draft).First(n => n.Date == new DateTime(2026, 11, 16)).Kind);
+
+            // a night that already has something in it, a camp and a day that is not a night are left where they are
+            var held = new ProgramDraft { Start = new DateTime(2026, 11, 15), End = new DateTime(2026, 12, 20), MeetingDay = DayOfWeek.Monday };
+            held.NightEdits["2026-11-16"] = new ProgramRow { Activity = "Mine" };
+            held.Extras.Add(new ProgramRow { Kind = ProgramRowKind.Other, Date = new DateTime(2026, 11, 16), Activity = "Aquatic Night", TerrainEventId = "t1" });
+            held.Extras.Add(new ProgramRow { Kind = ProgramRowKind.Camp, Date = new DateTime(2026, 11, 23), EndDate = new DateTime(2026, 11, 24), Activity = "Camp", TerrainEventId = "c1" });
+            held.Extras.Add(new ProgramRow { Kind = ProgramRowKind.Other, Date = new DateTime(2026, 11, 21), Activity = "Saturday", TerrainEventId = "s1" });
+            ProgramFill.Apply(held, new List<GetEventResultModel>());
+            Assert.AreEqual(3, held.Extras.Count);
+            Assert.AreEqual("Mine", held.NightEdits["2026-11-16"].Activity);
+        }
+
         private static List<GetEventResultModel> DutyEvents(DateTime first, params string[] duty)
         {
             var events = new List<GetEventResultModel>();
