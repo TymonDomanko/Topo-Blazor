@@ -52,8 +52,32 @@
         }
     </datalist>
 
-    <details class="pb-section" open>
-        <summary><h4>Set up</h4></summary>
+    var planned = nights.Count(n => !n.Skipped && n.Activity != "");
+    var running = nights.Count(n => !n.Skipped);
+
+    <nav class="pb-stages" aria-label="Stages of making the program">
+        <ol>
+            @for (var i = 0; i < StageNames.Length; i++)
+            {
+                var stage = i;
+                <li class="@(Stage == i ? "pb-stage-current" : Stage > i ? "pb-stage-done" : "")">
+                    <button type="button" class="pb-stage-step" aria-current="@(Stage == i ? "step" : null)" @onclick="() => GoToStage(stage)">
+                        <span class="pb-stage-number">@(i + 1)</span>
+                        <span class="pb-stage-name">@StageNames[i]</span>
+                        @if (i == 1)
+                        {
+                            <span class="pb-stage-note">@planned of @running</span>
+                        }
+                    </button>
+                </li>
+            }
+        </ol>
+    </nav>
+
+    @if (Stage == 0)
+    {
+    <section class="pb-stage" aria-label="Set up">
+        <h4>Set up</h4>
         <div class="pb-setup">
             <div class="pb-panel">
                 <div class="pb-panel-label">The term</div>
@@ -68,29 +92,12 @@
                         }
                     </select>
                 </label>
-                <div class="pb-field pb-wide pb-field-button">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="FindUsual" disabled="@Busy" title="Find the section night and the usual times from the unit's calendar">Find night and times from the calendar</button>
-                </div>
                 <label class="pb-field">Start date
                     <input type="date" class="form-control form-control-sm" value="@draft.Start.ToString("yyyy-MM-dd")" @onchange="SetStart" />
                 </label>
                 <label class="pb-field">End date
                     <input type="date" class="form-control form-control-sm" value="@draft.End.ToString("yyyy-MM-dd")" @onchange="SetEnd" />
                 </label>
-                <div class="pb-field pb-wide">
-                    Breaks <span class="text-muted small">(no section nights in a break)</span>
-                    @foreach (var item in draft.Breaks)
-                    {
-                        <div class="pb-break">
-                            <input type="date" class="form-control form-control-sm" @bind="item.From" @bind:after="Save" />
-                            <span>to</span>
-                            <input type="date" class="form-control form-control-sm" @bind="item.To" @bind:after="Save" />
-                            <input class="form-control form-control-sm" @bind="item.Label" @bind:after="Save" placeholder="Term Break" />
-                            <button type="button" class="pb-x" title="Remove this break" aria-label="Remove this break" @onclick="() => RemoveBreak(item)">&times;</button>
-                        </div>
-                    }
-                    <div><button type="button" class="btn btn-outline-secondary btn-sm" @onclick="AddBreak">Add a break</button></div>
-                </div>
             </div>
 
             <div class="pb-panel">
@@ -171,13 +178,21 @@
                 }
             </div>
         </div>
-    </details>
+        @StageButtons
+    </section>
+    }
 
-    <details class="pb-section" open>
-        <summary><h4>Plan the Program</h4><span class="pb-count">@nights.Count(n => !n.Skipped && n.Activity != "") of @nights.Count(n => !n.Skipped) planned</span></summary>
+    @if (Stage == 1)
+    {
+    <section class="pb-stage" aria-label="Plan the Program">
+        <h4>Plan the Program<span class="pb-count">@planned of @running planned</span></h4>
         <p class="text-muted">
             Add the things the section might do, then drag each onto a night. Drag a night's handle to another night to move it (swapping with what is there), or back to the ideas to take it off.
         </p>
+        <div class="mb-3">
+            <button type="button" class="btn btn-primary" @onclick="RefreshFromTerrainClick" disabled="@Busy" title="Read the unit's calendar and the youth's proposals in Terrain again, filling in what is new, adding any new locations and ideas">Refresh from Terrain</button>
+            <span class="text-muted small ms-2">Reads the unit's calendar and the youth's proposals again, filling in what is new.</span>
+        </div>
         @{
             var areaSummary = ProgramLayout.AreaSummary(draft);
         }
@@ -220,9 +235,23 @@
             <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => AddExtra(ProgramRowKind.Weekend)">Add a weekend activity</button>
             <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => AddExtra(ProgramRowKind.Other)">Add another activity</button>
         </div>
+        <div class="pb-panel pb-breaks mb-3">
+            <div class="pb-panel-label">Breaks <span class="text-muted small">(no section nights in a break)</span></div>
+            @foreach (var item in draft.Breaks)
+            {
+                <div class="pb-break">
+                    <input type="date" class="form-control form-control-sm" aria-label="Break starts" @bind="item.From" @bind:after="Save" />
+                    <span>to</span>
+                    <input type="date" class="form-control form-control-sm" aria-label="Break ends" @bind="item.To" @bind:after="Save" />
+                    <input class="form-control form-control-sm" aria-label="Break name" @bind="item.Label" @bind:after="Save" placeholder="Term Break" />
+                    <button type="button" class="pb-x" title="Remove this break" aria-label="Remove this break" @onclick="() => RemoveBreak(item)">&times;</button>
+                </div>
+            }
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="AddBreak">Add a break</button>
+        </div>
         <div class="pb-plan">
             <div class="pb-ideas">
-                <div class="pb-panel ideas-panel">
+                <div class="pb-panel ideas-panel" data-drop-ideas>
                     <div class="pb-panel-label">Ideas <span class="pb-badge">@draft.Ideas.Count</span></div>
                     <div class="idea-new">
                         <input class="form-control form-control-sm" placeholder="New idea" @bind="NewIdea.Title" @bind:event="oninput" @onkeydown="@(e => { if (e.Key == "Enter") return AddIdea(); return Task.CompletedTask; })" />
@@ -240,7 +269,7 @@
                         </select>
                         <button type="button" class="btn btn-outline-primary btn-sm" @onclick="AddIdea">Add idea</button>
                     </div>
-                    <div class="ideas-pool" @ondragover:preventDefault="true" @ondrop="DropOnIdeas">
+                    <div class="ideas-pool">
                         @if (draft.Ideas.Count == 0)
                         {
                             <span class="text-muted small">No ideas yet. Add one below.</span>
@@ -248,7 +277,7 @@
                         @foreach (var idea in draft.Ideas)
                         {
                             var card = idea;
-                            <div class="idea-card" draggable="true" @ondragstart="() => DragIdea(card)">
+                            <div class="idea-card" data-drag-kind="idea" data-drag-key="@card.Id">
                                 <span class="drag-handle" aria-hidden="true">&#8942;&#8942;</span>
                                 <span class="idea-text">
                                     <span class="idea-title">@card.Title</span>
@@ -314,12 +343,14 @@
                                     }
                                     var night = entry.Night!;
                                     var edit = EditFor(night.Date);
+                                    var canCarry = edit.Activity != "" && !night.Skipped;
                                     <div class="night-card @(night.Skipped ? "night-skipped" : "")" style="@DutyChipStyle(night.Duty)"
-                                         @ondragover:preventDefault="@(!night.Skipped)" @ondrop="() => DropOnNight(night.Date)">
+                                         data-drop-night="@(night.Skipped ? null : night.Date.ToString("yyyy-MM-dd"))"
+                                         data-drag-kind="@(canCarry ? "night" : null)" data-drag-key="@(canCarry ? night.Date.ToString("yyyy-MM-dd") : null)">
                                         <div class="night-head">
-                                            @if (edit.Activity != "" && !night.Skipped)
+                                            @if (canCarry)
                                             {
-                                                <span class="drag-handle" draggable="true" title="Drag to another night, or back to the ideas" @ondragstart="() => DragNight(night.Date)">&#8942;&#8942;</span>
+                                                <span class="drag-handle" title="Drag to another night, or back to the ideas">&#8942;&#8942;</span>
                                             }
                                             <span class="night-date">@night.Date.ToString("ddd d MMM")</span>
                                             @DutyPick(edit, night)
@@ -382,10 +413,14 @@
                 }
             </div>
         </div>
-    </details>
+        @StageButtons
+    </section>
+    }
 
-    <details class="pb-section" open>
-        <summary><h4>Locations and contacts</h4></summary>
+    @if (Stage == 2)
+    {
+    <section class="pb-stage" aria-label="Locations and contacts">
+        <h4>Locations and contacts</h4>
         <div class="pb-setup">
             <div class="pb-panel">
                 <div class="pb-panel-label">Locations</div>
@@ -415,10 +450,14 @@
                 <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="AddContact">Add a contact</button>
             </div>
         </div>
-    </details>
+        @StageButtons
+    </section>
+    }
 
-    <details class="pb-section" open>
-        <summary><h4>The program</h4></summary>
+    @if (Stage == 3)
+    {
+    <section class="pb-stage" aria-label="The program">
+        <h4>The program</h4>
         <div class="export-panels mb-3">
             <div class="export-panel">
                 <div class="export-panel-label">Make the program</div>
@@ -426,16 +465,15 @@
                     <ReportButton Name="Program" Format="docx" Disabled="@(document.Rows.Count == 0)" OnClick="WordClick" />
                 </ReportButtons>
             </div>
-            <div class="export-panel">
-                <div class="export-panel-label">Terrain <span class="text-muted">(read for you, with the youth's proposals as ideas; nothing is sent automatically)</span></div>
-                <div class="export-panel-buttons">
-                    <button type="button" class="btn btn-primary" @onclick="RefreshFromTerrainClick" disabled="@Busy" title="Read the unit's calendar and the youth's proposals in Terrain again, filling in what is new, adding any new locations and ideas">Refresh from Terrain</button>
-                    @if (!_storageService.IsYouthMember)
-                    {
+            @if (!_storageService.IsYouthMember)
+            {
+                <div class="export-panel">
+                    <div class="export-panel-label">Terrain <span class="text-muted">(nothing is sent automatically)</span></div>
+                    <div class="export-panel-buttons">
                         <button type="button" class="btn btn-danger" @onclick="PushToTerrainClick" disabled="@(!CanPush)" title="Add what the program has and Terrain does not to the unit's calendar in Terrain, and change what differs there, after showing you the list">Push to Terrain</button>
-                    }
+                    </div>
                 </div>
-            </div>
+            }
         </div>
 
         <div class="pb-chips mb-3" role="group" aria-label="What the program shows">
@@ -450,7 +488,9 @@
         </div>
 
         <ProgramPreview Document="document" />
-    </details>
+        @StageButtons
+    </section>
+    }
 }
 
 @if (PushDialogOpen)
@@ -563,6 +603,18 @@
 }
 
 @code {
+    // Back and Next at the foot of a stage, to move along the stages
+    private RenderFragment StageButtons => @<div class="pb-stage-buttons">
+        @if (Stage > 0)
+        {
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => GoToStage(Stage - 1)">&larr; Back: @StageNames[Stage - 1]</button>
+        }
+        @if (Stage < StageNames.Length - 1)
+        {
+            <button type="button" class="btn btn-primary" @onclick="() => GoToStage(Stage + 1)">Next: @StageNames[Stage + 1] &rarr;</button>
+        }
+    </div>;
+
     private static readonly (string Value, string Label)[] Areas =
     {
         ("outdoors", "Outdoors"), ("community", "Community"), ("personal_growth", "Personal Growth"), ("creative", "Creative")
@@ -582,16 +634,19 @@
             <span class="extra-note">not a section night</span>
             <button type="button" class="pb-x" title="Remove" aria-label="Remove this activity" @onclick="() => RemoveExtra(extra)">&times;</button>
         </div>
-        <div class="extra-head">
+        <div class="extra-dates">
             <select class="form-select form-select-sm extra-kind" aria-label="Kind" @bind="extra.Kind" @bind:after="Save">
                 <option value="@ProgramRowKind.Camp">Camp</option>
                 <option value="@ProgramRowKind.Hike">Hike</option>
                 <option value="@ProgramRowKind.Weekend">Weekend</option>
                 <option value="@ProgramRowKind.Other">Other</option>
             </select>
-            <input type="date" class="form-control form-control-sm" aria-label="From" value="@(ProgramPlanner.IsDated(extra) ? extra.Date.ToString("yyyy-MM-dd") : "")" @onchange="e => SetExtraFrom(extra, e)" />
-            <span>to</span>
-            <input type="date" class="form-control form-control-sm" aria-label="To" disabled="@(!ProgramPlanner.IsDated(extra))" min="@(ProgramPlanner.IsDated(extra) ? extra.Date.ToString("yyyy-MM-dd") : "")" value="@(extra.EndDate?.ToString("yyyy-MM-dd"))" @onchange="e => SetExtraTo(extra, e)" />
+            <label class="extra-date">First day
+                <input type="date" class="form-control form-control-sm" value="@(ProgramPlanner.IsDated(extra) ? extra.Date.ToString("yyyy-MM-dd") : "")" @onchange="e => SetExtraFrom(extra, e)" />
+            </label>
+            <label class="extra-date">Last day
+                <input type="date" class="form-control form-control-sm" disabled="@(!ProgramPlanner.IsDated(extra))" min="@(ProgramPlanner.IsDated(extra) ? extra.Date.ToString("yyyy-MM-dd") : "")" value="@(extra.EndDate?.ToString("yyyy-MM-dd"))" @onchange="e => SetExtraTo(extra, e)" />
+            </label>
         </div>
         <input class="form-control form-control-sm night-activity" placeholder="Activity" aria-label="Activity" @bind="extra.Activity" @bind:after="Save" />
         <div class="night-pair">

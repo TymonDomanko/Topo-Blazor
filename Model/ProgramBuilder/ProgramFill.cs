@@ -22,7 +22,7 @@ namespace Topo.Model.ProgramBuilder
 
             var known = draft.NightEdits.Values.Concat(draft.Extras).Select(r => r.TerrainEventId).Where(id => id != "").ToHashSet();
             var nights = ProgramPlanner.Nights(draft).Where(n => !n.Skipped).Select(n => n.Date.Date).ToHashSet();
-            int filled = 0, added = 0;
+            int filled = MoveToNights(draft, nights), added = 0;
             var filledNow = new HashSet<string>();
 
             foreach (var evt in InProgram(draft, inTerrain))
@@ -65,6 +65,42 @@ namespace Topo.Model.ProgramBuilder
             }
             PinDutyPatrols(draft, byId);
             return (filled, added);
+        }
+
+        // An activity that came in as an extra because its day was not a section night then (the night was another day, or the dates were different) is
+        // moved onto its night once it falls on a running one that has nothing in it, as it would have been filled in. Its times are kept. How many.
+        private static int MoveToNights(ProgramDraft draft, HashSet<DateTime> nights)
+        {
+            var moved = 0;
+            var candidates = draft.Extras
+                .Where(e => e.TerrainEventId != "" && e.Kind != ProgramRowKind.Camp && ProgramPlanner.IsDated(e) && (e.EndDate == null || e.EndDate.Value.Date <= e.Date.Date) && nights.Contains(e.Date.Date))
+                .OrderBy(e => e.Date).ToList();
+            foreach (var extra in candidates)
+            {
+                var key = ProgramPlanner.NightKey(extra.Date);
+                draft.NightEdits.TryGetValue(key, out var night);
+                if (night != null && (night.Activity != "" || night.TerrainEventId != ""))
+                {
+                    continue;
+                }
+                var usualStart = extra.Kind == ProgramRowKind.Weekend || extra.Kind == ProgramRowKind.Other || extra.Kind == ProgramRowKind.Hike ? draft.OtherStart : draft.CampStart;
+                var usualEnd = extra.Kind == ProgramRowKind.Weekend || extra.Kind == ProgramRowKind.Other || extra.Kind == ProgramRowKind.Hike ? draft.OtherEnd : draft.CampEnd;
+                var start = string.IsNullOrWhiteSpace(extra.StartTime) ? usualStart : extra.StartTime;
+                var end = string.IsNullOrWhiteSpace(extra.EndTime) ? usualEnd : extra.EndTime;
+                extra.Kind = ProgramRowKind.SectionNight;
+                extra.EndDate = null;
+                extra.StartTime = start == draft.NightStart ? "" : start;
+                extra.EndTime = end == draft.NightEnd ? "" : end;
+                if (night != null)
+                {
+                    extra.NoDuty = night.NoDuty;
+                    extra.DutyPatrol = night.DutyPatrol;
+                }
+                draft.NightEdits[key] = extra;
+                draft.Extras.Remove(extra);
+                moved++;
+            }
+            return moved;
         }
 
         // A night or camp entered in the program that is in Terrain already (an activity of the same name that day), such as one added to Terrain from

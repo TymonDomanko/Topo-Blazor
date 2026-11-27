@@ -53,7 +53,11 @@ namespace Topo.Controller
         private List<GetEventResultModel>? _terrainEvents;
         private readonly AutoRun _auto = new AutoRun();
 
-        public void Dispose() => _auto.Dispose();
+        public void Dispose()
+        {
+            _auto.Dispose();
+            _dragReference?.Dispose();
+        }
 
         public ProgramDocument Document => ProgramLayout.Build(draft);
         public List<ProgramRow> Nights => ProgramPlanner.Nights(draft);
@@ -114,11 +118,46 @@ namespace Topo.Controller
 
         internal async Task UnitChange(ChangeEventArgs e) => await LoadUnit(e.Value?.ToString() ?? "");
 
+        // The stages of making the program, in order, and the one that is showing
+        internal static readonly string[] StageNames = { "Set up", "Plan the Program", "Locations and contacts", "The program" };
+        internal int Stage { get; private set; }
+        private DotNetObjectReference<ProgramBuilderController>? _dragReference;
+        private bool _scrollToStages;
+        internal void GoToStage(int stage)
+        {
+            Stage = Math.Clamp(stage, 0, StageNames.Length - 1);
+            _scrollToStages = true;
+        }
+
+        // Once the new stage is showing, start it from the top
+        protected override async Task OnAfterRenderAsync(bool firstRender)
+        {
+            if (firstRender)
+            {
+                // the script that picks up ideas and nights reports what was dropped to this page
+                _dragReference = DotNetObjectReference.Create(this);
+                try
+                {
+                    await JS.InvokeVoidAsync("ProgramDrag.init", _dragReference);
+                }
+                catch (Exception)
+                {
+                    // without it nothing can be dragged, and the rest of the page still works
+                }
+            }
+            if (_scrollToStages)
+            {
+                _scrollToStages = false;
+                await JS.InvokeVoidAsync("ScrollToStages");
+            }
+        }
+
         private static string StorageKey(string unitId) => $"ProgramBuilder_{unitId}";
 
         private async Task LoadUnit(string unitId)
         {
             UnitId = unitId;
+            Stage = 0;
             _terrainEvents = null;
             Message = "";
             ErrorMessage = "";
@@ -157,6 +196,12 @@ namespace Topo.Controller
                 {
                     await Save();
                 }
+                // a program that has not had its night and times found yet (the calendar could not be read, or it is from before they were) looks for
+                // them now, and one that has keeps what was chosen
+                if (!draft.UsualFound)
+                {
+                    await FindUsual();
+                }
                 AutoFill();
                 return;
             }
@@ -189,7 +234,7 @@ namespace Topo.Controller
             return new ProgramDraft
             {
                 Title = $"{UnitName} Program {start.Year}", UnitName = UnitName, Section = _storageService.Section,
-                Start = start, End = start.AddDays(76), MeetingDay = last?.MeetingDay ?? DayOfWeek.Wednesday,
+                Start = start, End = start.AddDays(76), MeetingDay = last?.MeetingDay ?? DayOfWeek.Wednesday, UsualFound = last?.UsualFound ?? false,
                 DutyPatrols = new List<string>(Patrols), FirstDutyPatrol = Patrols.FirstOrDefault() ?? "",
                 Locations = last?.Locations ?? new List<ProgramLocation>(), Contacts = last?.Contacts ?? new List<ProgramContact>(),
                 NightStart = last?.NightStart ?? "19:00", NightEnd = last?.NightEnd ?? "21:00", CampStart = last?.CampStart ?? "18:00", CampEnd = last?.CampEnd ?? "10:00",
@@ -276,8 +321,9 @@ namespace Topo.Controller
             }
         }
 
-        // Finds the section night and the usual times from the last few months of the calendar. What it can't tell is left as it was.
-        internal async Task FindUsual()
+        // Finds the section night and the usual times from the last few months of the calendar, when a unit is opened. What it can't tell is left as it was.
+        // Nothing is said of a calendar that is missing or can't be read: it is tried again the next time the unit is opened.
+        private async Task FindUsual()
         {
             Busy = true;
             Progress = "the unit's calendar";
@@ -286,7 +332,6 @@ namespace Topo.Controller
                 var usual = await _programBuilderService.FindUsual(UnitId);
                 if (usual == null)
                 {
-                    Message = "There is no calendar named after this unit to find the section night and times from.";
                     return;
                 }
 
@@ -321,12 +366,13 @@ namespace Topo.Controller
                 else
                 {
                     Message = $"From the calendar: {string.Join(", ", found)}.";
+                    draft.UsualFound = true;
                     await Save();
                 }
             }
             catch (Exception)
             {
-                ErrorMessage = "Couldn't read the unit's calendar from Terrain.";
+                // tried again the next time the unit is opened
             }
             finally
             {
@@ -658,8 +704,6 @@ namespace Topo.Controller
 
         // The idea being typed in
         public ProgramIdea NewIdea = new ProgramIdea();
-        // What is being dragged: an idea from the list (its id), or what is on a night (its date)
-        private (bool FromIdeas, string Key)? _dragged;
 
         internal async Task AddIdea()
         {
@@ -679,41 +723,36 @@ namespace Topo.Controller
             await Save();
         }
 
-        internal void DragIdea(ProgramIdea idea) => _dragged = (true, idea.Id);
-
-        internal void DragNight(DateTime night) => _dragged = (false, ProgramPlanner.NightKey(night));
-
-        internal async Task DropOnNight(DateTime night)
+        // Told by the script (js/programBuilderDrag.js) when something is put down: an idea or what is on a night (kind "idea" or "night", and its
+        // id or date), onto a night (its date) or back among the ideas
+        [JSInvokable]
+        public async Task DropDragged(string kind, string key, string onto, string to)
         {
-            var dragged = _dragged;
-            _dragged = null;
-            if (dragged == null)
+            var done = false;
+            if (onto == "night" && TryNight(to, out var night))
             {
-                return;
+                if (kind == "idea")
+                {
+                    done = ProgramIdeas.Assign(draft, key, night);
+                }
+                else if (kind == "night" && TryNight(key, out var from))
+                {
+                    done = ProgramIdeas.Move(draft, from, night);
+                }
             }
-            var done = dragged.Value.FromIdeas
-                ? ProgramIdeas.Assign(draft, dragged.Value.Key, night)
-                : ProgramIdeas.Move(draft, DateTime.ParseExact(dragged.Value.Key, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), night);
+            else if (onto == "ideas" && kind == "night" && TryNight(key, out var taken))
+            {
+                done = ProgramIdeas.Unassign(draft, taken);
+            }
             if (done)
             {
                 await Save();
             }
+            StateHasChanged();
         }
 
-        // Dropping what is on a night back among the ideas
-        internal async Task DropOnIdeas()
-        {
-            var dragged = _dragged;
-            _dragged = null;
-            if (dragged == null || dragged.Value.FromIdeas)
-            {
-                return;
-            }
-            if (ProgramIdeas.Unassign(draft, DateTime.ParseExact(dragged.Value.Key, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)))
-            {
-                await Save();
-            }
-        }
+        private static bool TryNight(string key, out DateTime night) =>
+            DateTime.TryParseExact(key, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out night);
 
         // ---- camps, hikes and the rest
 

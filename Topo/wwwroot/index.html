@@ -9,6 +9,7 @@
     <base href="/" />
     <link href="css/bootstrap/bootstrap.min.css" rel="stylesheet" />
     <link href="css/app.css" rel="stylesheet" />
+    <link href="css/programBuilderDrag.css" rel="stylesheet" />
     <link href="Topo.styles.css" rel="stylesheet" />
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
@@ -33,11 +34,17 @@
         <a href="" class="reload">Reload</a>
         <a class="dismiss">🗙</a>
     </div>
+    <script src="js/programBuilderDrag.js?v=3"></script>
     <script src="_framework/blazor.webassembly.js"></script>
 </body>
 
 </html>
 <script type="text/javascript">
+    // Brings the strip of stages to the top of the page, so a new stage starts at its beginning
+    function ScrollToStages() {
+        document.querySelector(".pb-stages")?.scrollIntoView({ block: "start" });
+    }
+
     // Use it for .NET 6+
     function BlazorDownloadFile(filename, contentType, content) {
         // Create the URL

@@ -273,7 +273,7 @@
 .night-date {
     font-weight: 600;
     white-space: nowrap;
-    flex: 1 1 auto;
+    flex: 1 0 auto;
 }
 
 /* A button that moves the night's duty patrol on; the stripe is the patrol's colour, and it is filled when put on by hand */
@@ -334,6 +334,7 @@
 }
 
 .night-skip {
+    flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
@@ -413,6 +414,10 @@
     flex: 0 0 auto;
 }
 
+.extra-dates .extra-kind {
+    width: 100%;
+}
+
 .extra-head .extra-tag {
     flex: 0 1 auto;
     min-width: 0;
@@ -430,6 +435,32 @@
 
 .extra-head .pb-x {
     margin-left: auto;
+}
+
+/* the kind, and the first and last day, laid out to fit however narrow the card is */
+.extra-dates {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.3rem;
+}
+
+.extra-dates .extra-kind {
+    grid-column: 1 / -1;
+}
+
+.extra-date {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    font-size: 0.72rem;
+    color: #666;
+}
+
+.extra-date input {
+    min-width: 0;
+    padding-left: 0.35rem;
+    padding-right: 0.25rem;
+    font-size: 0.8rem;
 }
 
 .extra-times {
@@ -553,43 +584,95 @@
     color: #b3261e;
 }
 
-/* The sections fold away from their headings */
-.pb-section > summary {
+/* The stages of making the program: a numbered strip to jump between them, and one stage showing at a time */
+.pb-stages {
+    margin: 1.25rem 0 0.5rem;
+}
+
+.pb-stages ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-bottom: 2px solid #e3e3e3;
+}
+
+.pb-stages li {
+    flex: 1 1 10rem;
+    margin-bottom: -2px;
+}
+
+.pb-stage-step {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-top: 1.5rem;
-    cursor: pointer;
-    list-style: none;
-}
-
-.pb-section > summary::-webkit-details-marker {
-    display: none;
-}
-
-.pb-section > summary h4 {
-    margin: 0;
-}
-
-.pb-section > summary::before {
-    content: "\25BE";
-    display: inline-block;
-    width: 1rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
     color: #666;
-    transition: transform 0.15s;
+    text-align: left;
+    cursor: pointer;
 }
 
-.pb-section:not([open]) > summary::before {
-    transform: rotate(-90deg);
+.pb-stage-step:hover {
+    background-color: #f4f6f8;
 }
 
-.pb-section > summary:hover h4 {
-    text-decoration: underline;
+.pb-stage-number {
+    flex: 0 0 auto;
+    width: 1.6rem;
+    height: 1.6rem;
+    line-height: 1.6rem;
+    border-radius: 50%;
+    background-color: #dfe3e8;
+    color: #444;
+    font-weight: bold;
+    font-size: 0.85rem;
+    text-align: center;
 }
 
-.pb-section:not([open]) {
-    border-bottom: 1px solid #e3e3e3;
-    padding-bottom: 0.5rem;
+.pb-stage-name {
+    font-weight: 600;
+}
+
+.pb-stage-note {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.pb-stage-current .pb-stage-step {
+    color: #0d6efd;
+    border-bottom-color: #0d6efd;
+}
+
+.pb-stage-current .pb-stage-number {
+    background-color: #0d6efd;
+    color: #fff;
+}
+
+.pb-stage-done .pb-stage-number {
+    background-color: #198754;
+    color: #fff;
+}
+
+.pb-stage > h4 {
+    margin: 1rem 0 0.5rem;
+}
+
+.pb-stage-buttons {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 1.5rem 0 1rem;
+}
+
+.pb-stage-buttons .btn:only-child {
+    margin-left: auto;
 }
 
 /* The strip of camps, hikes and other activities that have no date yet */
@@ -628,8 +711,17 @@
     width: 100%;
 }
 
+/* the duty patrol gives way, with dots, when its name is too long for the card, so the date and Skip are always in it */
 .night-head .menu-wrap {
-    display: inline-block;
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 12rem;
+}
+
+.night-head .night-duty {
+    display: block;
+    width: 100%;
 }
 
 .pb-menu-backdrop {
