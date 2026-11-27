@@ -420,7 +420,7 @@
 .night-date[b-vxcw87pzxj] {
     font-weight: 600;
     white-space: nowrap;
-    flex: 1 1 auto;
+    flex: 1 0 auto;
 }
 
 /* A button that moves the night's duty patrol on; the stripe is the patrol's colour, and it is filled when put on by hand */
@@ -481,6 +481,7 @@
 }
 
 .night-skip[b-vxcw87pzxj] {
+    flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
@@ -560,6 +561,10 @@
     flex: 0 0 auto;
 }
 
+.extra-dates .extra-kind[b-vxcw87pzxj] {
+    width: 100%;
+}
+
 .extra-head .extra-tag[b-vxcw87pzxj] {
     flex: 0 1 auto;
     min-width: 0;
@@ -577,6 +582,32 @@
 
 .extra-head .pb-x[b-vxcw87pzxj] {
     margin-left: auto;
+}
+
+/* the kind, and the first and last day, laid out to fit however narrow the card is */
+.extra-dates[b-vxcw87pzxj] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.3rem;
+}
+
+.extra-dates .extra-kind[b-vxcw87pzxj] {
+    grid-column: 1 / -1;
+}
+
+.extra-date[b-vxcw87pzxj] {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    font-size: 0.72rem;
+    color: #666;
+}
+
+.extra-date input[b-vxcw87pzxj] {
+    min-width: 0;
+    padding-left: 0.35rem;
+    padding-right: 0.25rem;
+    font-size: 0.8rem;
 }
 
 .extra-times[b-vxcw87pzxj] {
@@ -700,43 +731,95 @@
     color: #b3261e;
 }
 
-/* The sections fold away from their headings */
-.pb-section > summary[b-vxcw87pzxj] {
+/* The stages of making the program: a numbered strip to jump between them, and one stage showing at a time */
+.pb-stages[b-vxcw87pzxj] {
+    margin: 1.25rem 0 0.5rem;
+}
+
+.pb-stages ol[b-vxcw87pzxj] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-bottom: 2px solid #e3e3e3;
+}
+
+.pb-stages li[b-vxcw87pzxj] {
+    flex: 1 1 10rem;
+    margin-bottom: -2px;
+}
+
+.pb-stage-step[b-vxcw87pzxj] {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-top: 1.5rem;
-    cursor: pointer;
-    list-style: none;
-}
-
-.pb-section > summary[b-vxcw87pzxj]::-webkit-details-marker {
-    display: none;
-}
-
-.pb-section > summary h4[b-vxcw87pzxj] {
-    margin: 0;
-}
-
-.pb-section > summary[b-vxcw87pzxj]::before {
-    content: "\25BE";
-    display: inline-block;
-    width: 1rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
     color: #666;
-    transition: transform 0.15s;
+    text-align: left;
+    cursor: pointer;
 }
 
-.pb-section:not([open]) > summary[b-vxcw87pzxj]::before {
-    transform: rotate(-90deg);
+.pb-stage-step:hover[b-vxcw87pzxj] {
+    background-color: #f4f6f8;
 }
 
-.pb-section > summary:hover h4[b-vxcw87pzxj] {
-    text-decoration: underline;
+.pb-stage-number[b-vxcw87pzxj] {
+    flex: 0 0 auto;
+    width: 1.6rem;
+    height: 1.6rem;
+    line-height: 1.6rem;
+    border-radius: 50%;
+    background-color: #dfe3e8;
+    color: #444;
+    font-weight: bold;
+    font-size: 0.85rem;
+    text-align: center;
 }
 
-.pb-section:not([open])[b-vxcw87pzxj] {
-    border-bottom: 1px solid #e3e3e3;
-    padding-bottom: 0.5rem;
+.pb-stage-name[b-vxcw87pzxj] {
+    font-weight: 600;
+}
+
+.pb-stage-note[b-vxcw87pzxj] {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.pb-stage-current .pb-stage-step[b-vxcw87pzxj] {
+    color: #0d6efd;
+    border-bottom-color: #0d6efd;
+}
+
+.pb-stage-current .pb-stage-number[b-vxcw87pzxj] {
+    background-color: #0d6efd;
+    color: #fff;
+}
+
+.pb-stage-done .pb-stage-number[b-vxcw87pzxj] {
+    background-color: #198754;
+    color: #fff;
+}
+
+.pb-stage > h4[b-vxcw87pzxj] {
+    margin: 1rem 0 0.5rem;
+}
+
+.pb-stage-buttons[b-vxcw87pzxj] {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 1.5rem 0 1rem;
+}
+
+.pb-stage-buttons .btn:only-child[b-vxcw87pzxj] {
+    margin-left: auto;
 }
 
 /* The strip of camps, hikes and other activities that have no date yet */
@@ -775,8 +858,17 @@
     width: 100%;
 }
 
+/* the duty patrol gives way, with dots, when its name is too long for the card, so the date and Skip are always in it */
 .night-head .menu-wrap[b-vxcw87pzxj] {
-    display: inline-block;
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 12rem;
+}
+
+.night-head .night-duty[b-vxcw87pzxj] {
+    display: block;
+    width: 100%;
 }
 
 .pb-menu-backdrop[b-vxcw87pzxj] {
