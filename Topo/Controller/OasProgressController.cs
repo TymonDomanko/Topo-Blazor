@@ -48,7 +48,7 @@ namespace Topo.Controller
         internal async Task RefreshClick()
         {
             ReadUtc = null;
-            using (CacheScope.Begin(CacheMode.Reread))
+            using (CacheScope.Begin(CacheMode.Reread, behindShownData: Sheets.Count > 0))
             {
                 await UnitChange(model.UnitId);
             }

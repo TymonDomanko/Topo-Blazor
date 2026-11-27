@@ -27,7 +27,7 @@ namespace Topo.Model.Cache
             Failed = false;
             try
             {
-                using (CacheScope.Begin(CacheMode.Reread))
+                using (CacheScope.Begin(CacheMode.Reread, behindShownData: ReadUtc != null))
                 {
                     await read(step =>
                     {
