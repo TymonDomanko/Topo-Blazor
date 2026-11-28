@@ -448,7 +448,9 @@ namespace Topo.Services
             var rows = MemberReportLayouts.MemberList(sortedMemberList, section);
             var columns = new List<(string Heading, Func<MemberListRow, string> Value)> { ("First Name", r => r.FirstName) };
             if (MemberReportLayouts.ShowLastName(rows))
+            {
                 columns.Add(("Last Name", r => r.LastName));
+            }
             columns.Add(("Age", r => r.Age));
             columns.Add(("Member", r => r.MemberNumber));
             columns.Add(("Duty", r => r.Duty));
@@ -474,23 +476,31 @@ namespace Topo.Services
                 }
 
                 if (member.AgeBand == AgeBand.SecondLast)
+                {
                     sheet.Range[rowNumber, ageColumn].CellStyle.ColorIndex = ExcelKnownColors.Yellow;
+                }
                 if (member.AgeBand == AgeBand.Last)
+                {
                     sheet.Range[rowNumber, ageColumn].CellStyle.ColorIndex = ExcelKnownColors.Rose;
+                }
             }
 
             rowNumber++;
             rowNumber++;
             sheet.Range[rowNumber, 2].Text = "Second last year in section";
             if (ageColumn > 3)
+            {
                 sheet.Range[rowNumber, 2, rowNumber, ageColumn - 1].Merge();
+            }
             sheet.Range[rowNumber, ageColumn].Text = "";
             sheet.Range[rowNumber, ageColumn].BorderAround();
             sheet.Range[rowNumber, ageColumn].CellStyle.ColorIndex = ExcelKnownColors.Yellow;
             rowNumber++;
             sheet.Range[rowNumber, 2].Text = "Last year in section";
             if (ageColumn > 3)
+            {
                 sheet.Range[rowNumber, 2, rowNumber, ageColumn - 1].Merge();
+            }
             sheet.Range[rowNumber, ageColumn].Text = "";
             sheet.Range[rowNumber, ageColumn].BorderAround();
             sheet.Range[rowNumber, ageColumn].CellStyle.ColorIndex = ExcelKnownColors.Rose;
